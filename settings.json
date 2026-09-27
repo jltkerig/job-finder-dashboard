@@ -1,0 +1,11 @@
+{
+	"searxng_timeout_minutes": 60,
+	"max_search_results": 10,
+	"request_delay_seconds": 2,
+	"website_timeout_seconds": 15,
+	"start_docker_automatically": true,
+	"stop_docker_when_finished": true,
+	"start_mysql_automatically": true,
+	"stop_mysql_when_finished": true,
+	"usa_only": true
+}
