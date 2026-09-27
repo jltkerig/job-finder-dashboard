@@ -1,0 +1,57 @@
+# Canada
+.ca
+
+# United Kingdom
+.co.uk
+.uk
+
+# Australia
+.com.au
+.au
+
+# New Zealand
+.co.nz
+.nz
+
+# India
+.co.in
+.in
+
+# Germany
+.de
+
+# France
+.fr
+
+# Spain
+.es
+
+# Italy
+.it
+
+# Netherlands
+.nl
+
+# Ireland
+.ie
+
+# Japan
+.jp
+
+# China
+.cn
+
+# Brazil
+.br
+
+# Mexico
+.mx
+
+# South Africa
+.za
+
+# Singapore
+.sg
+
+# Hong Kong
+.hk
