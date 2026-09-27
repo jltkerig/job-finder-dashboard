@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+		<title>Job Finder</title>
+
+		<link rel="stylesheet" href="/static/css/style.css" />
+	</head>
+
+	<body>
+		<header>
+			<h1>Job Finder</h1>
+
+			<p>{{ companies|length }} companies found</p>
+		</header>
+
+		<main>
+			<section class="company-section">
+				<h2>Companies</h2>
+
+				{% if companies %}
+
+				<div class="table-wrapper">
+					<table>
+						<thead>
+							<tr>
+								<th>Company</th>
+								<th>Domain</th>
+								<th>Country</th>
+								<th>State</th>
+								<th>USA Confidence</th>
+								<th>Career Page</th>
+							</tr>
+						</thead>
+
+						<tbody>
+							{% for company in companies %}
+
+							<tr>
+								<td>{{ company.name or "Unknown" }}</td>
+
+								<td>{{ company.domain or "Unknown" }}</td>
+
+								<td>{{ company.country or "Unknown" }}</td>
+
+								<td>{{ company.state or "Unknown" }}</td>
+
+								<td>{{ company.usa_confidence or 0 }}</td>
+
+								<td>
+									{% if company.career_url %}
+
+									<a href="{{ company.career_url }}" target="_blank" rel="noopener noreferrer"> View Careers </a>
+
+									{% else %} None {% endif %}
+								</td>
+							</tr>
+
+							{% endfor %}
+						</tbody>
+					</table>
+				</div>
+
+				{% else %}
+
+				<p>No companies have been saved yet.</p>
+
+				{% endif %}
+			</section>
+		</main>
+
+		<footer>
+			<p>
+				© <span id="copyright-year"></span>
+				Jamie Lee Thomas Kerig
+			</p>
+
+			<p class="footer-links">
+				<a href="https://jamiekerig.com" target="_blank" rel="noopener noreferrer"> Portfolio </a>
+
+				<span>|</span>
+
+				<a href="https://github.com/jltkerig" target="_blank" rel="noopener noreferrer"> GitHub </a>
+			</p>
+		</footer>
+
+		<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+		<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+
+		<script src="/static/js/charts.js"></script>
+	</body>
+</html>
