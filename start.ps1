@@ -138,14 +138,14 @@ FLASK_SECRET_KEY=$FlaskSecret
     }
 }
 
-& $PythonPath -c "import flask, mysql.connector, dotenv, requests, bs4" 2>$null
+& $PythonPath -c "import flask, mysql.connector, dotenv, requests, bs4, pypdf, docx" 2>$null
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Installing missing Python dependencies..."
     & $PythonPath -m pip install -r $RequirementsPath
     if ($LASTEXITCODE -ne 0) {
         Fail-Startup "E5004" "Required Python packages could not be installed."
     }
-    & $PythonPath -c "import flask, mysql.connector, dotenv, requests, bs4" 2>$null
+    & $PythonPath -c "import flask, mysql.connector, dotenv, requests, bs4, pypdf, docx" 2>$null
     if ($LASTEXITCODE -ne 0) {
         Fail-Startup "E5016" "Python dependencies are installed but could not be imported."
     }
