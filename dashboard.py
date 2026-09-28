@@ -1,23 +1,911 @@
 from datetime import datetime
 import os
 from pathlib import Path
+import subprocess
+import sys
+import threading
+import secrets
+import re
+import json
+import shutil
+import tempfile
+import time
 from zoneinfo import ZoneInfo
 
 import mysql.connector
-from flask import Flask, render_template
-from mysql.connector import Error
 from dotenv import load_dotenv
+from flask import Flask, abort, jsonify, redirect, render_template, request, session
+from mysql.connector import Error
+from profile_tools import SKILL_ALIASES, fit_score, normalize_skills, resume_suggestions
 
-load_dotenv(Path(__file__).resolve().parent / ".env")
+BASE_DIR = Path(__file__).resolve().parent
+load_dotenv(BASE_DIR / ".env")
 
 app = Flask(__name__)
 
+APP_VERSION = "1.1.61"
+
+app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY") or secrets.token_hex(32)
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Strict"
 
 DB_HOST = os.getenv("DB_HOST", "127.0.0.1")
 DB_PORT = int(os.getenv("DB_PORT", "3306"))
 DB_USER = os.getenv("DB_USER", "root")
 DB_PASSWORD = os.getenv("DB_PASSWORD", "")
 DB_NAME = os.getenv("DB_NAME", "job_finder")
+
+JOB_FINDER_PATH = BASE_DIR / "job_finder.py"
+BLOCKED_DOMAINS_FILE = BASE_DIR / "blocked_domains.txt"
+BLOCKED_COMPANIES_FILE = BASE_DIR / "blocked_companies.txt"
+BLOCK_METADATA_FILE = BASE_DIR / "block_metadata.json"
+RECOMMENDED_DOMAINS_FILE = BASE_DIR / "recommended_domains.txt"
+SCRAPER_LOG_FILE = BASE_DIR / "job_finder.log"
+UPDATE_SCRIPT = BASE_DIR / "update.ps1"
+UPDATE_MARKER = BASE_DIR / ".update-in-progress"
+UPDATE_ZIP_PATTERN = re.compile(r"^job-finder-v(\d+)\.(\d+)\.(\d+)\.zip$", re.IGNORECASE)
+UPDATE_SEARCH_DIRS = [
+    Path.home() / "Downloads",
+    BASE_DIR.parent,
+]
+scraper_process = None
+scraper_mode = None
+scraper_last_error = None
+scraper_lock = threading.Lock()
+scraper_started_at = None
+
+
+ERROR_CODES = {
+    "csrf": "E2201",
+    "bad_request": "E2001",
+    "not_found": "E2002",
+    "database": "E3001",
+    "process": "E2003",
+    "unexpected": "E9001",
+}
+
+
+def log_error_code(code, message):
+    print(f"[{code}] {message}")
+
+
+def api_error(code, message, status=400):
+    log_error_code(code, message)
+    return jsonify({"status": "error", "error_code": code, "message": message}), status
+
+
+@app.errorhandler(403)
+def handle_forbidden(error):
+    if request.path.startswith(("/start-search", "/replace-result", "/refresh-search", "/update-existing", "/save-kept", "/search-status", "/reject-listing", "/restore-rejected", "/block-domain", "/unsave-kept", "/stop-search", "/install-update")):
+        return api_error("E2201", "Your dashboard session expired. The page will refresh automatically.", 403)
+    return error
+
+
+@app.errorhandler(500)
+def handle_internal_error(error):
+    log_error_code("E9001", f"Unhandled server error on {request.path}: {error}")
+    if request.path.startswith(("/start-search", "/replace-result", "/refresh-search", "/update-existing", "/save-kept", "/search-status", "/reject-listing", "/restore-rejected", "/block-domain", "/unsave-kept", "/stop-search", "/install-update", "/job-title-suggestions")):
+        return jsonify({"status": "error", "error_code": "E9001", "message": "The dashboard hit an unexpected server error."}), 500
+    return "Internal server error [E9001]", 500
+
+
+API_PATH_CODES = {
+    "/start-search": "E2101",
+    "/replace-result": "E2110",
+    "/refresh-search": "E2102",
+    "/update-existing": "E2103",
+    "/save-kept": "E3101",
+    "/search-status": "E2104",
+    "/job-title-suggestions": "E1101",
+    "/unsave-kept": "E3102",
+    "/stop-search": "E2105",
+}
+
+
+@app.after_request
+def attach_error_codes(response):
+    if response.status_code < 400:
+        return response
+
+    code = API_PATH_CODES.get(request.path)
+    if not code or not response.is_json:
+        return response
+
+    payload = response.get_json(silent=True) or {}
+    if "error_code" not in payload:
+        payload["error_code"] = code
+        response.set_data(app.json.dumps(payload))
+        response.mimetype = "application/json"
+        log_error_code(code, f"{request.method} {request.path} -> HTTP {response.status_code}: {payload.get('message', 'Request failed')}")
+    return response
+
+
+RELATED_JOB_TITLES = {
+    "web designer": ["UI Designer", "UX/UI Designer", "Digital Designer", "Website Designer", "Visual Designer", "WordPress Designer"],
+    "front end developer": ["Frontend Developer", "Web Developer", "UI Developer", "Junior Web Developer", "WordPress Developer", "Web Content Developer"],
+    "frontend developer": ["Front End Developer", "Web Developer", "UI Developer", "Junior Web Developer", "WordPress Developer", "Web Content Developer"],
+    "web developer": ["Front End Developer", "Frontend Developer", "Junior Web Developer", "WordPress Developer", "UI Developer", "Web Application Developer"],
+    "wordpress developer": ["Web Developer", "Front End Developer", "WordPress Designer", "Website Developer", "PHP Developer", "Web Content Developer"],
+    "ui designer": ["Web Designer", "UX/UI Designer", "Visual Designer", "Product Designer", "Digital Designer", "Interaction Designer"],
+    "ux designer": ["UX/UI Designer", "UI Designer", "Product Designer", "Interaction Designer", "Web Designer", "Experience Designer"],
+    "ux/ui designer": ["UI Designer", "UX Designer", "Product Designer", "Web Designer", "Interaction Designer", "Digital Designer"],
+    "graphic designer": ["Digital Designer", "Visual Designer", "Web Designer", "Production Designer", "Marketing Designer", "Brand Designer"],
+    "website content coordinator": ["Web Content Coordinator", "Web Content Specialist", "Content Coordinator", "CMS Specialist", "Digital Content Specialist", "Website Coordinator"],
+    "web content coordinator": ["Website Content Coordinator", "Web Content Specialist", "Content Coordinator", "CMS Specialist", "Digital Content Specialist", "Website Coordinator"],
+    "content coordinator": ["Web Content Coordinator", "Website Content Coordinator", "Content Specialist", "Digital Content Specialist", "CMS Specialist", "Marketing Coordinator"],
+}
+
+
+def related_job_title_suggestions(raw_titles):
+    selected = [part.strip() for part in (raw_titles or "").split(",") if part.strip()]
+    selected_lower = {title.lower() for title in selected}
+    suggestions = []
+
+    for title in selected:
+        key = re.sub(r"\s+", " ", title.lower()).strip()
+        candidates = RELATED_JOB_TITLES.get(key, [])
+
+        if not candidates:
+            if "designer" in key:
+                candidates = ["Web Designer", "UI Designer", "UX/UI Designer", "Digital Designer", "Visual Designer"]
+            elif "developer" in key:
+                candidates = ["Web Developer", "Front End Developer", "Frontend Developer", "UI Developer", "WordPress Developer"]
+            elif "content" in key:
+                candidates = ["Web Content Specialist", "Content Coordinator", "Digital Content Specialist", "CMS Specialist", "Website Coordinator"]
+
+        for candidate in candidates:
+            candidate_key = candidate.lower()
+            if candidate_key not in selected_lower and candidate_key not in {item.lower() for item in suggestions}:
+                suggestions.append(candidate)
+
+    return suggestions[:8]
+
+
+
+
+def _safe_db_identifier(value):
+    if not re.fullmatch(r"[A-Za-z0-9_]+", value or ""):
+        raise ValueError("DB_NAME may contain only letters, numbers, and underscores.")
+    return value
+
+
+def initialize_database():
+    """Create only missing database objects. Never drops or overwrites existing data."""
+    database_name = _safe_db_identifier(DB_NAME)
+    connection = None
+    cursor = None
+    try:
+        connection = mysql.connector.connect(
+            host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD
+        )
+        cursor = connection.cursor()
+        cursor.execute(f"CREATE DATABASE IF NOT EXISTS `{database_name}`")
+        cursor.execute(f"USE `{database_name}`")
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS companies (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                name VARCHAR(255) NULL,
+                career_job_title VARCHAR(255) NULL,
+                career_credibility INT NULL,
+                domain VARCHAR(255) NULL,
+                career_url TEXT NULL,
+                source_url TEXT NULL,
+                source_type VARCHAR(50) NOT NULL DEFAULT 'SearXNG',
+                country VARCHAR(100) NULL,
+                state VARCHAR(100) NULL,
+                city VARCHAR(150) NULL,
+                latitude DECIMAL(10,7) NULL,
+                longitude DECIMAL(10,7) NULL,
+                distance_miles DECIMAL(8,2) NULL,
+                work_arrangement VARCHAR(20) NULL,
+                listing_skills TEXT NULL,
+                usa_credibility INT NULL,
+                date_found TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                last_checked TIMESTAMP NULL DEFAULT NULL,
+                result_updated_at TIMESTAMP NULL DEFAULT NULL,
+                is_kept TINYINT(1) NOT NULL DEFAULT 0,
+                job_open_status VARCHAR(20) NOT NULL DEFAULT 'Open',
+                application_status VARCHAR(30) NOT NULL DEFAULT 'None',
+                notes TEXT NULL,
+                is_rejected TINYINT(1) NOT NULL DEFAULT 0,
+                rejected_at TIMESTAMP NULL DEFAULT NULL
+            )
+        """)
+        connection.commit()
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if connection is not None and connection.is_connected():
+            connection.close()
+
+
+def get_csrf_token():
+    token = session.get("csrf_token")
+    if not token:
+        token = secrets.token_urlsafe(32)
+        session["csrf_token"] = token
+    return token
+
+
+@app.context_processor
+def inject_csrf_token():
+    return {"csrf_token": get_csrf_token(), "app_version": APP_VERSION}
+
+
+@app.before_request
+def protect_local_post_requests():
+    if request.method != "POST":
+        return None
+
+    supplied = request.headers.get("X-CSRF-Token") or request.form.get("csrf_token")
+    expected = session.get("csrf_token")
+    if not supplied or not expected or not secrets.compare_digest(supplied, expected):
+        abort(403)
+
+    return None
+
+
+def ensure_keep_column():
+    connection = None
+    cursor = None
+
+    try:
+        connection = mysql.connector.connect(
+            host=DB_HOST,
+            port=DB_PORT,
+            user=DB_USER,
+            password=DB_PASSWORD,
+            database=DB_NAME,
+        )
+        cursor = connection.cursor()
+        cursor.execute("""
+            ALTER TABLE companies
+            ADD COLUMN IF NOT EXISTS is_kept TINYINT(1) NOT NULL DEFAULT 0
+        """)
+        connection.commit()
+    except Error as error:
+        print()
+        print("Could not ensure the keep column exists.")
+        print(error)
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if connection is not None and connection.is_connected():
+            connection.close()
+
+
+
+
+def ensure_job_tracking_columns():
+    connection = None
+    cursor = None
+
+    try:
+        connection = mysql.connector.connect(
+            host=DB_HOST,
+            port=DB_PORT,
+            user=DB_USER,
+            password=DB_PASSWORD,
+            database=DB_NAME,
+        )
+        cursor = connection.cursor()
+        for legacy, current in (("career_confidence", "career_credibility"),
+                                ("usa_confidence", "usa_credibility")):
+            cursor.execute("SHOW COLUMNS FROM companies LIKE %s", (legacy,))
+            old_exists = cursor.fetchone() is not None
+            cursor.execute("SHOW COLUMNS FROM companies LIKE %s", (current,))
+            new_exists = cursor.fetchone() is not None
+            if old_exists and not new_exists:
+                cursor.execute(f"ALTER TABLE companies CHANGE COLUMN {legacy} {current} INT NULL")
+            elif old_exists and new_exists:
+                cursor.execute(f"UPDATE companies SET {current} = COALESCE({current}, {legacy})")
+                cursor.execute(f"ALTER TABLE companies DROP COLUMN {legacy}")
+        cursor.execute("""
+            ALTER TABLE companies
+            ADD COLUMN IF NOT EXISTS job_open_status VARCHAR(20) NOT NULL DEFAULT 'Open'
+        """)
+        cursor.execute("""
+            ALTER TABLE companies
+            ADD COLUMN IF NOT EXISTS application_status VARCHAR(30) NOT NULL DEFAULT 'None'
+        """)
+        # Keep unsaved legacy rows from appearing as if the user explicitly saved them.
+        cursor.execute("""
+            UPDATE companies
+            SET application_status = 'None'
+            WHERE is_kept = 0 AND is_rejected = 0 AND application_status = 'Saved'
+        """)
+        cursor.execute("""
+            ALTER TABLE companies
+            MODIFY COLUMN application_status VARCHAR(30) NOT NULL DEFAULT 'None'
+        """)
+        cursor.execute("""
+            ALTER TABLE companies
+            ADD COLUMN IF NOT EXISTS notes TEXT NULL
+        """)
+        cursor.execute("ALTER TABLE companies ADD COLUMN IF NOT EXISTS listing_skills TEXT NULL")
+        cursor.execute("""
+            ALTER TABLE companies
+            ADD COLUMN IF NOT EXISTS source_type VARCHAR(50) NOT NULL DEFAULT 'SearXNG'
+        """)
+        cursor.execute("""
+            ALTER TABLE companies
+            ADD COLUMN IF NOT EXISTS is_rejected TINYINT(1) NOT NULL DEFAULT 0
+        """)
+        cursor.execute("""
+            ALTER TABLE companies
+            ADD COLUMN IF NOT EXISTS rejected_at TIMESTAMP NULL DEFAULT NULL
+        """)
+        cursor.execute("""ALTER TABLE companies ADD COLUMN IF NOT EXISTS city VARCHAR(150) NULL""")
+        cursor.execute("""ALTER TABLE companies ADD COLUMN IF NOT EXISTS latitude DECIMAL(10,7) NULL""")
+        cursor.execute("""ALTER TABLE companies ADD COLUMN IF NOT EXISTS longitude DECIMAL(10,7) NULL""")
+        cursor.execute("""ALTER TABLE companies ADD COLUMN IF NOT EXISTS distance_miles DECIMAL(8,2) NULL""")
+        cursor.execute("""ALTER TABLE companies ADD COLUMN IF NOT EXISTS result_updated_at TIMESTAMP NULL DEFAULT NULL""")
+        cursor.execute("""ALTER TABLE companies ADD COLUMN IF NOT EXISTS work_arrangement VARCHAR(20) NULL""")
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS search_history (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                job_title TEXT NOT NULL,
+                state VARCHAR(100) NOT NULL,
+                cities_json TEXT NULL,
+                searched_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cursor.execute("""
+            ALTER TABLE search_history
+            MODIFY COLUMN job_title TEXT NOT NULL
+        """)
+        cursor.execute("""ALTER TABLE search_history ADD COLUMN IF NOT EXISTS cities_json TEXT NULL""")
+        connection.commit()
+    except Error as error:
+        print()
+        print("Could not ensure job tracking fields exist.")
+        print(error)
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if connection is not None and connection.is_connected():
+            connection.close()
+
+
+def record_search_history(job_title, state, cities=None):
+    ensure_job_tracking_columns()
+    connection = None
+    cursor = None
+    try:
+        connection = mysql.connector.connect(
+            host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD, database=DB_NAME
+        )
+        cursor = connection.cursor()
+        cursor.execute(
+            "INSERT INTO search_history (job_title, state, cities_json) VALUES (%s, %s, %s)",
+            (job_title, state, json.dumps(cities or [])),
+        )
+        connection.commit()
+    except Error as error:
+        print("Could not record search history.")
+        print(error)
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if connection is not None and connection.is_connected():
+            connection.close()
+
+
+def get_search_history(limit=10):
+    ensure_job_tracking_columns()
+    connection = None
+    cursor = None
+    try:
+        connection = mysql.connector.connect(
+            host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD, database=DB_NAME
+        )
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute(
+            """
+            SELECT job_title, state, cities_json, searched_at
+            FROM search_history
+            ORDER BY searched_at DESC
+            LIMIT %s
+            """,
+            (limit,),
+        )
+        return cursor.fetchall()
+    except Error as error:
+        print("Could not read search history.")
+        print(error)
+        return []
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if connection is not None and connection.is_connected():
+            connection.close()
+
+
+def get_dashboard_counts():
+    ensure_job_tracking_columns()
+    connection = None
+    cursor = None
+    counts = {"saved": 0, "applied": 0, "interview": 0, "closed": 0}
+    try:
+        connection = mysql.connector.connect(
+            host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD, database=DB_NAME
+        )
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT
+                COUNT(*) AS saved,
+                SUM(application_status = 'Applied') AS applied,
+                SUM(application_status = 'Interview') AS interview,
+                SUM(job_open_status = 'Closed') AS closed
+            FROM companies
+            WHERE is_kept = 1 AND is_rejected = 0
+        """)
+        row = cursor.fetchone() or {}
+        for key in counts:
+            counts[key] = int(row.get(key) or 0)
+        return counts
+    except Error as error:
+        print("Could not read dashboard counts.")
+        print(error)
+        return counts
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if connection is not None and connection.is_connected():
+            connection.close()
+
+
+def ensure_profile_tables():
+    connection = None
+    cursor = None
+
+    try:
+        connection = mysql.connector.connect(
+            host=DB_HOST,
+            port=DB_PORT,
+            user=DB_USER,
+            password=DB_PASSWORD,
+            database=DB_NAME,
+        )
+        cursor = connection.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_profile (
+                id TINYINT PRIMARY KEY,
+                first_name VARCHAR(100) NOT NULL DEFAULT '',
+                last_name VARCHAR(100) NOT NULL DEFAULT '',
+                state VARCHAR(100) NOT NULL DEFAULT '',
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_profile_job_titles (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                profile_id TINYINT NOT NULL,
+                job_title VARCHAR(255) NOT NULL,
+                UNIQUE KEY unique_profile_job_title (profile_id, job_title)
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_profile_cities (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                profile_id TINYINT NOT NULL,
+                city VARCHAR(150) NOT NULL,
+                radius_miles INT NOT NULL DEFAULT 50,
+                UNIQUE KEY unique_profile_city (profile_id, city)
+            )
+        """)
+        for column, definition in (
+            ("home_location", "VARCHAR(150) NOT NULL DEFAULT ''"),
+            ("primary_job_title", "VARCHAR(255) NOT NULL DEFAULT ''"),
+            ("avatar_data", "MEDIUMTEXT NULL"),
+        ):
+            cursor.execute(f"ALTER TABLE user_profile ADD COLUMN IF NOT EXISTS {column} {definition}")
+        cursor.execute("""CREATE TABLE IF NOT EXISTS user_profile_skills (
+            id INT AUTO_INCREMENT PRIMARY KEY, profile_id TINYINT NOT NULL,
+            skill VARCHAR(80) NOT NULL, UNIQUE KEY unique_profile_skill (profile_id, skill))""")
+        cursor.execute("""CREATE TABLE IF NOT EXISTS user_profile_work_history (
+            id INT AUTO_INCREMENT PRIMARY KEY, profile_id TINYINT NOT NULL,
+            company VARCHAR(150) NOT NULL DEFAULT '', role VARCHAR(150) NOT NULL DEFAULT '',
+            dates VARCHAR(100) NOT NULL DEFAULT '', description TEXT NULL)""")
+        cursor.execute("""
+            INSERT IGNORE INTO user_profile (id, first_name, last_name, state)
+            VALUES (1, '', '', '')
+        """)
+        connection.commit()
+    except Error as error:
+        print()
+        print("Could not ensure profile tables exist.")
+        print(error)
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if connection is not None and connection.is_connected():
+            connection.close()
+
+
+def get_user_profile():
+    ensure_profile_tables()
+    connection = None
+    cursor = None
+
+    profile = {
+        "first_name": "",
+        "last_name": "",
+        "state": "",
+        "home_location": "", "primary_job_title": "", "avatar_data": "", "skills": [], "work_history": [],
+        "job_titles": [],
+        "cities": [],
+    }
+
+    try:
+        connection = mysql.connector.connect(
+            host=DB_HOST,
+            port=DB_PORT,
+            user=DB_USER,
+            password=DB_PASSWORD,
+            database=DB_NAME,
+        )
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT first_name, last_name, state, home_location, primary_job_title, avatar_data
+            FROM user_profile
+            WHERE id = 1
+        """)
+        row = cursor.fetchone()
+        if row:
+            profile.update(row)
+
+        cursor.execute("""
+            SELECT job_title
+            FROM user_profile_job_titles
+            WHERE profile_id = 1
+            ORDER BY job_title
+        """)
+        profile["job_titles"] = [row["job_title"] for row in cursor.fetchall()]
+        cursor.execute("""
+            SELECT city, radius_miles
+            FROM user_profile_cities
+            WHERE profile_id = 1
+            ORDER BY city
+        """)
+        profile["cities"] = cursor.fetchall()
+        cursor.execute("SELECT skill FROM user_profile_skills WHERE profile_id = 1 ORDER BY skill")
+        profile["skills"] = [row["skill"] for row in cursor.fetchall()]
+        cursor.execute("SELECT company, role, dates, description FROM user_profile_work_history WHERE profile_id = 1 ORDER BY id")
+        profile["work_history"] = cursor.fetchall()
+        return profile
+    except Error as error:
+        print()
+        print("Could not read user profile from the database.")
+        print(error)
+        return profile
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if connection is not None and connection.is_connected():
+            connection.close()
+
+
+def save_user_profile(first_name, last_name, state, job_titles, cities=None, *, home_location=None,
+                      primary_job_title=None, skills=None, work_history=None, avatar_data=None):
+    ensure_profile_tables()
+    connection = None
+    cursor = None
+
+    try:
+        connection = mysql.connector.connect(
+            host=DB_HOST,
+            port=DB_PORT,
+            user=DB_USER,
+            password=DB_PASSWORD,
+            database=DB_NAME,
+        )
+        cursor = connection.cursor()
+        cursor.execute("""
+            UPDATE user_profile
+            SET first_name = %s, last_name = %s, state = %s
+            WHERE id = 1
+        """, (first_name, last_name, state))
+        if home_location is not None:
+            cursor.execute("UPDATE user_profile SET home_location = %s WHERE id = 1", (home_location[:150],))
+        if primary_job_title is not None:
+            cursor.execute("UPDATE user_profile SET primary_job_title = %s WHERE id = 1", (primary_job_title[:255],))
+        if avatar_data is not None:
+            cursor.execute("UPDATE user_profile SET avatar_data = %s WHERE id = 1", (avatar_data,))
+        cursor.execute("DELETE FROM user_profile_job_titles WHERE profile_id = 1")
+
+        for job_title in job_titles:
+            cursor.execute("""
+                INSERT INTO user_profile_job_titles (profile_id, job_title)
+                VALUES (1, %s)
+            """, (job_title,))
+
+        cursor.execute("DELETE FROM user_profile_cities WHERE profile_id = 1")
+        allowed_radii = {10, 15, 20, 30, 50}
+        for item in (cities or []):
+            city = str(item.get("city", "")).strip()[:150]
+            try:
+                radius = int(item.get("radius", item.get("radius_miles", 50)))
+            except (TypeError, ValueError):
+                radius = 50
+            if city and radius in allowed_radii:
+                cursor.execute("""
+                    INSERT IGNORE INTO user_profile_cities (profile_id, city, radius_miles)
+                    VALUES (1, %s, %s)
+                    """, (city, radius))
+
+        if skills is not None:
+            cursor.execute("DELETE FROM user_profile_skills WHERE profile_id = 1")
+            for skill in normalize_skills(skills):
+                cursor.execute("INSERT INTO user_profile_skills (profile_id, skill) VALUES (1, %s)", (skill,))
+        if work_history is not None:
+            cursor.execute("DELETE FROM user_profile_work_history WHERE profile_id = 1")
+            for item in work_history[:50]:
+                if not isinstance(item, dict):
+                    continue
+                company = str(item.get("company", "")).strip()[:150]
+                role = str(item.get("role", "")).strip()[:150]
+                dates = str(item.get("dates", "")).strip()[:100]
+                description = str(item.get("description", "")).strip()[:3000]
+                if company or role:
+                    cursor.execute("""INSERT INTO user_profile_work_history
+                        (profile_id, company, role, dates, description) VALUES (1, %s, %s, %s, %s)""",
+                        (company, role, dates, description))
+
+        connection.commit()
+        return True
+    except Error as error:
+        print()
+        print("Could not save user profile.")
+        print(error)
+        return False
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if connection is not None and connection.is_connected():
+            connection.close()
+
+
+def read_block_metadata():
+    try:
+        data = json.loads(BLOCK_METADATA_FILE.read_text(encoding="utf-8"))
+        if isinstance(data, dict):
+            return {"domains": data.get("domains", {}), "companies": data.get("companies", {})}
+    except (OSError, ValueError):
+        pass
+    return {"domains": {}, "companies": {}}
+
+
+def save_block_metadata(kind, key, source=None):
+    data = read_block_metadata()
+    if source is None:
+        data[kind].pop(key, None)
+    elif key not in data[kind]:
+        data[kind][key] = {"source": source, "blocked_at": datetime.now().astimezone().isoformat(timespec="seconds")}
+    temp = BLOCK_METADATA_FILE.with_suffix(".tmp")
+    temp.write_text(json.dumps(data, indent=2, sort_keys=True), encoding="utf-8")
+    temp.replace(BLOCK_METADATA_FILE)
+
+
+def block_details(kind, names):
+    data = read_block_metadata()[kind]
+    recommended = set()
+    if kind == "domains" and RECOMMENDED_DOMAINS_FILE.exists():
+        recommended = {line.strip().lower() for line in RECOMMENDED_DOMAINS_FILE.read_text(encoding="utf-8").splitlines() if line.strip() and not line.startswith("#")}
+    return {name: {"source": data.get(name.casefold(), {}).get("source") or ("Recommended" if name.lower() in recommended else "User"),
+                   "blocked_at": data.get(name.casefold(), {}).get("blocked_at")}
+            for name in names}
+
+
+def add_domain_to_blocklist(domain):
+    domain = (domain or "").strip().lower().removeprefix("www.")
+    if not domain:
+        return
+
+    existing = set()
+    if BLOCKED_DOMAINS_FILE.exists():
+        existing = {
+            line.strip().lower()
+            for line in BLOCKED_DOMAINS_FILE.read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.strip().startswith("#")
+        }
+
+    if domain in existing:
+        return
+
+    with BLOCKED_DOMAINS_FILE.open("a", encoding="utf-8") as file:
+        if BLOCKED_DOMAINS_FILE.stat().st_size:
+            file.write("\n")
+        file.write(domain + "\n")
+    save_block_metadata("domains", domain, "User")
+
+
+def get_blocked_companies():
+    if not BLOCKED_COMPANIES_FILE.exists():
+        return []
+    return sorted({line.strip() for line in BLOCKED_COMPANIES_FILE.read_text(encoding="utf-8").splitlines()
+                   if line.strip() and not line.lstrip().startswith("#")}, key=str.casefold)
+
+
+def add_blocked_company(name):
+    name = " ".join((name or "").split())[:150]
+    if not name or "\n" in name or "\r" in name:
+        return False
+    if name.casefold() not in {item.casefold() for item in get_blocked_companies()}:
+        with BLOCKED_COMPANIES_FILE.open("a", encoding="utf-8") as file:
+            file.write(name + "\n")
+        save_block_metadata("companies", name.casefold(), "User")
+    return True
+
+
+@app.route("/settings/blocked-companies", methods=["POST"])
+def manage_blocked_company():
+    name = " ".join(request.form.get("company", "").split())[:150]
+    action = request.form.get("action", "")
+    if not name:
+        return redirect("/rejected-listings?company_notice=invalid#blocked-companies")
+    if action == "add":
+        add_blocked_company(name)
+    elif action == "remove":
+        names = [item for item in get_blocked_companies() if item.casefold() != name.casefold()]
+        BLOCKED_COMPANIES_FILE.write_text("\n".join(names) + ("\n" if names else ""), encoding="utf-8")
+        save_block_metadata("companies", name.casefold())
+    else:
+        abort(400)
+    return redirect("/rejected-listings?company_notice=" + action + "#blocked-companies")
+
+
+@app.route("/block-company/<int:company_id>", methods=["POST"])
+def block_company(company_id):
+    ensure_job_tracking_columns()
+    connection = None
+    cursor = None
+    try:
+        connection = mysql.connector.connect(host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD, database=DB_NAME)
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute("SELECT name FROM companies WHERE id = %s", (company_id,))
+        row = cursor.fetchone()
+        if not row or not add_blocked_company(row.get("name")):
+            return api_error("E3220", "No company name was available to block.", 404)
+        return jsonify({"status": "blocked", "company": row["name"]})
+    except Error as error:
+        log_error_code("E3221", f"Could not block company: {error}")
+        return api_error("E3221", "Could not block this company.", 500)
+    finally:
+        if cursor is not None: cursor.close()
+        if connection is not None and connection.is_connected(): connection.close()
+
+
+def get_blocked_domains():
+    if not BLOCKED_DOMAINS_FILE.exists():
+        return []
+    return sorted({line.strip().lower() for line in BLOCKED_DOMAINS_FILE.read_text(encoding="utf-8").splitlines()
+                   if line.strip() and not line.lstrip().startswith("#")})
+
+
+@app.route("/settings/blocked-domains", methods=["POST"])
+def manage_blocked_domain():
+    domain = request.form.get("domain", "").strip().lower().removeprefix("www.")
+    action = request.form.get("action", "")
+    if not re.fullmatch(r"(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}", domain):
+        return redirect("/rejected-listings?domain_notice=invalid#blocked-domains")
+    if action == "add":
+        add_domain_to_blocklist(domain)
+    elif action == "remove":
+        remove_domain_from_blocklist(domain)
+    else:
+        abort(400)
+    return redirect("/rejected-listings?domain_notice=" + action + "#blocked-domains")
+
+
+def remove_domain_from_blocklist(domain):
+    domain = (domain or "").strip().lower().removeprefix("www.")
+    if not domain or not BLOCKED_DOMAINS_FILE.exists():
+        return
+
+    lines = BLOCKED_DOMAINS_FILE.read_text(encoding="utf-8").splitlines()
+    kept = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#") and stripped.lower() == domain:
+            continue
+        kept.append(line)
+
+    BLOCKED_DOMAINS_FILE.write_text("\n".join(kept).rstrip() + "\n", encoding="utf-8")
+    save_block_metadata("domains", domain)
+
+
+def get_rejected_companies():
+    ensure_job_tracking_columns()
+    connection = None
+    cursor = None
+    try:
+        connection = mysql.connector.connect(
+            host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD, database=DB_NAME
+        )
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT id, name, career_job_title, career_credibility, domain, career_url,
+                   source_url, source_type, country, state, city, latitude, longitude, distance_miles, usa_credibility, work_arrangement, date_found,
+                   last_checked, result_updated_at, rejected_at
+            FROM companies
+            WHERE is_rejected = 1
+            ORDER BY rejected_at DESC, date_found DESC
+        """)
+        return cursor.fetchall()
+    except Error as error:
+        print("Could not read rejected listings.")
+        print(error)
+        return []
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if connection is not None and connection.is_connected():
+            connection.close()
+
+
+def get_kept_companies(status_filter="", state_filter="", title_filter="", sort_by="date_desc"):
+    ensure_job_tracking_columns()
+    connection = None
+    cursor = None
+
+    try:
+        connection = mysql.connector.connect(
+            host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD, database=DB_NAME
+        )
+        cursor = connection.cursor(dictionary=True)
+
+        where = ["is_kept = 1", "is_rejected = 0"]
+        params = []
+        if status_filter:
+            where.append("application_status = %s")
+            params.append(status_filter)
+        if state_filter:
+            where.append("state LIKE %s")
+            params.append(f"%{state_filter}%")
+        if title_filter:
+            where.append("career_job_title LIKE %s")
+            params.append(f"%{title_filter}%")
+
+        sort_map = {
+            "date_asc": "date_found ASC",
+            "company": "name ASC",
+            "title": "career_job_title ASC",
+            "status": "application_status ASC, date_found DESC",
+            "verified": "last_checked DESC",
+        }
+        order_by = sort_map.get(sort_by, "date_found DESC")
+
+        sql = f"""
+            SELECT id, name, career_job_title, career_credibility, domain, career_url,
+                   source_url, source_type, country, state, city, latitude, longitude, distance_miles, usa_credibility, work_arrangement, date_found,
+                   last_checked, result_updated_at, is_kept, job_open_status, application_status, notes, listing_skills,
+                   is_rejected, rejected_at
+            FROM companies
+            WHERE {' AND '.join(where)}
+            ORDER BY {order_by}
+        """
+        cursor.execute(sql, params)
+        return cursor.fetchall()
+    except Error as error:
+        print()
+        print("Could not read kept companies from the database.")
+        print(error)
+        return []
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if connection is not None and connection.is_connected():
+            connection.close()
+
+
+def add_job_fit(companies, skills):
+    for company in companies:
+        try:
+            found = json.loads(company.get("listing_skills") or "[]")
+        except (TypeError, ValueError):
+            found = []
+        company["job_fit"] = fit_score(skills, found if isinstance(found, list) else [])
 
 
 def get_companies():
@@ -39,25 +927,49 @@ def get_companies():
             SELECT
                 id,
                 name,
+                career_job_title,
+                career_credibility,
                 domain,
                 career_url,
                 source_url,
                 country,
                 state,
-                usa_confidence,
+                city,
+                latitude,
+                longitude,
+                distance_miles,
+                usa_credibility,
+                work_arrangement,
                 date_found,
-                last_checked
+                last_checked,
+                result_updated_at,
+                is_kept,
+                job_open_status,
+                application_status,
+                notes,
+                listing_skills,
+                source_type
             FROM companies
+            WHERE is_rejected = 0
             ORDER BY date_found DESC
-            """)
+        """)
 
-        return cursor.fetchall()
+        rows = cursor.fetchall()
+        blocked_domains = set(get_blocked_domains())
+        blocked_names = {name.casefold() for name in get_blocked_companies()}
+        return [row for row in rows if (row.get("name") or "").casefold() not in blocked_names
+                and not (re.search(r"/types-of-aid/employment/campus/?(?:[?#]|$)",
+                                   (row.get("career_url") or "").lower())
+                         and (row.get("career_job_title") or "").strip().casefold() in
+                         {"directory search", "campus employment & internships", "student employment"})
+                and not any((row.get("domain") or "").lower().removeprefix("www.") == domain
+                            or (row.get("domain") or "").lower().endswith("." + domain)
+                            for domain in blocked_domains)]
 
     except Error as error:
         print()
-        print("Could not read companies " "from the database.")
+        print("Could not read companies from the database.")
         print(error)
-
         return []
 
     finally:
@@ -68,24 +980,837 @@ def get_companies():
             connection.close()
 
 
+def scraper_status():
+    global scraper_process, scraper_mode, scraper_last_error
+
+    with scraper_lock:
+        if scraper_process is None:
+            return False, None
+
+        exit_code = scraper_process.poll()
+        if exit_code is None:
+            return True, scraper_mode
+
+        if exit_code != 0:
+            scraper_last_error = (
+                f"Job Finder stopped with exit code {exit_code}. "
+                f"Details were saved to {SCRAPER_LOG_FILE.name}."
+            )
+
+        scraper_process = None
+        scraper_mode = None
+        return False, None
+
+
+def scraper_is_running():
+    running, _ = scraper_status()
+    return running
+
+
+def find_latest_update_zip():
+    candidates = []
+
+    for folder in UPDATE_SEARCH_DIRS:
+        if not folder.exists() or not folder.is_dir():
+            continue
+
+        try:
+            entries = folder.iterdir()
+        except OSError:
+            continue
+
+        for path in entries:
+            if not path.is_file():
+                continue
+
+            match = UPDATE_ZIP_PATTERN.match(path.name)
+            if not match:
+                continue
+
+            version = tuple(int(part) for part in match.groups())
+            candidates.append((version, path))
+
+    if not candidates:
+        return None, None
+
+    version, path = max(candidates, key=lambda item: item[0])
+    return version, path
+
+
+@app.route("/check-update")
+def check_update():
+    try:
+        current_version = tuple(int(part) for part in APP_VERSION.split("."))
+        latest_version, latest_path = find_latest_update_zip()
+
+        if latest_version is None:
+            return jsonify({
+                "status": "none_found",
+                "current_version": APP_VERSION,
+                "message": "No Job Finder update ZIPs were found in Downloads or the Python folder.",
+            })
+
+        latest_text = ".".join(str(part) for part in latest_version)
+        return jsonify({
+            "status": "update_available" if latest_version > current_version else "current",
+            "current_version": APP_VERSION,
+            "latest_version": latest_text,
+            "file_name": latest_path.name,
+            "folder": str(latest_path.parent),
+            "message": (
+                f"Update v{latest_text} is available."
+                if latest_version > current_version
+                else f"You already have the latest version found: v{latest_text}."
+            ),
+        })
+    except Exception as error:
+        log_error_code("E1401", f"Update check failed: {error}")
+        return api_error("E1401", "Could not check for the latest Job Finder update.", 500)
+
+
+@app.route("/install-update", methods=["POST"])
+def install_update():
+    data = request.get_json(silent=True) or {}
+    requested = (data.get("file_name") or "").strip()
+    latest_version, latest_path = find_latest_update_zip()
+    if latest_path is None:
+        return api_error("E1402", "No update ZIP was found.", 404)
+    current_version = tuple(int(part) for part in APP_VERSION.split("."))
+    if latest_version <= current_version:
+        return api_error("E1406", "No newer update is available to install.", 409)
+    if requested and latest_path.name != requested:
+        return jsonify({
+            "status": "update_changed",
+            "code": "E1403",
+            "message": "A newer update ZIP was found. Review the new version before installing.",
+            "latest_version": ".".join(map(str, latest_version)),
+            "file_name": latest_path.name,
+        }), 409
+    if not UPDATE_SCRIPT.exists():
+        return api_error("E1404", "update.ps1 was not found.", 500)
+    try:
+        creationflags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+        subprocess.Popen(
+            ["powershell.exe", "-ExecutionPolicy", "Bypass", "-File", str(UPDATE_SCRIPT), "-ZipPath", str(latest_path), "-CurrentPid", str(os.getpid())],
+            cwd=str(BASE_DIR),
+            creationflags=creationflags,
+        )
+        return jsonify({"status": "updating", "version": ".".join(map(str, latest_version)), "file_name": latest_path.name})
+    except OSError as error:
+        log_error_code("E1405", f"Could not launch updater: {error}")
+        return api_error("E1405", "Could not start the update installer.", 500)
+
+
+@app.route("/app-version")
+def app_version():
+    return jsonify({"version": APP_VERSION})
+
+
 @app.route("/")
 def home():
     now = datetime.now(ZoneInfo("America/New_York"))
 
     print()
     print("=" * 60)
-
     print("PAGE REFRESH — " f"{now.strftime('%B %d, %Y at %I:%M:%S %p %Z')}")
-
     print("=" * 60)
 
+    ensure_keep_column()
+    ensure_job_tracking_columns()
     companies = get_companies()
+
+    running, mode = scraper_status()
+    profile = get_user_profile()
+    add_job_fit(companies, profile.get("skills", []))
 
     return render_template(
         "index.html",
         companies=companies,
+        scraper_running=running,
+        scraper_mode=mode or "",
+        profile_cities=profile.get("cities", []),
+        profile_job_titles=profile.get("job_titles", []),
+        profile_state=profile.get("state", ""),
     )
 
 
+
+@app.route("/dashboard")
+def user_dashboard():
+    ensure_keep_column()
+    ensure_job_tracking_columns()
+    status_filter = request.args.get("status", "").strip()[:30]
+    state_filter = request.args.get("state", "").strip()[:100]
+    title_filter = request.args.get("title", "").strip()[:255]
+    sort_by = request.args.get("sort", "date_desc").strip()[:30]
+    companies = get_kept_companies(status_filter, state_filter, title_filter, sort_by)
+    profile = get_user_profile()
+    add_job_fit(companies, profile.get("skills", []))
+    return render_template(
+        "user-dashboard.html",
+        companies=companies,
+        profile=profile,
+        counts=get_dashboard_counts(),
+        search_history=get_search_history(),
+        skill_suggestions=[skill for skill in SKILL_ALIASES if skill.casefold() not in {s.casefold() for s in profile["skills"]}],
+        filters={"status": status_filter, "state": state_filter, "title": title_filter, "sort": sort_by},
+    )
+
+
+@app.route("/credibility-scores")
+def credibility_scores():
+    return render_template("credibility-scores.html")
+
+
+@app.route("/rejected-listings")
+def rejected_listings():
+    ensure_job_tracking_columns()
+    return render_template(
+        "rejected-listings.html",
+        companies=get_rejected_companies(),
+        blocked_domains=get_blocked_domains(),
+        blocked_companies=get_blocked_companies(),
+        blocked_domain_info=block_details("domains", get_blocked_domains()),
+        blocked_company_info=block_details("companies", get_blocked_companies()),
+        company_notice=request.args.get("company_notice", ""),
+        domain_notice=request.args.get("domain_notice", ""),
+    )
+
+
+@app.route("/reject-listing/<int:company_id>", methods=["POST"])
+def reject_listing(company_id):
+    ensure_job_tracking_columns()
+    wants_json = request.headers.get("X-Requested-With") == "fetch" or request.accept_mimetypes.best == "application/json"
+    connection = None
+    cursor = None
+    domain = None
+    try:
+        connection = mysql.connector.connect(
+            host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD, database=DB_NAME
+        )
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute("SELECT domain FROM companies WHERE id = %s", (company_id,))
+        row = cursor.fetchone()
+        if not row:
+            if wants_json:
+                return api_error("E3201", "The listing could not be found.", 404)
+            return redirect(request.referrer or "/")
+
+        domain = row.get("domain")
+        cursor.execute(
+            """
+            UPDATE companies
+            SET is_rejected = 1, is_kept = 0, application_status = 'Rejected',
+                rejected_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+            """,
+            (company_id,),
+        )
+        connection.commit()
+        if wants_json:
+            return jsonify({"status": "rejected", "company_id": company_id, "domain": domain})
+    except Error as error:
+        print("Could not reject listing.")
+        print(error)
+        if wants_json:
+            return api_error("E3202", "Could not reject the listing.", 500)
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if connection is not None and connection.is_connected():
+            connection.close()
+
+    return redirect(request.referrer or "/")
+
+
+@app.route("/restore-rejected/<int:company_id>", methods=["POST"])
+def restore_rejected(company_id):
+    ensure_job_tracking_columns()
+    wants_json = request.headers.get("X-Requested-With") == "fetch" or request.accept_mimetypes.best == "application/json"
+    connection = None
+    cursor = None
+    domain = None
+    try:
+        connection = mysql.connector.connect(
+            host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD, database=DB_NAME
+        )
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute("SELECT domain FROM companies WHERE id = %s AND is_rejected = 1", (company_id,))
+        row = cursor.fetchone()
+        if not row:
+            if wants_json:
+                return api_error("E3203", "The rejected listing could not be found.", 404)
+            return redirect("/rejected-listings")
+
+        domain = row.get("domain")
+        cursor.execute(
+            """
+            UPDATE companies
+            SET is_rejected = 0, is_kept = 1, application_status = 'Saved',
+                rejected_at = NULL
+            WHERE id = %s
+            """,
+            (company_id,),
+        )
+        connection.commit()
+        if wants_json:
+            return jsonify({"status": "restored", "company_id": company_id, "domain": domain})
+    except Error as error:
+        print("Could not restore rejected listing.")
+        print(error)
+        if wants_json:
+            return api_error("E3204", "Could not restore the listing.", 500)
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if connection is not None and connection.is_connected():
+            connection.close()
+
+    return redirect("/rejected-listings")
+
+
+@app.route("/block-domain/<int:company_id>", methods=["POST"])
+def block_domain(company_id):
+    ensure_job_tracking_columns()
+    connection = None
+    cursor = None
+    try:
+        connection = mysql.connector.connect(host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD, database=DB_NAME)
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute("SELECT domain FROM companies WHERE id = %s", (company_id,))
+        row = cursor.fetchone()
+        if not row or not row.get("domain"):
+            return api_error("E3210", "No domain was available to block.", 404)
+        add_domain_to_blocklist(row["domain"])
+        return jsonify({"status": "blocked", "domain": row["domain"]})
+    except Error as error:
+        return api_error("E3211", "Could not block the domain.", 500)
+    finally:
+        if cursor is not None: cursor.close()
+        if connection is not None and connection.is_connected(): connection.close()
+
+
+@app.route("/save-profile", methods=["POST"])
+def save_profile():
+    first_name = request.form.get("first_name", "").strip()[:100]
+    last_name = request.form.get("last_name", "").strip()[:100]
+    state = request.form.get("state", "").strip()[:100]
+    raw_job_titles = request.form.get("job_titles", "")[:5000]
+    job_titles = []
+
+    for part in re.split(r"[,\n]+", raw_job_titles):
+        title = part.strip()[:255]
+        if title and title.lower() not in {item.lower() for item in job_titles}:
+            job_titles.append(title)
+
+    try:
+        cities = json.loads(request.form.get("cities_json", "[]") or "[]")
+    except json.JSONDecodeError:
+        cities = []
+    def read_list(key):
+        try:
+            value = json.loads(request.form.get(key, "[]"))
+            return value if isinstance(value, list) else []
+        except (TypeError, ValueError):
+            return []
+    home_location = request.form.get("home_location", "").strip()[:150]
+    primary = request.form.get("primary_job_title", "").strip()[:255]
+    if primary and primary.casefold() not in {title.casefold() for title in job_titles}:
+        primary = ""
+    avatar = request.form.get("avatar_data", "")
+    if avatar and (not re.fullmatch(r"data:image/jpeg;base64,[A-Za-z0-9+/=]+", avatar) or len(avatar) > 550000):
+        abort(400)
+    save_user_profile(first_name, last_name, state, job_titles, cities,
+                      home_location=home_location, primary_job_title=primary,
+                      skills=read_list("skills_json"), work_history=read_list("work_history_json"),
+                      avatar_data=avatar if "avatar_data" in request.form else None)
+    return redirect("/dashboard")
+
+
+@app.route("/profile/save-title", methods=["POST"])
+def save_profile_title():
+    data = request.get_json(silent=True) or {}
+    title = str(data.get("title", "")).strip()[:255]
+    if not title:
+        return api_error("E3301", "Enter a job title.")
+    profile = get_user_profile()
+    if title.casefold() in {s.casefold() for s in profile["job_titles"]}:
+        return jsonify({"status": "already_saved"})
+    profile["job_titles"].append(title)
+    if not save_user_profile(profile["first_name"], profile["last_name"], profile["state"],
+                             profile["job_titles"], profile["cities"]):
+        return api_error("E3302", "Could not save the job title.", 500)
+    return jsonify({"status": "saved"})
+
+
+@app.route("/profile/parse-resume", methods=["POST"])
+def parse_resume():
+    upload = request.files.get("resume")
+    if not upload or not upload.filename:
+        return api_error("E3310", "Choose a PDF or Word document.")
+    extension = Path(upload.filename).suffix.lower()
+    if extension not in (".pdf", ".docx"):
+        return api_error("E3311", "Use a PDF or DOCX résumé.")
+    data = upload.read(5 * 1024 * 1024 + 1)
+    if len(data) > 5 * 1024 * 1024:
+        return api_error("E3312", "The résumé must be under 5 MB.")
+    try:
+        from io import BytesIO
+        if extension == ".pdf":
+            from pypdf import PdfReader
+            text = "\n".join(page.extract_text() or "" for page in PdfReader(BytesIO(data)).pages[:20])
+        else:
+            from docx import Document
+            document = Document(BytesIO(data))
+            text = "\n".join([p.text for p in document.paragraphs] +
+                             [cell.text for table in document.tables for row in table.rows for cell in row.cells])
+    except Exception as error:
+        print(f"Could not parse résumé: {error}")
+        return api_error("E3313", "Could not read that résumé. Try another PDF or DOCX.")
+    if not text.strip():
+        return api_error("E3314", "No selectable text was found. A scanned image résumé needs OCR.")
+    return jsonify({"status": "ok", "suggestions": resume_suggestions(text[:250000])})
+
+
+@app.route("/save-kept", methods=["POST"])
+def save_kept():
+    ensure_keep_column()
+
+    data = request.get_json(silent=True) or {}
+    company_ids = data.get("company_ids", [])
+
+    if not isinstance(company_ids, list):
+        return jsonify({"status": "error", "message": "Invalid company list."}), 400
+
+    cleaned_ids = []
+    for company_id in company_ids:
+        try:
+            cleaned_ids.append(int(company_id))
+        except (TypeError, ValueError):
+            continue
+
+    if not cleaned_ids:
+        return jsonify({"status": "error", "message": "Select at least one result to keep."}), 400
+
+    connection = None
+    cursor = None
+
+    try:
+        connection = mysql.connector.connect(
+            host=DB_HOST,
+            port=DB_PORT,
+            user=DB_USER,
+            password=DB_PASSWORD,
+            database=DB_NAME,
+        )
+        cursor = connection.cursor()
+        placeholders = ",".join(["%s"] * len(cleaned_ids))
+        cursor.execute(
+            f"UPDATE companies SET is_kept = 1, application_status = 'Saved' WHERE id IN ({placeholders})",
+            cleaned_ids,
+        )
+        connection.commit()
+        return jsonify({"status": "saved", "count": cursor.rowcount})
+    except Error as error:
+        return jsonify({"status": "error", "message": str(error)}), 500
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if connection is not None and connection.is_connected():
+            connection.close()
+
+
+
+@app.route("/unsave-kept/<int:company_id>", methods=["POST"])
+def unsave_kept(company_id):
+    ensure_job_tracking_columns()
+    connection = None
+    cursor = None
+    try:
+        connection = mysql.connector.connect(
+            host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD, database=DB_NAME
+        )
+        cursor = connection.cursor()
+        cursor.execute(
+            "UPDATE companies SET is_kept = 0, application_status = 'None' WHERE id = %s",
+            (company_id,),
+        )
+        connection.commit()
+        return jsonify({"status": "unsaved", "company_id": company_id})
+    except Error as error:
+        return api_error("E3102", "Could not unsave the listing.", 500)
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if connection is not None and connection.is_connected():
+            connection.close()
+
+
+@app.route("/stop-search", methods=["POST"])
+def stop_search():
+    global scraper_process, scraper_mode, scraper_last_error
+    with scraper_lock:
+        if scraper_process is None or scraper_process.poll() is not None:
+            scraper_process = None
+            scraper_mode = None
+            return jsonify({"status": "stopped", "message": "No Job Finder process was running."})
+        try:
+            scraper_process.terminate()
+            try:
+                scraper_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                scraper_process.kill()
+                scraper_process.wait(timeout=5)
+            scraper_process = None
+            scraper_mode = None
+            scraper_last_error = None
+            return jsonify({"status": "stopped"})
+        except OSError as error:
+            return api_error("E2105", "Could not stop the current Job Finder action.", 500)
+
+
+@app.route("/update-kept/<int:company_id>", methods=["POST"])
+def update_kept(company_id):
+    ensure_job_tracking_columns()
+    application_status = request.form.get("application_status", "None").strip()
+    notes = request.form.get("notes", "").strip()[:5000]
+    allowed = {"None", "Saved", "Applied", "Interview", "Rejected", "Closed"}
+    if application_status not in allowed:
+        application_status = "None"
+
+    connection = None
+    cursor = None
+    try:
+        connection = mysql.connector.connect(
+            host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD, database=DB_NAME
+        )
+        cursor = connection.cursor()
+        cursor.execute(
+            "UPDATE companies SET application_status = %s, notes = %s WHERE id = %s AND is_kept = 1",
+            (application_status, notes, company_id),
+        )
+        connection.commit()
+    except Error as error:
+        print("Could not update saved result.")
+        print(error)
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if connection is not None and connection.is_connected():
+            connection.close()
+    return redirect(request.referrer or "/dashboard")
+
+
+@app.route("/delete-kept/<int:company_id>", methods=["POST"])
+def delete_kept(company_id):
+    ensure_keep_column()
+    connection = None
+    cursor = None
+
+    try:
+        connection = mysql.connector.connect(
+            host=DB_HOST,
+            port=DB_PORT,
+            user=DB_USER,
+            password=DB_PASSWORD,
+            database=DB_NAME,
+        )
+        cursor = connection.cursor()
+        cursor.execute(
+            "DELETE FROM companies WHERE id = %s AND is_kept = 1",
+            (company_id,),
+        )
+        connection.commit()
+    except Error as error:
+        print()
+        print("Could not delete saved result.")
+        print(error)
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if connection is not None and connection.is_connected():
+            connection.close()
+
+    return redirect("/dashboard")
+
+
+def validate_search_criteria(job_title, state, cities=None):
+    job_title = (job_title or "").strip()[:1000]
+    state = (state or "").strip()[:100]
+
+    if not job_title:
+        return None, None, None, "Enter a job title."
+
+    if not state:
+        return None, None, None, "Enter a state."
+
+    cleaned_cities = []
+    allowed_radii = {10, 15, 20, 30, 50}
+    if isinstance(cities, list):
+        seen = set()
+        for item in cities[:25]:
+            if not isinstance(item, dict):
+                continue
+            city = str(item.get("city", "")).strip()[:150]
+            try:
+                radius = int(item.get("radius", 50))
+            except (TypeError, ValueError):
+                radius = 50
+            if city and radius in allowed_radii and city.lower() not in seen:
+                seen.add(city.lower())
+                cleaned_cities.append({"city": city, "radius": radius})
+
+    return job_title, state, cleaned_cities, None
+
+
+def launch_search_process(job_title, state, cities=None, mode="search"):
+    global scraper_process, scraper_mode, scraper_started_at
+
+    job_title, state, cities, validation_error = validate_search_criteria(job_title, state, cities)
+    if validation_error:
+        return jsonify({"status": "error", "message": validation_error}), 400
+
+    # Keep Search and User Profile on the same saved job-title/location data.
+    if mode != "replacement":
+        try:
+            profile = get_user_profile()
+            titles = []
+            for part in job_title.split(","):
+                title = part.strip()[:255]
+                if title and title.lower() not in {item.lower() for item in titles}:
+                    titles.append(title)
+            save_user_profile(
+                profile.get("first_name", ""),
+                profile.get("last_name", ""),
+                state,
+                titles,
+                cities,
+            )
+        except Exception as error:
+            log_error_code("E3301", f"Could not sync search criteria to profile: {error}")
+
+    with scraper_lock:
+        if scraper_process is not None and scraper_process.poll() is None:
+            return jsonify({"status": "already_running", "mode": scraper_mode}), 200
+
+        if not JOB_FINDER_PATH.exists():
+            return jsonify({"status": "error", "message": "job_finder.py was not found."}), 500
+
+        try:
+            creationflags = 0
+            if os.name == "nt":
+                creationflags = subprocess.CREATE_NO_WINDOW
+
+            global scraper_last_error
+            scraper_last_error = None
+            with SCRAPER_LOG_FILE.open("a", encoding="utf-8") as log_file:
+                log_file.write(
+                    f"\n=== {datetime.now().isoformat(timespec='seconds')} | {mode} | "
+                    f"{job_title} | {state} ===\n"
+                )
+                log_file.flush()
+                scraper_process = subprocess.Popen(
+                    [
+                        sys.executable,
+                        "-u",
+                        str(JOB_FINDER_PATH),
+                        "--job-title",
+                        job_title,
+                        "--state",
+                        state,
+                        "--cities-json",
+                        json.dumps(cities or []),
+                    ] + (["--max-new", "1"] if mode == "replacement" else []),
+                    cwd=str(BASE_DIR),
+                    creationflags=creationflags,
+                    stdout=log_file,
+                    stderr=subprocess.STDOUT,
+                )
+            scraper_mode = mode
+            scraper_started_at = time.monotonic()
+            if mode != "replacement":
+                record_search_history(job_title, state, cities)
+        except OSError as error:
+            scraper_process = None
+            scraper_mode = None
+            return jsonify({"status": "error", "message": str(error)}), 500
+
+    return jsonify({"status": "started"}), 202
+
+
+
+
+@app.route("/job-title-suggestions")
+def job_title_suggestions():
+    titles = (request.args.get("titles") or "").strip()[:1000]
+    return jsonify({"suggestions": related_job_title_suggestions(titles)})
+
+@app.route("/start-search", methods=["POST"])
+def start_search():
+    data = request.get_json(silent=True) or {}
+    return launch_search_process(
+        data.get("job_title"),
+        data.get("state"),
+        data.get("cities"),
+        mode="search",
+    )
+
+
+@app.route("/replace-result", methods=["POST"])
+def replace_result():
+    history = get_search_history(limit=1)
+    if not history:
+        return jsonify({"status": "no_results", "message": "Start a search to save criteria before requesting a replacement."}), 200
+    search = history[0]
+    try:
+        cities = json.loads(search.get("cities_json") or "[]")
+    except (TypeError, ValueError):
+        cities = []
+    return launch_search_process(search.get("job_title"), search.get("state"), cities, mode="replacement")
+
+
+@app.route("/refresh-search", methods=["POST"])
+def refresh_search():
+    """Recheck the result rows currently shown without changing search criteria."""
+    global scraper_process, scraper_mode, scraper_started_at, scraper_last_error
+    data = request.get_json(silent=True) or {}
+    ids = data.get("company_ids")
+    if not isinstance(ids, list) or len(ids) > 500 or any(type(value) is not int or value <= 0 for value in ids):
+        return jsonify({"status": "error", "message": "Invalid result selection."}), 400
+    ids = list(dict.fromkeys(ids))
+    if not ids:
+        return jsonify({"status": "no_results", "message": "There are no displayed listings to refresh."})
+    with scraper_lock:
+        if scraper_process is not None and scraper_process.poll() is None:
+            return jsonify({"status": "already_running", "mode": scraper_mode}), 200
+        if not JOB_FINDER_PATH.exists():
+            return jsonify({"status": "error", "message": "job_finder.py was not found."}), 500
+        try:
+            flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+            scraper_last_error = None
+            with SCRAPER_LOG_FILE.open("a", encoding="utf-8") as log_file:
+                log_file.write(f"\n=== {datetime.now().isoformat(timespec='seconds')} | update-existing ===\n")
+                log_file.flush()
+                scraper_process = subprocess.Popen(
+                    [sys.executable, "-u", str(JOB_FINDER_PATH), "--update-existing", "--update-ids", ",".join(map(str, ids))],
+                    cwd=str(BASE_DIR), creationflags=flags, stdout=log_file, stderr=subprocess.STDOUT,
+                )
+            scraper_mode = "refresh"
+            scraper_started_at = time.monotonic()
+        except OSError as error:
+            scraper_process = None
+            scraper_mode = None
+            return jsonify({"status": "error", "message": str(error)}), 500
+    return jsonify({"status": "started"}), 202
+
+
+@app.route("/update-existing", methods=["POST"])
+def update_existing():
+    global scraper_process, scraper_mode, scraper_started_at
+
+    with scraper_lock:
+        if scraper_process is not None and scraper_process.poll() is None:
+            return jsonify({"status": "already_running", "mode": scraper_mode}), 200
+
+        if not JOB_FINDER_PATH.exists():
+            return jsonify({"status": "error", "message": "job_finder.py was not found."}), 500
+
+        try:
+            creationflags = 0
+            if os.name == "nt":
+                creationflags = subprocess.CREATE_NO_WINDOW
+
+            global scraper_last_error
+            scraper_last_error = None
+            with SCRAPER_LOG_FILE.open("a", encoding="utf-8") as log_file:
+                log_file.write(
+                    f"\n=== {datetime.now().isoformat(timespec='seconds')} | update-existing ===\n"
+                )
+                log_file.flush()
+                scraper_process = subprocess.Popen(
+                    [sys.executable, "-u", str(JOB_FINDER_PATH), "--update-existing"],
+                    cwd=str(BASE_DIR),
+                    creationflags=creationflags,
+                    stdout=log_file,
+                    stderr=subprocess.STDOUT,
+                )
+            scraper_mode = "update"
+            scraper_started_at = time.monotonic()
+        except OSError as error:
+            scraper_process = None
+            scraper_mode = None
+            return jsonify({"status": "error", "message": str(error)}), 500
+
+    return jsonify({"status": "started"}), 202
+
+
+def update_progress_from_log():
+    if not SCRAPER_LOG_FILE.exists():
+        return "Preparing existing results"
+    try:
+        with SCRAPER_LOG_FILE.open("rb") as log_file:
+            size = log_file.seek(0, 2)
+            log_file.seek(max(0, size - 65536))
+            tail = log_file.read().decode("utf-8", errors="replace")
+    except OSError:
+        return "Preparing existing results"
+    current = tail.rsplit("| update-existing ===", 1)[-1]
+    matches = list(re.finditer(r"Updating (\d+)/(\d+): ([^\r\n]+)", current))
+    if matches:
+        latest = matches[-1]
+        completed = "Existing row updated in place." in current[latest.end():] or "Could not update this existing row." in current[latest.end():]
+        verb = "Checked" if completed else "Checking"
+        return f"{verb} {latest.group(1)} of {latest.group(2)}: {latest.group(3)[:70]}"
+    found = re.findall(r"Found (\d+) existing results to verify", current)
+    if found:
+        return f"Found {found[-1]} existing results to check"
+    return "Preparing existing results"
+
+
+def search_progress_from_log(mode):
+    fallback = "Starting replacement search" if mode == "replacement" else "Starting search"
+    if not SCRAPER_LOG_FILE.exists():
+        return {"progress": fallback, "passed": 0}
+    try:
+        with SCRAPER_LOG_FILE.open("rb") as log_file:
+            size = log_file.seek(0, 2)
+            log_file.seek(max(0, size - 2097152))
+            tail = log_file.read().decode("utf-8", errors="replace")
+    except OSError:
+        return {"progress": fallback, "passed": 0}
+    markers = list(re.finditer(r"\| " + re.escape(mode) + r" \|[^\r\n]*===", tail))
+    if not markers:
+        return {"progress": fallback, "passed": 0}
+    current = tail[markers[-1].end():]
+    candidates = list(re.finditer(r"Checking result (\d+): ([^\r\n]+)", current))
+    passed_matches = list(re.finditer(r"Passed validation: (\d+)", current))
+    passed = int(passed_matches[-1].group(1)) if passed_matches else 0
+    if candidates:
+        latest = candidates[-1]
+        progress = f"Checking result {latest.group(1)}: {latest.group(2)[:60]}"
+    else:
+        progress = "Searching for results"
+    return {"progress": progress, "passed": passed}
+
+
+@app.route("/search-status")
+def search_status():
+    running, mode = scraper_status()
+    elapsed = int(time.monotonic() - scraper_started_at) if running and scraper_started_at else 0
+    activity = search_progress_from_log(mode) if running and mode in ("search", "replacement") else None
+    return jsonify({
+        "running": running,
+        "mode": mode,
+        "error": scraper_last_error,
+        "progress": (update_progress_from_log() if mode in ("update", "refresh") else activity["progress"] if activity else None) if running else None,
+        "passed": activity["passed"] if activity else None,
+        "elapsed_seconds": elapsed,
+    })
+
+
 if __name__ == "__main__":
-    app.run(debug=True)
+    initialize_database()
+    ensure_keep_column()
+    ensure_job_tracking_columns()
+    ensure_profile_tables()
+    app.run(host="127.0.0.1", port=5000, debug=False, use_reloader=False)
