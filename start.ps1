@@ -138,15 +138,39 @@ FLASK_SECRET_KEY=$FlaskSecret
     }
 }
 
-& $PythonPath -c "import flask, mysql.connector, dotenv, requests, bs4, pypdf, docx" 2>$null
-if ($LASTEXITCODE -ne 0) {
+function Test-PythonDependencies {
+    $previousPreference = $ErrorActionPreference
+    try {
+        # Windows PowerShell can turn Python's missing-module stderr into a
+        # terminating NativeCommandError when the script preference is Stop.
+        # Capture it here so a missing package reaches the install step.
+        $ErrorActionPreference = "Continue"
+        $output = & $PythonPath -c "import flask, mysql.connector, dotenv, requests, bs4, pypdf, docx" 2>&1
+        $dependencyExitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousPreference
+    }
+    if ($dependencyExitCode -ne 0) {
+        $output | Select-Object -Last 5 | ForEach-Object { Write-Host $_ -ForegroundColor Yellow }
+        return $false
+    }
+    return $true
+}
+
+if (-not (Test-PythonDependencies)) {
     Write-Host "Installing missing Python dependencies..."
-    & $PythonPath -m pip install -r $RequirementsPath
-    if ($LASTEXITCODE -ne 0) {
+    $previousPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        & $PythonPath -m pip install -r $RequirementsPath
+        $pipExitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousPreference
+    }
+    if ($pipExitCode -ne 0) {
         Fail-Startup "E5004" "Required Python packages could not be installed."
     }
-    & $PythonPath -c "import flask, mysql.connector, dotenv, requests, bs4, pypdf, docx" 2>$null
-    if ($LASTEXITCODE -ne 0) {
+    if (-not (Test-PythonDependencies)) {
         Fail-Startup "E5016" "Python dependencies are installed but could not be imported."
     }
 }

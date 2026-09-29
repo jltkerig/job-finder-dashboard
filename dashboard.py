@@ -17,13 +17,14 @@ from dotenv import load_dotenv
 from flask import Flask, abort, jsonify, redirect, render_template, request, session
 from mysql.connector import Error
 from profile_tools import SKILL_ALIASES, fit_score, normalize_skills, resume_suggestions
+from onet_data import occupation_skill_suggestions, related_title_suggestions
 
 BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR / ".env")
 
 app = Flask(__name__)
 
-APP_VERSION = "1.1.61"
+APP_VERSION = "1.1.63"
 
 app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY") or secrets.token_hex(32)
 app.config["SESSION_COOKIE_HTTPONLY"] = True
@@ -143,7 +144,7 @@ def related_job_title_suggestions(raw_titles):
 
     for title in selected:
         key = re.sub(r"\s+", " ", title.lower()).strip()
-        candidates = RELATED_JOB_TITLES.get(key, [])
+        candidates = RELATED_JOB_TITLES.get(key, []) + related_title_suggestions(title)
 
         if not candidates:
             if "designer" in key:
@@ -159,6 +160,25 @@ def related_job_title_suggestions(raw_titles):
                 suggestions.append(candidate)
 
     return suggestions[:8]
+
+
+def profile_skill_suggestions(profile):
+    selected = profile.get("primary_job_title") or next(iter(profile.get("job_titles") or []), "")
+    # Use occupation examples to rank skills our listing parser can also recognize.
+    aliases = {alias.casefold(): name for name, variants in SKILL_ALIASES.items()
+               for alias in [name, *variants]}
+    ranked = []
+    for example in occupation_skill_suggestions(selected, limit=150):
+        lower = example.casefold()
+        canonical = aliases.get(lower)
+        if canonical is None:
+            canonical = next((name for alias, name in aliases.items()
+                              if len(alias) >= 3 and re.search(r"(?<!\w)" + re.escape(alias) + r"(?!\w)", lower)), None)
+        if canonical and canonical not in ranked:
+            ranked.append(canonical)
+    saved = {skill.casefold() for skill in profile.get("skills", [])}
+    return [skill for skill in dict.fromkeys(ranked + list(SKILL_ALIASES))
+            if skill.casefold() not in saved]
 
 
 
@@ -1152,7 +1172,7 @@ def user_dashboard():
         profile=profile,
         counts=get_dashboard_counts(),
         search_history=get_search_history(),
-        skill_suggestions=[skill for skill in SKILL_ALIASES if skill.casefold() not in {s.casefold() for s in profile["skills"]}],
+        skill_suggestions=profile_skill_suggestions(profile),
         filters={"status": status_filter, "state": state_filter, "title": title_filter, "sort": sort_by},
     )
 
@@ -1277,8 +1297,10 @@ def block_domain(company_id):
     try:
         connection = mysql.connector.connect(host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD, database=DB_NAME)
         cursor = connection.cursor(dictionary=True)
-        cursor.execute("SELECT domain FROM companies WHERE id = %s", (company_id,))
+        cursor.execute("SELECT domain, source_type FROM companies WHERE id = %s", (company_id,))
         row = cursor.fetchone()
+        if row and row.get("source_type") == "Remote OK":
+            return api_error("E3212", "This is the feed domain, not the employer domain. Block the company instead.", 400)
         if not row or not row.get("domain"):
             return api_error("E3210", "No domain was available to block.", 404)
         add_domain_to_blocklist(row["domain"])

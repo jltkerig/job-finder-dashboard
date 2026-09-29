@@ -29,6 +29,8 @@ SKILL_ALIASES = {
     "UI Design": ["ui design", "user interface design"],
     "UX Design": ["ux design", "user experience design"],
     "Project Management": ["project management", "project-managed"],
+    "Canva": ["canva"], "Adobe After Effects": ["adobe after effects", "after effects"],
+    "Microsoft Excel": ["microsoft excel", "excel spreadsheets"],
 }
 
 
