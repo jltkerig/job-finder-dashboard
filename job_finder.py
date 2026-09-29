@@ -1771,10 +1771,17 @@ def update_existing_results(company_ids=None):
             if item:
                 try:
                     new_skills = listing_skills(item.get("description") or "")
+                    feed_location = str(item.get("location") or "")[:100] or None
+                    location_changed = company.get("state") != feed_location
+                    status_changed = company.get("job_open_status") != "Open"
                     with database.cursor() as feed_cursor:
                         feed_cursor.execute(
-                            "UPDATE companies SET listing_skills = %s, last_checked = %s WHERE id = %s",
-                            (json.dumps(new_skills), datetime.now(timezone.utc), company_id),
+                            """UPDATE companies SET listing_skills = %s, state = %s,
+                               job_open_status = 'Open', last_checked = %s,
+                               result_updated_at = CASE WHEN %s THEN %s ELSE result_updated_at END
+                               WHERE id = %s""",
+                            (json.dumps(new_skills), feed_location, datetime.now(timezone.utc),
+                             location_changed or status_changed, datetime.now(timezone.utc), company_id),
                         )
                     database.commit()
                     updated += 1
@@ -1783,8 +1790,25 @@ def update_existing_results(company_ids=None):
                     database.rollback()
                     failed += 1
                     print(f"Could not refresh Remote OK listing: {error}")
+            elif remote_feed is not None:
+                try:
+                    with database.cursor() as feed_cursor:
+                        feed_cursor.execute(
+                            """UPDATE companies SET job_open_status = 'Unknown', last_checked = %s,
+                               result_updated_at = CASE WHEN job_open_status <> 'Unknown' THEN %s ELSE result_updated_at END
+                               WHERE id = %s""",
+                            (datetime.now(timezone.utc), datetime.now(timezone.utc), company_id),
+                        )
+                    database.commit()
+                    updated += 1
+                    print("Not in the recent feed; listing status is Unknown until verified at the source.")
+                except Error as error:
+                    database.rollback()
+                    failed += 1
+                    print(f"Could not update Remote OK listing status: {error}")
             else:
-                print("Not in Remote OK's recent feed; status left unchanged.")
+                failed += 1
+                print("Remote OK feed unavailable; status left unchanged.")
             continue
 
         career_credibility = 0
@@ -2091,24 +2115,13 @@ def main(job_title=None, state=None, cities_json=None, max_new=None):
     print("================================")
     print()
 
-    if not start_docker_desktop():
-        return
-
-    if not start_searxng():
-        stop_docker_desktop()
-        return
-
     database = connect_database()
 
     if database is None:
-        stop_searxng()
-        stop_docker_desktop()
         return
 
     if not ensure_database_schema(database):
         database.close()
-        stop_searxng()
-        stop_docker_desktop()
         return
 
     print()
@@ -2134,8 +2147,6 @@ def main(job_title=None, state=None, cities_json=None, max_new=None):
     if not job_titles:
         print("No valid job titles were provided.")
         database.close()
-        stop_searxng()
-        stop_docker_desktop()
         return
 
     try:
@@ -2154,8 +2165,6 @@ def main(job_title=None, state=None, cities_json=None, max_new=None):
     if requested_cities and not city_targets:
         print("ERROR: None of the selected cities could be geocoded. The search was stopped so the mileage filter would not be silently ignored.")
         database.close()
-        stop_searxng()
-        stop_docker_desktop()
         raise SystemExit(2)
     if requested_cities and len(city_targets) < len(requested_cities):
         print(f"Warning: {len(requested_cities) - len(city_targets)} selected city/cities could not be geocoded and were skipped.")
@@ -2203,7 +2212,7 @@ def main(job_title=None, state=None, cities_json=None, max_new=None):
                 inserted = save_company(
                     database, job["name"], job["title"], 6, "remoteok.com",
                     job["url"], job["url"], "United States" if job["usa_score"] == 6 else None,
-                    None, job["usa_score"], work_arrangement="Remote",
+                    job["location"][:100] or None, job["usa_score"], work_arrangement="Remote",
                     skills=listing_skills(job["html"]), source_type="Remote OK",
                 )
                 passed_count += 1
@@ -2216,6 +2225,16 @@ def main(job_title=None, state=None, cities_json=None, max_new=None):
                     existing_companies += 1
         except (requests.RequestException, ValueError, TypeError) as error:
             print(f"Remote OK unavailable; continuing web search: {error}")
+
+    # The remote feed works without Docker. Search it first so a Docker failure
+    # does not prevent independent API results from being saved.
+    if not start_docker_desktop():
+        database.close()
+        return
+    if not start_searxng():
+        database.close()
+        stop_docker_desktop()
+        return
 
     search_queries = []
     city_names = [item.get("city", "").strip() for item in cities if isinstance(item, dict)
