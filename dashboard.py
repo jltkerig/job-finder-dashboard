@@ -24,7 +24,7 @@ load_dotenv(BASE_DIR / ".env")
 
 app = Flask(__name__)
 
-APP_VERSION = "1.1.63"
+APP_VERSION = "1.1.64"
 
 app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY") or secrets.token_hex(32)
 app.config["SESSION_COOKIE_HTTPONLY"] = True

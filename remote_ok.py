@@ -17,14 +17,21 @@ def fetch_jobs(timeout=15):
 
 def matching_jobs(jobs, titles, usa_only=True):
     """A conservative title match and U.S.-eligible location filter."""
-    words = [set(re.findall(r"[a-z0-9]+", title.casefold())) for title in titles]
+    def title_words(value):
+        value = re.sub(r"\bfront[\s-]*end\b", "frontend", value.casefold())
+        value = re.sub(r"\bback[\s-]*end\b", "backend", value)
+        value = re.sub(r"\bfull[\s-]*stack\b", "fullstack", value)
+        return set(re.findall(r"[a-z0-9]+", value))
+
+    words = [title_words(title) for title in titles]
     for job in jobs:
         position = str(job.get("position") or "")
-        position_words = set(re.findall(r"[a-z0-9]+", position.casefold()))
+        position_words = title_words(position)
         if not any(w and w <= position_words for w in words):
             continue
         location = str(job.get("location") or "")
-        eligible = bool(re.search(r"\b(?:USA?|United States|Anywhere|Worldwide|Global)\b", location, re.I))
+        explicit_us = bool(re.search(r"\b(?:USA?|United States)\b", location, re.I))
+        eligible = explicit_us or bool(re.search(r"\b(?:Anywhere|Worldwide|Global)\b", location, re.I))
         if usa_only and not eligible:
             continue
         url = str(job.get("url") or job.get("apply_url") or "")
@@ -37,5 +44,5 @@ def matching_jobs(jobs, titles, usa_only=True):
             "name": str(job.get("company") or "").strip()[:255],
             "title": position[:255], "url": url,
             "location": location, "html": description, "text": text,
-            "usa_score": 6 if re.search(r"\b(?:USA?|United States)\b", location, re.I) else 5,
+            "usa_score": 6 if explicit_us else 5 if eligible else 0,
         }
