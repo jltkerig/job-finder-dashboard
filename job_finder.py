@@ -21,6 +21,7 @@ from remote_ok import fetch_jobs as fetch_remote_ok_jobs, matching_jobs as match
 from job_listings import canonical_url, extract_jobs, job_links, pagination_links, excludes_us, matching_title as matching_job_title
 from ats_feeds import public_board_links
 from onet_data import related_title_suggestions
+from search_skips import cached_skip, latest_decisions, record_decision
 
 # =========================================================
 # FILES
@@ -34,18 +35,13 @@ BLOCKED_DOMAINS_FILE = BASE_DIR / "blocked_domains.txt"
 BLOCKED_COMPANIES_FILE = BASE_DIR / "blocked_companies.txt"
 BLOCKED_COUNTRY_DOMAINS_FILE = BASE_DIR / "blocked_country_domains.txt"
 SEARCH_SKIPS_FILE = BASE_DIR / "search_skips.jsonl"
+_skip_decisions = {}
 
 
 def record_skip(reason, url, title=""):
-    """Keep a bounded, readable trail for the most recent search."""
-    print(f"Skipped ({reason}): {title[:70]} {url[:120]}")
-    try:
-        if SEARCH_SKIPS_FILE.exists() and SEARCH_SKIPS_FILE.stat().st_size > 200_000:
-            return
-        with SEARCH_SKIPS_FILE.open("a", encoding="utf-8") as stream:
-            stream.write(json.dumps({"reason": reason, "url": url, "title": title[:120]}) + "\n")
-    except OSError:
-        pass
+    """Keep each search decision for review and short-lived cache checks."""
+    print(f"Skipped ({reason}): {title[:70]} {url[:120]}", flush=True)
+    record_decision(SEARCH_SKIPS_FILE, _skip_decisions, reason, url, title)
 
 SEARXNG_COMPOSE_FILE = BASE_DIR / "searxng" / "docker-compose.yml"
 
@@ -1765,7 +1761,7 @@ def update_existing_results(company_ids=None):
             details = json.loads(company.get("listing_details") or "{}")
         except (TypeError, ValueError):
             details = {}
-        work_arrangement = detect_work_arrangement(search_title)
+        work_arrangement = detect_work_arrangement(search_title) or company.get("work_arrangement")
         skills = None
 
         print()
@@ -1838,10 +1834,13 @@ def update_existing_results(company_ids=None):
             response = safe_request(career_url)
             if response is not None:
                 skills = listing_skills(response.text)
-                work_arrangement = work_arrangement or detect_work_arrangement("", response.text)
+                current_postings = extract_jobs(career_url, response.text, [search_title])
+                matching_posting = next((opening for opening in current_postings
+                                         if canonical_url(opening["url"]) == canonical_url(career_url)), None)
+                work_arrangement = (matching_posting or {}).get("type") or work_arrangement or detect_work_arrangement("", response.text)
                 career_data = score_career_page(career_url, response.text)
                 career_credibility = career_data["score"]
-                active_posting = bool(details and extract_jobs(career_url, response.text, [search_title]))
+                active_posting = bool(details and current_postings)
                 if active_posting:
                     career_credibility = max(CAREER_CREDIBILITY_THRESHOLD, career_credibility)
                 if details and not active_posting:
@@ -1872,9 +1871,6 @@ def update_existing_results(company_ids=None):
             location_data["country"] = company.get("country")
             location_data["state"] = company.get("state")
             location_data["score"] = company.get("usa_credibility") or 0
-
-        if not work_arrangement and not source_url and not career_url:
-            work_arrangement = company.get("work_arrangement")
 
         update_cursor = None
         try:
@@ -2118,13 +2114,10 @@ def distance_to_city_targets(database, html, fallback_text, state, targets):
 def main(job_title=None, state=None, cities_json=None, max_new=None):
     global MAX_SEARCH_RESULTS
     _page_cache.clear()
+    _skip_decisions.clear()
+    _skip_decisions.update(latest_decisions(SEARCH_SKIPS_FILE))
     if max_new is not None:
         MAX_SEARCH_RESULTS = max_new
-    if max_new is None:
-        try:
-            SEARCH_SKIPS_FILE.write_text("", encoding="utf-8")
-        except OSError:
-            pass
     print()
     print("================================")
     print("       PERSONAL JOB FINDER")
@@ -2289,6 +2282,8 @@ def main(job_title=None, state=None, cities_json=None, max_new=None):
             f'"{title}" "{state}" jobs',
             f'{title} careers {state}',
             f'{title} hiring {state}',
+            f'"{title}" freelance project {state}',
+            f'"{title}" contract gig {state}',
         ])
         for candidate_query in title_queries:
             if candidate_query not in search_queries:
@@ -2348,7 +2343,11 @@ def main(job_title=None, state=None, cities_json=None, max_new=None):
                     blocked_sites += 1
                     record_skip("Blocked domain", url, title)
                     continue
-                print(f"Checking result {candidate_number}: {title[:75]}")
+                print(f"Checking result {candidate_number}: {title[:75]}", flush=True)
+                recent_skip = cached_skip(_skip_decisions, url)
+                if recent_skip:
+                    print(f"Skipped (recent check: {recent_skip['reason']}): {title[:70]} {url[:120]}", flush=True)
+                    continue
                 websites_checked += 1
                 landing = safe_request(url)
                 if landing is None:
@@ -2441,10 +2440,12 @@ def main(job_title=None, state=None, cities_json=None, max_new=None):
                                                 work_arrangement=arrangement, skills=listing_skills(page.text),
                                                 listing_details=details)
                         if detail_score < CAREER_CREDIBILITY_THRESHOLD:
+                            record_skip("Low credibility lead", job_url, opening["title"])
                             print(f"Saved lead for review: {opening['title']} ({detail_score * 10}% credibility)")
                             continue
+                        record_decision(SEARCH_SKIPS_FILE, _skip_decisions, "Passed", job_url, opening["title"])
                         passed_count += 1
-                        print(f"Passed validation: {passed_count} · {opening['title']}")
+                        print(f"Passed validation: {passed_count} · {opening['title']} — {', '.join(details.get('evidence') or ['individual opening'])}", flush=True)
                         if inserted:
                             companies_saved += 1
                             print(f"Saved job {companies_saved}/{MAX_SEARCH_RESULTS}: {job_url}")
@@ -2504,6 +2505,9 @@ def parse_arguments():
 
 
 if __name__ == "__main__":
+    for output in (sys.stdout, sys.stderr):
+        if hasattr(output, "reconfigure"):
+            output.reconfigure(encoding="utf-8", errors="backslashreplace")
     args = parse_arguments()
 
     if args.update_existing:

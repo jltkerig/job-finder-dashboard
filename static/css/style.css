@@ -1295,6 +1295,11 @@ body[data-page="search"] #results-table .listing-arrangement { display:block; ma
 .skipped-results { margin:0 0 16px; padding:12px 14px; border:1px solid #c7d3df; border-radius:8px; background:#f7fafc; color:#243e56; }
 .skipped-results summary { cursor:pointer; font-weight:700; }
 .skipped-results ul { max-height:230px; overflow:auto; padding-left:20px; line-height:1.5; font-size:.83rem; overflow-wrap:anywhere; }
+.search-skip-list { list-style:none; padding:0; margin:14px 0; display:grid; gap:8px; }
+.search-skip-list li { padding:11px 13px; border:1px solid #d4dce4; background:#fff; border-radius:8px; overflow-wrap:anywhere; }
+.search-skip-list li[hidden] { display:none; }
+.search-skip-list li div { display:grid; gap:5px; }
+.search-skip-list small { color:#516070; }
 .reject-reason-label { display:flex; gap:8px; align-items:center; flex-wrap:wrap; font-size:.82rem; }
 .reject-reason-label select { max-width:190px; padding:5px 8px; }
 body[data-page="search"] .results-toolbar .compact-field { min-width:0; }
@@ -1303,6 +1308,11 @@ body[data-page="search"] .results-toolbar select, body[data-page="search"] .resu
   body[data-page="search"] .results-toolbar { grid-template-columns:repeat(4,minmax(0,1fr)); }
   body[data-page="search"] .results-toolbar .toolbar-title, body[data-page="search"] .results-toolbar .results-count { grid-column:1/-1; }
 }
+body[data-page="search"] .results-toolbar { align-items:start; }
+body[data-page="search"] .results-toolbar .compact-field { align-self:start; }
+body[data-page="search"] .results-toolbar .compact-field label { min-height:1.35em; }
+body[data-page="search"] .results-toolbar .compact-field input,
+body[data-page="search"] .results-toolbar .compact-field select { min-height:42px; }
 
 /* Listing controls and typography: version 1.1.53 */
 body[data-page="search"] #results-table .keep-action,
@@ -1345,7 +1355,8 @@ body[data-page="rejected"] .saved-job-card .saved-job-topline h3.long-job-title 
   body[data-page="search"] #results-table th:nth-child(8) { width:74px; }
   body[data-page="search"] #results-table th:nth-child(9) { width:95px; }
   body[data-page="search"] #results-table th:nth-child(10) { width:69px; }
-  body[data-page="search"] #results-table th:nth-child(11) { width:260px; }
+  body[data-page="search"] #results-table th:nth-child(11) { width:75px; }
+  body[data-page="search"] #results-table th:nth-child(12) { width:260px; }
   body[data-page="search"] #results-table th:nth-child(6),
   body[data-page="search"] #results-table th:nth-child(9),
   body[data-page="search"] #results-table .result-row td:nth-child(6),
@@ -1430,6 +1441,15 @@ body[data-page="rejected"] .rejected-card .card-actions > button { flex:1 1 180p
 #avatar-canvas { max-width:100%; width:100%; height:auto; cursor:grab; touch-action:none; }
 #avatar-zoom { display:block; width:100%; }
 #dashboard-refresh-status { margin:0 0 14px; }
+.skill-add-row input,.skill-add-row button { box-sizing:border-box; min-height:42px; }
+#work-history-list { margin-bottom:16px; }
+#add-work-history { margin-top:8px; }
+.work-entry input[type="month"] { min-height:42px; }
+.history-months { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+.history-months input[type="checkbox"] { width:auto; }
+@media(max-width:680px) { .history-months { grid-template-columns:1fr; } }
+.profile-preferences { display:flex; flex-wrap:wrap; gap:8px 16px; margin-top:10px; }
+.profile-preferences label { display:inline-flex; align-items:center; gap:6px; }
 @media(max-width:680px) {
   .profile-save-actions .bordered-button,.history-actions .bordered-button { flex:1 1 auto; width:auto; }
   .dashboard-filter-panel .filter-actions { display:flex; flex-wrap:wrap; }

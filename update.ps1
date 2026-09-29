@@ -10,6 +10,29 @@ $BackupRoot = Join-Path $PythonDir "job-finder-backups"
 $TempRoot = Join-Path $env:TEMP ("job-finder-update-" + [guid]::NewGuid().ToString("N"))
 $UpdateLog = Join-Path $ProjectDir "update.log"
 $backup = $null
+$backupVerified = $false
+$installationStarted = $false
+$backupFiles = @()
+$backupDirectories = @()
+
+function Assert-BackupComplete {
+    if (-not $backup -or -not (Test-Path -LiteralPath $backup -PathType Container)) {
+        throw "The backup directory is missing."
+    }
+    $backupItems = @(Get-ChildItem -LiteralPath $backup -Recurse -Force)
+    if (@($backupItems | Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint }).Count) {
+        throw "Backup contains a reparse point; recovery must be reviewed manually."
+    }
+    foreach ($relative in $backupDirectories) {
+        if (-not (Test-Path -LiteralPath (Join-Path $backup $relative) -PathType Container)) {
+            throw "Backup directory is missing: $relative"
+        }
+    }
+    foreach ($entry in $backupFiles) {
+        $savedHash = (Get-FileHash -LiteralPath (Join-Path $backup $entry.Path) -Algorithm SHA256).Hash
+        if ($savedHash -ne $entry.Hash) { throw "Backup verification failed: $($entry.Path)" }
+    }
+}
 
 function Write-UpdateLog([string]$Message) {
     $line = "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') $Message"
@@ -17,7 +40,9 @@ function Write-UpdateLog([string]$Message) {
 }
 
 function Restore-Backup {
-    if ($backup -and (Test-Path $backup)) {
+    if ($backupVerified -and $installationStarted) {
+        # Recheck the saved bytes before removing any partially installed files.
+        Assert-BackupComplete
         Write-UpdateLog "Restoring backup after failed update."
 
         # Remove partially installed files first so rollback cannot leave a mixed-version project.
@@ -25,7 +50,7 @@ function Restore-Backup {
             Remove-Item $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
         }
 
-        Get-ChildItem $backup -Force | ForEach-Object {
+        Get-ChildItem $backup -Force | Where-Object { $_.Name -ne "update.log" } | ForEach-Object {
             Copy-Item $_.FullName (Join-Path $ProjectDir $_.Name) -Recurse -Force
         }
     }
@@ -47,12 +72,36 @@ try {
         $copyNumber++
     }
     New-Item -ItemType Directory -Path $backup -ErrorAction Stop | Out-Null
-    Get-ChildItem $ProjectDir -Force | Where-Object { $_.Name -ne "__pycache__" } | ForEach-Object {
+    $originalItems = @(Get-ChildItem -LiteralPath $ProjectDir -Recurse -Force)
+    if (@($originalItems | Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint }).Count) {
+        throw "Project contains a reparse point; create a reviewed backup before updating."
+    }
+    $backupDirectories = @($originalItems | Where-Object { $_.PSIsContainer } | ForEach-Object {
+        $_.FullName.Substring($ProjectDir.Length + 1)
+    })
+    # update.log is actively appended and is never deleted by rollback.
+    $backupFiles = @($originalItems | Where-Object { -not $_.PSIsContainer -and $_.FullName -ne $UpdateLog } | ForEach-Object {
+        [PSCustomObject]@{
+            Path = $_.FullName.Substring($ProjectDir.Length + 1)
+            Hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash
+        }
+    })
+    Get-ChildItem $ProjectDir -Force | ForEach-Object {
         Copy-Item $_.FullName (Join-Path $backup $_.Name) -Recurse -Force
     }
-    Write-UpdateLog "Backup created at $backup"
+    Assert-BackupComplete
+    foreach ($entry in $backupFiles) {
+        if ((Get-FileHash -LiteralPath (Join-Path $ProjectDir $entry.Path) -Algorithm SHA256).Hash -ne $entry.Hash) {
+            throw "Project changed during backup: $($entry.Path)"
+        }
+    }
+    $currentPaths = @(Get-ChildItem -LiteralPath $ProjectDir -Recurse -Force | ForEach-Object { $_.FullName })
+    $originalPaths = @($originalItems | ForEach-Object { $_.FullName })
+    if (Compare-Object $originalPaths $currentPaths) { throw "Project contents changed during backup." }
+    $backupVerified = $true
+    Write-UpdateLog "Backup verified at $backup"
 
-    $preserve = @(".env", "settings.json", "blocked_domains.txt", "blocked_companies.txt", "blocked_country_domains.txt", "block_metadata.json", "dashboard.log", "dashboard-error.log", "job_finder.log", "update.log")
+    $preserve = @(".env", "settings.json", "blocked_domains.txt", "blocked_companies.txt", "blocked_country_domains.txt", "block_metadata.json", "dashboard.log", "dashboard-error.log", "job_finder.log", "search_skips.jsonl", "update.log")
 
     New-Item -ItemType Directory -Path $TempRoot -Force | Out-Null
     Expand-Archive -LiteralPath $ZipPath -DestinationPath $TempRoot -Force
@@ -60,6 +109,7 @@ try {
     if (-not $dashboardFile) { throw "dashboard.py was not found inside the update ZIP." }
     $sourceRoot = $dashboardFile.Directory.FullName
 
+    $installationStarted = $true
     Get-ChildItem $sourceRoot -Force | ForEach-Object {
         if ($_.Name -notin $preserve -and $_.Name -ne "__pycache__") {
             $destination = Join-Path $ProjectDir $_.Name

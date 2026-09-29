@@ -146,13 +146,22 @@ def extract_jobs(url, html, wanted):
                 remote = True
             employer = _plain(node.get("hiringOrganization"))
             description = BeautifulSoup(_plain(node.get("description")), "html.parser").get_text(" ", strip=True)
-            arrangement = "Hybrid" if re.search(r"\bhybrid\b", f"{location} {description[:2500]}", re.I) else "Remote" if remote or re.search(r"\b(?:fully remote|remote position|remote role|work from home)\b", description[:2500], re.I) else "Onsite" if re.search(r"\b(?:on[- ]?site|in[- ]?office)\b", f"{location} {description[:2500]}", re.I) else None
+            work_text = f"{title} {location} {description[:2500]}"
+            location_type = _plain(node.get("jobLocationType"))
+            arrangement = ("Hybrid" if re.search(r"\bhybrid\b", f"{location_type} {work_text}", re.I)
+                           else "Remote" if remote or re.search(r"\b(?:remote|telecommut(?:e|ing)|work from home|wfh)\b", f"{title} {location}", re.I)
+                           or re.search(r"\b(?:fully remote|remote position|remote role|remote work|work from home|telecommut(?:e|ing))\b", description[:2500], re.I)
+                           else "Onsite" if re.search(r"\b(?:on[- ]?site|in[- ]?office|in[- ]?person|office[- ]based)\b", work_text, re.I)
+                           else None)
             evidence = ["JobPosting data", "title matches search", "direct listing link"]
             posted = _freshness(node.get("datePosted"))
             if posted:
                 evidence.append("posted " + posted)
+            schedule = _plain(node.get("employmentType"))
+            if re.search(r"\b(?:freelanc(?:e|er)|gig|project[- ]based|independent contractor)\b", f"{schedule} {title} {description[:2500]}", re.I):
+                schedule = "Freelance / Gig"
             results.append(dict(title=title[:255], url=direct, company=employer[:255], location=location[:100],
-                                type=arrangement, schedule=_plain(node.get("employmentType"))[:100],
+                                type=arrangement, schedule=schedule[:100],
                                 salary=_salary(node.get("baseSalary")), posted=posted, evidence=evidence,
                                 description=description))
             seen.add(direct)
@@ -170,10 +179,12 @@ def extract_jobs(url, html, wanted):
     if not apply or not (JOB_PATH.search(urlparse(url).path) or any(urlparse(url).hostname.endswith(h) for h in ATS_HOSTS)):
         return []
     direct = canonical_url(url)
+    page_text=soup.get_text(" ", strip=True)[:20000]
+    project_work=bool(re.search(r"\b(?:freelanc(?:e|er)|gig|project[- ]based|independent contractor)\b", f"{title} {page_text[:2500]}", re.I))
     return [dict(title=title[:255], url=direct, company="", location="", type=None,
-                 schedule="", salary="", posted=None,
+                 schedule="Freelance / Gig" if project_work else "", salary="", posted=None,
                  evidence=["job detail page", "title matches search", "apply action"],
-                 description=soup.get_text(" ", strip=True)[:20000])]
+                 description=page_text)]
 
 
 def job_links(url, html, limit=24):
