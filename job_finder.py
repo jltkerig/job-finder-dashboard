@@ -2,12 +2,11 @@ import argparse
 import json
 import math
 import time
-import json
 import os
 import re
 import subprocess
 import sys
-import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urljoin, urlparse
@@ -19,6 +18,9 @@ from mysql.connector import Error
 from dotenv import load_dotenv
 from profile_tools import listing_skills
 from remote_ok import fetch_jobs as fetch_remote_ok_jobs, matching_jobs as matching_remote_ok_jobs
+from job_listings import canonical_url, extract_jobs, job_links, pagination_links, excludes_us, matching_title as matching_job_title
+from ats_feeds import public_board_links
+from onet_data import related_title_suggestions
 
 # =========================================================
 # FILES
@@ -31,6 +33,19 @@ SETTINGS_FILE = BASE_DIR / "settings.json"
 BLOCKED_DOMAINS_FILE = BASE_DIR / "blocked_domains.txt"
 BLOCKED_COMPANIES_FILE = BASE_DIR / "blocked_companies.txt"
 BLOCKED_COUNTRY_DOMAINS_FILE = BASE_DIR / "blocked_country_domains.txt"
+SEARCH_SKIPS_FILE = BASE_DIR / "search_skips.jsonl"
+
+
+def record_skip(reason, url, title=""):
+    """Keep a bounded, readable trail for the most recent search."""
+    print(f"Skipped ({reason}): {title[:70]} {url[:120]}")
+    try:
+        if SEARCH_SKIPS_FILE.exists() and SEARCH_SKIPS_FILE.stat().st_size > 200_000:
+            return
+        with SEARCH_SKIPS_FILE.open("a", encoding="utf-8") as stream:
+            stream.write(json.dumps({"reason": reason, "url": url, "title": title[:120]}) + "\n")
+    except OSError:
+        pass
 
 SEARXNG_COMPOSE_FILE = BASE_DIR / "searxng" / "docker-compose.yml"
 
@@ -113,10 +128,11 @@ USA_ONLY = settings.get(
 
 USER_AGENT = "PersonalJobFinder/1.0"
 MAX_HTML_SIZE = 2_000_000
+_page_cache = {}
 
 HEADERS = {"User-Agent": USER_AGENT}
 
-CAREER_CREDIBILITY_THRESHOLD = 6
+CAREER_CREDIBILITY_THRESHOLD = 3
 USA_CREDIBILITY_THRESHOLD = 5
 MAX_DISCOVERY_PAGES = 8
 
@@ -520,7 +536,9 @@ def ensure_database_schema(connection):
             "result_updated_at": "TIMESTAMP NULL DEFAULT NULL AFTER last_checked",
             "work_arrangement": "VARCHAR(20) NULL AFTER distance_miles",
             "listing_skills": "TEXT NULL AFTER work_arrangement",
+            "listing_details": "TEXT NULL AFTER listing_skills",
             "is_rejected": "TINYINT(1) NOT NULL DEFAULT 0 AFTER is_kept",
+            "rejection_reason": "VARCHAR(40) NULL AFTER is_rejected",
         }
 
         for column_name, definition in required_columns.items():
@@ -602,6 +620,7 @@ def save_company(
     work_arrangement=None,
     skills=None,
     source_type="SearXNG",
+    listing_details=None,
 ):
     now = datetime.now(timezone.utc)
     cursor = None
@@ -609,31 +628,20 @@ def save_company(
     try:
         cursor = connection.cursor()
 
-        # Feed items have stable source URLs; a provider domain is shared by many employers.
-        if source_type == "Remote OK":
-            cursor.execute("SELECT id FROM companies WHERE source_type = %s AND source_url = %s LIMIT 1", (source_type, source_url))
-        else:
-            cursor.execute(
-            """
-            SELECT id
-            FROM companies
-            WHERE LOWER(TRIM(domain)) = LOWER(TRIM(%s))
-              AND LOWER(TRIM(COALESCE(career_job_title, ''))) = LOWER(TRIM(%s))
-            LIMIT 1
-            """,
-            (domain, career_job_title or ""),
-            )
+        # An employer can have many openings; the individual posting URL is the key.
+        cursor.execute("SELECT id FROM companies WHERE source_url = %s LIMIT 1", (source_url,))
         duplicate = cursor.fetchone()
         if duplicate:
             cursor.execute(
                 """
                 UPDATE companies
-                SET name = %s, career_credibility = %s, career_url = %s, source_url = %s,
+                SET name = %s, career_job_title = %s, career_credibility = %s, career_url = %s, source_url = %s,
                     source_type = %s, country = %s, state = %s, city = %s, latitude = %s, longitude = %s, distance_miles = %s, usa_credibility = %s, work_arrangement = %s,
-                    listing_skills = %s, job_open_status = 'Open', last_checked = %s
+                    listing_skills = %s, listing_details = %s, job_open_status = 'Open', last_checked = %s,
+                    result_updated_at = %s
                 WHERE id = %s
                 """,
-                (name, career_credibility, career_url, source_url, source_type, country, state, city, latitude, longitude, distance_miles, usa_credibility, work_arrangement, json.dumps(skills or []), now, duplicate[0]),
+                (name, career_job_title, career_credibility, career_url, source_url, source_type, country, state, city, latitude, longitude, distance_miles, usa_credibility, work_arrangement, json.dumps(skills or []), json.dumps(listing_details or {}), now, now, duplicate[0]),
             )
             connection.commit()
             return False
@@ -658,12 +666,13 @@ def save_company(
             usa_credibility,
             work_arrangement,
             listing_skills,
+            listing_details,
             date_found,
             last_checked
         )
         VALUES
         (
-            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
         )
         ON DUPLICATE KEY UPDATE
             name = VALUES(name),
@@ -682,6 +691,7 @@ def save_company(
             usa_credibility = VALUES(usa_credibility),
             work_arrangement = VALUES(work_arrangement),
             listing_skills = VALUES(listing_skills),
+            listing_details = VALUES(listing_details),
             last_checked = VALUES(last_checked)
         """
 
@@ -705,6 +715,7 @@ def save_company(
                 usa_credibility,
                 work_arrangement,
                 json.dumps(skills or []),
+                json.dumps(listing_details or {}),
                 now,
                 now,
             ),
@@ -718,6 +729,20 @@ def save_company(
         print(error)
         return False
 
+    finally:
+        if cursor is not None:
+            cursor.close()
+
+
+def rejected_posting_urls(connection):
+    """Do not rediscover openings the user explicitly rejected."""
+    cursor = None
+    try:
+        cursor = connection.cursor()
+        cursor.execute("SELECT source_url FROM companies WHERE is_rejected = 1 AND source_url IS NOT NULL")
+        return {canonical_url(row[0]) for row in cursor.fetchall() if row[0]}
+    except Error:
+        return set()
     finally:
         if cursor is not None:
             cursor.close()
@@ -769,6 +794,10 @@ def safe_request(url):
     if not is_valid_url(url):
         return None
 
+    key = canonical_url(url)
+    if not update_existing_mode and key in _page_cache:
+        return _page_cache[key]
+
     try:
         time.sleep(REQUEST_DELAY)
 
@@ -815,6 +844,9 @@ def safe_request(url):
                 return None
 
         response._content = content
+
+        if not update_existing_mode and len(_page_cache) < 250:
+            _page_cache[key] = response
 
         return response
 
@@ -1651,37 +1683,6 @@ def inspect_company_site(homepage, search_title, domain):
     }
 
 
-def choose_best_career_page(candidate_urls):
-    best = None
-
-    for candidate_url in candidate_urls[:MAX_DISCOVERY_PAGES]:
-        response = safe_request(candidate_url)
-        if response is None:
-            continue
-
-        career_data = score_career_page(candidate_url, response.text)
-        if is_student_employment_overview(candidate_url, response.text):
-            print(f"Skipping student employment overview: {candidate_url}")
-            continue
-        location_data = analyze_usa_location(
-            response.text,
-            source_label=f"career page {candidate_url}",
-            page_url=response.url,
-        )
-
-        candidate = {
-            "url": candidate_url,
-            "career": career_data,
-            "location": location_data,
-            "html": response.text,
-        }
-
-        if best is None or candidate["career"]["score"] > best["career"]["score"]:
-            best = candidate
-
-    return best
-
-
 # =========================================================
 # UPDATE EXISTING RESULTS
 # =========================================================
@@ -1704,7 +1705,6 @@ def update_existing_results(company_ids=None):
     if not ensure_database_schema(database):
         database.close()
         return
-
     cursor = None
     try:
         cursor = database.cursor(dictionary=True)
@@ -1723,6 +1723,7 @@ def update_existing_results(company_ids=None):
                 career_credibility,
                 work_arrangement,
                 listing_skills,
+                listing_details,
                 source_type,
                 is_kept,
                 job_open_status
@@ -1760,6 +1761,10 @@ def update_existing_results(company_ids=None):
         career_url = company.get("career_url")
         source_url = company.get("source_url")
         search_title = company.get("career_job_title") or company.get("name") or ""
+        try:
+            details = json.loads(company.get("listing_details") or "{}")
+        except (TypeError, ValueError):
+            details = {}
         work_arrangement = detect_work_arrangement(search_title)
         skills = None
 
@@ -1836,7 +1841,12 @@ def update_existing_results(company_ids=None):
                 work_arrangement = work_arrangement or detect_work_arrangement("", response.text)
                 career_data = score_career_page(career_url, response.text)
                 career_credibility = career_data["score"]
-                if career_credibility >= CAREER_CREDIBILITY_THRESHOLD:
+                active_posting = bool(details and extract_jobs(career_url, response.text, [search_title]))
+                if active_posting:
+                    career_credibility = max(CAREER_CREDIBILITY_THRESHOLD, career_credibility)
+                if details and not active_posting:
+                    job_open_status = "Unknown"
+                elif active_posting or career_credibility >= CAREER_CREDIBILITY_THRESHOLD:
                     job_open_status = "Open"
                 elif career_credibility <= 2:
                     job_open_status = "Closed"
@@ -2107,8 +2117,14 @@ def distance_to_city_targets(database, html, fallback_text, state, targets):
 
 def main(job_title=None, state=None, cities_json=None, max_new=None):
     global MAX_SEARCH_RESULTS
+    _page_cache.clear()
     if max_new is not None:
         MAX_SEARCH_RESULTS = max_new
+    if max_new is None:
+        try:
+            SEARCH_SKIPS_FILE.write_text("", encoding="utf-8")
+        except OSError:
+            pass
     print()
     print("================================")
     print("       PERSONAL JOB FINDER")
@@ -2123,6 +2139,8 @@ def main(job_title=None, state=None, cities_json=None, max_new=None):
     if not ensure_database_schema(database):
         database.close()
         return
+
+    rejected_urls = rejected_posting_urls(database)
 
     print()
     print("Connected to job_finder database.")
@@ -2148,6 +2166,20 @@ def main(job_title=None, state=None, cities_json=None, max_new=None):
         print("No valid job titles were provided.")
         database.close()
         return
+
+    selected_titles = list(job_titles)
+    for title in selected_titles:
+        role = title.casefold().split()[-1]
+        added = 0
+        for suggestion in related_title_suggestions(title, limit=12):
+            if role in suggestion.casefold().split() and suggestion.casefold() not in seen_job_titles:
+                job_titles.append(suggestion)
+                seen_job_titles.add(suggestion.casefold())
+                added += 1
+                if added == 2:
+                    break
+    if len(job_titles) > len(selected_titles):
+        print("Related O*NET search titles: " + ", ".join(job_titles[len(selected_titles):]))
 
     try:
         cities = json.loads(cities_json or "[]")
@@ -2176,7 +2208,8 @@ def main(job_title=None, state=None, cities_json=None, max_new=None):
     print(f'State: "{state}"')
     print(f'Searching {len(job_titles)} job title(s).')
 
-    visited_domains = set()
+    fetched_pages = set()
+    seen_openings = set()
     seen_result_urls = set()
     results_checked = 0
     candidate_number = 0
@@ -2184,7 +2217,6 @@ def main(job_title=None, state=None, cities_json=None, max_new=None):
 
 
     websites_checked = 0
-    career_sites_found = 0
     companies_saved = 0
     passed_count = 0
     blocked_sites = 0
@@ -2209,11 +2241,16 @@ def main(job_title=None, state=None, cities_json=None, max_new=None):
                 print(f"Checking result {candidate_number}: {job['title'][:75]} (Remote OK)")
                 if not job["name"] or job["name"].casefold() in BLOCKED_COMPANIES:
                     continue
+                if canonical_url(job["url"]) in rejected_urls:
+                    record_skip("Previously rejected", job["url"], job["title"])
+                    continue
                 inserted = save_company(
                     database, job["name"], job["title"], 6, "remoteok.com",
                     job["url"], job["url"], "United States" if job["usa_score"] == 6 else None,
                     job["location"][:100] or None, job["usa_score"], work_arrangement="Remote",
                     skills=listing_skills(job["html"]), source_type="Remote OK",
+                    listing_details={"location": job["location"], "evidence": ["Remote OK feed", "matching title"],
+                                     "matched_title": next((wanted for wanted in job_titles if matching_job_title(job["title"], [wanted])), job_titles[0])},
                 )
                 passed_count += 1
                 print(f"Passed validation: {passed_count}")
@@ -2302,218 +2339,119 @@ def main(job_title=None, state=None, cities_json=None, max_new=None):
                 if companies_saved >= MAX_SEARCH_RESULTS or not check_searxng_timer():
                     break
                 candidate_number += 1
-                title = result.get(
-                    "title",
-                    "Unknown Company",
-                )
-
-                print(f"Checking result {candidate_number}: {re.sub(r'\s+', ' ', str(title))[:75]}")
-
-                url = result.get(
-                    "url",
-                    "",
-                )
-
-                if not url:
+                title = str(result.get("title") or "")
+                url = canonical_url(result.get("url") or "")
+                if not url or not is_valid_url(url):
                     continue
-
-                if not is_valid_url(url):
-                    continue
-
                 domain = get_domain(url)
-
-                if not domain:
-                    continue
-
-                if is_blocked_domain(domain):
+                if is_blocked_domain(domain) or has_blocked_country_domain(domain):
                     blocked_sites += 1
-
-                    print("Skipping aggregator: " f"{domain}")
-
+                    record_skip("Blocked domain", url, title)
                     continue
-
-                if has_blocked_country_domain(domain):
-                    blocked_countries += 1
-
-                    print("Skipping non-US domain: " f"{domain}")
-
-                    continue
-
-                if domain in visited_domains:
-                    duplicates += 1
-                    continue
-
-                visited_domains.add(domain)
-
+                print(f"Checking result {candidate_number}: {title[:75]}")
                 websites_checked += 1
-
-                print()
-                print("=" * 60)
-                print(title)
-                print(url)
-                print("Checking website...")
-
-                original_source_url = url
-
-                site_data = inspect_company_site(
-                    homepage=url,
-                    search_title=title,
-                    domain=domain,
-                )
-
-                source_is_directory = is_directory_or_marketplace_result(
-                    domain,
-                    title=title,
-                    html=site_data.get("landing_html", ""),
-                )
-
-                if source_is_directory:
-                    print("Directory/marketplace result detected; using it only as a discovery lead.")
-
-                # Directory/profile pages can point us to the actual company site.
-                resolved_official_employer = False
-
-                if site_data.get("official_site"):
-                    official_url = site_data["official_site"]
-                    official_domain = get_domain(official_url)
-
-                    print(f"Possible official company site: {official_url}")
-
-                    if official_domain and official_domain != domain:
-                        official_data = inspect_company_site(
-                            homepage=official_url,
-                            search_title=title,
-                            domain=official_domain,
-                        )
-
-                        if official_data["career_candidates"]:
-                            site_data = official_data
-                            domain = official_domain
-                            url = official_url
-                            resolved_official_employer = True
-
-                if source_is_directory and not resolved_official_employer:
-                    print("Skipping listing site: no verified official employer careers page was found.")
-                    no_career_page += 1
+                landing = safe_request(url)
+                if landing is None:
+                    record_skip("Page unavailable", url, title)
                     continue
-
-                company_name = site_data["company_name"]
+                landing_soup = BeautifulSoup(landing.text, "html.parser")
+                if is_directory_or_marketplace_result(domain, title, landing.text):
+                    record_skip("Directory or marketplace page", url, title)
+                    continue
+                if landing_soup.find("meta", attrs={"property": "og:type", "content": "article"}) or is_student_employment_overview(url, landing.text):
+                    record_skip("Article or student employment guide", url, title)
+                    continue
+                company_name = extract_company_name(landing_soup, title, domain)
                 if company_name.strip().casefold() in BLOCKED_COMPANIES:
-                    print(f"Skipping blocked company: {company_name}")
                     continue
-                career_candidates = site_data["career_candidates"]
-                location_data = site_data["location"]
-
-                print(f"Company: {company_name}")
-
-                if not career_candidates:
+                # Follow the site's career navigation, then individual job links.
+                # Each URL is fetched at most once per search and failures stay local.
+                pending = [url]
+                for link in landing_soup.find_all("a", href=True):
+                    marker = f"{link.get_text(' ', strip=True)} {link['href']}".casefold()
+                    if any(term in marker for term in ("career", "job openings", "open positions", "join our team")):
+                        candidate = canonical_url(urljoin(url, link["href"]))
+                        if candidate and (get_domain(candidate) == domain or any(get_domain(candidate).endswith(ats) for ats in ATS_DOMAINS)):
+                            pending.append(candidate)
+                pending.extend(job_links(url, landing.text))
+                for board_url in pending[:10]:
+                    pending.extend(public_board_links(board_url, job_titles))
+                checked = set()
+                while pending and len(checked) < 18 and companies_saved < MAX_SEARCH_RESULTS and check_searxng_timer():
+                    page_url = pending.pop(0)
+                    if page_url in checked or page_url in fetched_pages:
+                        continue
+                    checked.add(page_url)
+                    fetched_pages.add(page_url)
+                    page = landing if page_url == url else safe_request(page_url)
+                    if page is None:
+                        record_skip("Job page unavailable", page_url, title)
+                        continue
+                    openings = extract_jobs(page.url, page.text, job_titles)
+                    if not openings and len(checked) < 8:
+                        pending.extend(job_links(page.url, page.text, limit=24))
+                        pending.extend(pagination_links(page.url, page.text))
+                        pending.extend(public_board_links(page.url, job_titles))
+                        prefetch = list(dict.fromkeys(candidate for candidate in pending
+                                                       if candidate not in checked and candidate not in fetched_pages))[:2]
+                        if len(prefetch) == 2:
+                            with ThreadPoolExecutor(max_workers=2) as pool:
+                                list(pool.map(safe_request, prefetch))
+                    elif not openings:
+                        record_skip("No matching individual opening", page.url, title)
+                    for opening in openings:
+                        job_url = canonical_url(opening["url"])
+                        if not job_url or job_url in seen_openings or job_url in rejected_urls:
+                            continue
+                        seen_openings.add(job_url)
+                        if is_blocked_domain(get_domain(job_url)):
+                            continue
+                        name = opening["company"] or company_name
+                        if name.casefold() in BLOCKED_COMPANIES:
+                            continue
+                        details = {key: opening.get(key) for key in ("schedule", "salary", "posted", "evidence", "location")}
+                        details["source"] = url
+                        details["matched_title"] = next((wanted for wanted in job_titles if matching_job_title(opening["title"], [wanted])), job_titles[0])
+                        text = opening["description"] or BeautifulSoup(page.text, "html.parser").get_text(" ", strip=True)
+                        arrangement = opening["type"] or detect_work_arrangement(opening["title"], page.text)
+                        if excludes_us(opening["location"], text):
+                            record_skip("Posting restricts applicants outside the US", job_url, opening["title"])
+                            continue
+                        location = analyze_usa_location(page.text, extra_text=opening["location"], source_label=f"job posting {job_url}", page_url=job_url)
+                        detail_score = max(3, score_career_page(job_url, page.text)["score"])
+                        country = location["country"]
+                        state_name = location["state"] or opening["location"] or None
+                        within_radius, city, lat, lon, miles = True, None, None, None, None
+                        code = US_STATES.get(str(state_name or "").casefold(), str(state_name or "").upper())
+                        if statewide_states and code not in statewide_states and not city_targets:
+                            within_radius = False
+                        elif city_targets and arrangement != "Remote":
+                            within_radius, city, lat, lon, miles = distance_to_city_targets(
+                                database, page.text, opening["location"] or opening["title"], state, city_targets)
+                        if not within_radius:
+                            record_skip("Outside selected location", job_url, opening["title"])
+                            continue
+                        if USA_ONLY and location["score"] < USA_CREDIBILITY_THRESHOLD:
+                            record_skip("US eligibility unverified", job_url, opening["title"])
+                            continue
+                        inserted = save_company(database, name, opening["title"], detail_score,
+                                                get_domain(job_url), job_url, job_url, country,
+                                                str(state_name or "")[:100] or None, location["score"], city=city,
+                                                latitude=lat, longitude=lon, distance_miles=miles,
+                                                work_arrangement=arrangement, skills=listing_skills(page.text),
+                                                listing_details=details)
+                        if detail_score < CAREER_CREDIBILITY_THRESHOLD:
+                            print(f"Saved lead for review: {opening['title']} ({detail_score * 10}% credibility)")
+                            continue
+                        passed_count += 1
+                        print(f"Passed validation: {passed_count} · {opening['title']}")
+                        if inserted:
+                            companies_saved += 1
+                            print(f"Saved job {companies_saved}/{MAX_SEARCH_RESULTS}: {job_url}")
+                        else:
+                            existing_companies += 1
+                if not checked:
                     no_career_page += 1
-                    print("No career candidates found after deeper inspection.")
-                    continue
-
-                print("Possible career pages:")
-                for career_link in career_candidates:
-                    print(f"  {career_link}")
-
-                best_career = choose_best_career_page(career_candidates)
-
-                if best_career is None:
-                    no_career_page += 1
-                    print("Career candidates could not be loaded.")
-                    continue
-
-                career_sites_found += 1
-                primary_career_url = best_career["url"]
-                work_arrangement = detect_work_arrangement(title, best_career.get("html", ""))
-                print(f"  Work arrangement: {work_arrangement or 'Unknown'}")
-                career_credibility = best_career["career"]["score"]
-                location_data = merge_location_data(
-                    location_data,
-                    best_career["location"],
-                )
-
-                print()
-                print("Career validation:")
-                print(f"  Career credibility: {career_credibility}")
-                for reason in best_career["career"]["evidence"]:
-                    print(f"  Evidence: {reason}")
-
-                print()
-                print("Location information:")
-                print("  Country: " f"{location_data['country'] or 'Unknown'}")
-                print("  State: " f"{location_data['state'] or 'Unknown'}")
-                print("  USA credibility: " f"{location_data['score']}")
-                for reason in location_data.get("evidence", []):
-                    print(f"  Evidence: {reason}")
-
-                listing_state = str(location_data.get("state") or "").strip()
-                listing_code = US_STATES.get(listing_state.casefold(), listing_state.upper())
-                statewide_match = listing_code in statewide_states
-                within_radius, detected_city, job_lat, job_lon, distance_miles = True, None, None, None, None
-                if statewide_match:
-                    print(f"  Statewide match: {listing_code}")
-                elif city_targets:
-                    within_radius, detected_city, job_lat, job_lon, distance_miles = distance_to_city_targets(
-                        database, best_career.get("html", ""), title, state, city_targets
-                    )
-                    if detected_city:
-                        print(f"  City: {detected_city}")
-                        if distance_miles is not None:
-                            print(f"  Nearest saved city: {distance_miles:.1f} miles")
-                elif statewide_states:
-                    within_radius = False
-                if not within_radius:
-                    print("Skipping: listing does not match a selected state or city radius.")
-                    continue
-
-                is_viable = career_credibility >= CAREER_CREDIBILITY_THRESHOLD
-                if USA_ONLY:
-                    is_viable = (
-                        is_viable
-                        and location_data["score"] >= USA_CREDIBILITY_THRESHOLD
-                    )
-
-                inserted = save_company(
-                    connection=database,
-                    name=company_name,
-                    career_job_title=title,
-                    career_credibility=career_credibility,
-                    domain=domain,
-                    career_url=primary_career_url,
-                    source_url=original_source_url,
-                    country=location_data["country"],
-                    state=location_data["state"],
-                    usa_credibility=location_data["score"],
-                    work_arrangement=work_arrangement,
-                    skills=listing_skills(best_career.get("html", "")),
-                    city=detected_city,
-                    latitude=job_lat,
-                    longitude=job_lon,
-                    distance_miles=distance_miles,
-                )
-
-                if not is_viable:
-                    print(
-                        "Saved for review, but not counted as viable "
-                        f"(career >= {CAREER_CREDIBILITY_THRESHOLD}, "
-                        f"USA >= {USA_CREDIBILITY_THRESHOLD})."
-                    )
-                    continue
-
-                passed_count += 1
-                print(f"Passed validation: {passed_count}")
-                if inserted:
-                    companies_saved += 1
-                    print(
-                        f"Saved viable company "
-                        f"({companies_saved}/{MAX_SEARCH_RESULTS})."
-                    )
-                else:
-                    existing_companies += 1
-                    print(
-                        "Viable company already exists in database; "
-                        "continuing search."
-                    )
 
     if companies_saved < MAX_SEARCH_RESULTS:
         print()
@@ -2528,6 +2466,9 @@ def main(job_title=None, state=None, cities_json=None, max_new=None):
     print("=" * 60)
     print("SEARCH COMPLETE")
     print()
+    stop_reason = (f"{companies_saved} of {MAX_SEARCH_RESULTS} distinct jobs found" if companies_saved >= MAX_SEARCH_RESULTS
+                   else "Search time limit reached" if not check_searxng_timer() else "Search sources exhausted")
+    print(f"Stop reason: {stop_reason}")
 
     print(f"Search results checked: {results_checked}")
     print(f"Search pages checked: {pages_checked}")
@@ -2544,7 +2485,6 @@ def main(job_title=None, state=None, cities_json=None, max_new=None):
 
     print(f"No career page: " f"{no_career_page}")
 
-    print(f"Career sites found: " f"{career_sites_found}")
 
     print(f"Database saves: " f"{companies_saved}")
 

@@ -95,7 +95,8 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!confirm(`Reject ${companyName}? This hides it from search. You can restore it from Settings.`)) return;
     button.disabled = true; button.classList.add("is-removing"); button.textContent = "Removed";
     try {
-      const response = await fetch(`/reject-listing/${companyId}`, { method: "POST", headers: { "X-CSRF-Token": csrfToken, "X-Requested-With": "fetch", Accept: "application/json" } });
+      const reason=button.closest(".result-row")?.nextElementSibling?.querySelector(".reject-reason")?.value||"other";
+      const response = await fetch(`/reject-listing/${companyId}`, { method: "POST", headers: { "X-CSRF-Token": csrfToken, "X-Requested-With": "fetch", "Content-Type":"application/json", Accept: "application/json" }, body: JSON.stringify({reason}) });
       const data = await readJsonResponse(response, "Could not reject the listing.", "E3202"); if (!response.ok) throw new Error(serverMessage(data, "Could not reject the listing.", "E3202"));
       const item = button.closest(".result-row, .saved-job-card"); if (item) { item.classList.add("is-removing"); setTimeout(() => { if (item.matches("tr")) { const next = item.nextElementSibling; if (next?.classList.contains("details-row")) next.remove(); } item.remove(); updateClientResults(); }, 330); }
       if(page==="search")requestReplacement();
@@ -140,22 +141,27 @@ document.addEventListener("DOMContentLoaded", () => {
     const upper=raw.toUpperCase();
     return STATE_NAMES[upper]?upper:STATE_CODES[raw.toLowerCase()]||upper;
   }
-  const resultFilter = $("#result-filter"), resultStateFilter = $("#result-state-filter"), resultArrangementFilter = $("#result-arrangement-filter"), resultStatusFilter = $("#result-status-filter"), resultSort = $("#result-sort"), resultsCount = $("#results-count"), resultsTableBody = $("#results-table tbody");
+  const resultFilter = $("#result-filter"), resultStateFilter = $("#result-state-filter"), resultArrangementFilter = $("#result-arrangement-filter"), resultStatusFilter = $("#result-status-filter"), resultSort = $("#result-sort"), resultMinCredibility = $("#result-min-credibility"), resultScheduleFilter = $("#result-schedule-filter"), resultsCount = $("#results-count"), resultsTableBody = $("#results-table tbody");
   function updateClientResults() {
     if (!resultsTableBody) return;
     const query=(resultFilter?.value||"").trim().toLowerCase(),status=resultStatusFilter?.value||"all";
     const selectedState=resultStateFilter?.value||"all";
     const selectedArrangement=resultArrangementFilter?.value||"all";
+    const minScore=Number(resultMinCredibility?.value||0), selectedSchedule=resultScheduleFilter?.value||"all";
     const queryState=STATE_NAMES[query.toUpperCase()]?query.toUpperCase():STATE_CODES[query]||null;
     let rows=$$(".result-row",resultsTableBody);
+    const qualified=rows.filter(row=>row.dataset.searchRun==="true"&&Number(row.dataset.careerCredibility||0)>=3).length;
     rows.forEach((row)=>{
       const rowState=stateCode(row.dataset.state);
       const haystack=`${row.dataset.company||""} ${row.dataset.job||""} ${row.dataset.city||""}`.toLowerCase();
       const textMatches=!query||(queryState?rowState===queryState:haystack.includes(query));
       const arrangement=row.dataset.workArrangement||"";
+      const score=Number(row.dataset.careerCredibility||0), schedule=(row.dataset.schedule||"").toLowerCase();
       const matches=textMatches&&(selectedState==="all"||rowState===selectedState)
         &&(selectedArrangement==="all"||arrangement===selectedArrangement||(selectedArrangement==="unknown"&&!arrangement))
-        &&(status==="all"||row.dataset.status===status);
+        &&(status==="all"||row.dataset.status===status)
+        &&(minScore===-1||score>=minScore)&&(minScore!==0||qualified<10||score>=3||row.dataset.saved==="true")
+        &&(selectedSchedule==="all"||schedule.includes(selectedSchedule));
       row.hidden=!matches;
       const details=row.nextElementSibling;
       if(details?.classList.contains("details-row")&&row.hidden)details.hidden=true;
@@ -169,8 +175,9 @@ document.addEventListener("DOMContentLoaded", () => {
     codes.sort((a,b)=>(STATE_NAMES[a]||a).localeCompare(STATE_NAMES[b]||b));
     codes.forEach(code=>{const option=document.createElement("option");option.value=code;option.textContent=STATE_NAMES[code]?`${STATE_NAMES[code]} (${code})`:code;resultStateFilter.appendChild(option);});
   }
-  [resultFilter,resultStateFilter,resultArrangementFilter,resultStatusFilter,resultSort].forEach(control=>control?.addEventListener("input",updateClientResults));
-  [resultStateFilter,resultArrangementFilter,resultStatusFilter,resultSort].forEach(control=>control?.addEventListener("change",updateClientResults));
+  [resultFilter,resultStateFilter,resultArrangementFilter,resultStatusFilter,resultSort,resultMinCredibility,resultScheduleFilter].forEach(control=>control?.addEventListener("input",updateClientResults));
+  [resultStateFilter,resultArrangementFilter,resultStatusFilter,resultSort,resultMinCredibility,resultScheduleFilter].forEach(control=>control?.addEventListener("change",updateClientResults));
+  updateClientResults();
 
   function normalizeJobTitles(value) {
     const seen = new Set();
@@ -426,7 +433,7 @@ document.addEventListener("DOMContentLoaded", () => {
     async function checkSearchStatus(){try{const response=await fetchWithTimeout("/search-status",{cache:"no-store"},8000);const data=await readJsonResponse(response,"Could not read Job Finder status.","E1301");if(!response.ok)throw new Error(serverMessage(data,"Could not read Job Finder status.","E1301"));const previousMode=currentMode;currentMode=data.mode||null;if(wasRunning||data.running)setActivity(data.running,currentMode);if(data.running&&loadingDetail){const seconds=data.elapsed_seconds||0;const elapsed=`${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,"0")}`;loadingDetail.replaceChildren();
       const progressLine=document.createElement("span");progressLine.className="activity-detail-line";progressLine.textContent=data.progress||"Preparing search";loadingDetail.appendChild(progressLine);
       if((currentMode==="search"||currentMode==="replacement")&&data.passed!==null){const passedLine=document.createElement("span");passedLine.className="activity-detail-line";passedLine.textContent=`Passed: ${data.passed}`;loadingDetail.appendChild(passedLine);}
-      const elapsedLine=document.createElement("span");elapsedLine.className="activity-detail-line";elapsedLine.textContent=`${elapsed} elapsed`;loadingDetail.appendChild(elapsedLine);}if(wasRunning&&!data.running){if(data.error)sessionStorage.setItem("jobFinderToast",JSON.stringify({message:data.error,type:"danger"}));else sessionStorage.setItem("jobFinderToast",JSON.stringify({message:previousMode==="update"?"Update complete":previousMode==="refresh"?"Refresh complete":previousMode==="replacement"?"Replacement search finished":"Search complete",type:"success"}));location.reload();return;}wasRunning=data.running;}catch(error){console.error(error);}}
+      const elapsedLine=document.createElement("span");elapsedLine.className="activity-detail-line";elapsedLine.textContent=`${elapsed} elapsed`;loadingDetail.appendChild(elapsedLine);}if(wasRunning&&!data.running){if(data.error)sessionStorage.setItem("jobFinderToast",JSON.stringify({message:data.error,type:"danger"}));else sessionStorage.setItem("jobFinderToast",JSON.stringify({message:previousMode==="update"?"Update complete":previousMode==="refresh"?"Refresh complete":previousMode==="replacement"?"Replacement search finished":data.stop_reason||"Search complete",type:"success"}));location.reload();return;}wasRunning=data.running;}catch(error){console.error(error);}}
     requestReplacement=async()=>{
       try {
         const response=await fetchWithTimeout("/replace-result",{method:"POST",headers:{"X-CSRF-Token":csrfToken}},12000);

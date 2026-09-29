@@ -1290,8 +1290,18 @@ body[data-page="search"] .results-toolbar { grid-template-columns:auto minmax(21
 body[data-page="search"] #results-table .listing-arrangement { display:block; margin-top:4px; font-size:.78rem; color:#526174; }
 
 /* Search results: title, state, type, status and sort filters */
+.result-guide { color:#394c60; background:#e8f0f7; border-left:4px solid #315475; border-radius:6px; padding:10px 14px; font-size:.86rem; line-height:1.45; }
+.job-meta { display:block; margin-top:5px; font-size:.76rem; color:#42586e; line-height:1.35; }
+.skipped-results { margin:0 0 16px; padding:12px 14px; border:1px solid #c7d3df; border-radius:8px; background:#f7fafc; color:#243e56; }
+.skipped-results summary { cursor:pointer; font-weight:700; }
+.skipped-results ul { max-height:230px; overflow:auto; padding-left:20px; line-height:1.5; font-size:.83rem; overflow-wrap:anywhere; }
+.reject-reason-label { display:flex; gap:8px; align-items:center; flex-wrap:wrap; font-size:.82rem; }
+.reject-reason-label select { max-width:190px; padding:5px 8px; }
+body[data-page="search"] .results-toolbar .compact-field { min-width:0; }
+body[data-page="search"] .results-toolbar select, body[data-page="search"] .results-toolbar input { width:100%; min-width:0; }
 @media (min-width:1101px) {
-  body[data-page="search"] .results-toolbar { grid-template-columns:auto minmax(180px,1.5fr) repeat(3,minmax(125px,.75fr)) minmax(145px,.75fr) auto; }
+  body[data-page="search"] .results-toolbar { grid-template-columns:repeat(4,minmax(0,1fr)); }
+  body[data-page="search"] .results-toolbar .toolbar-title, body[data-page="search"] .results-toolbar .results-count { grid-column:1/-1; }
 }
 
 /* Listing controls and typography: version 1.1.53 */

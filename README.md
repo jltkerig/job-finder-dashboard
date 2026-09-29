@@ -1,10 +1,18 @@
-# Job Finder v1.1.64
+# Job Finder v1.1.65
 
 Personal job discovery project using Python, MySQL, Flask, Docker, SearXNG, Remote OK, local O*NET occupation data, and OpenStreetMap Nominatim.
 
 ## What Job Finder does
 
 Job Finder searches the web locally for employer career pages and job listings, checks each result for career and United States location evidence, and saves the findings to MySQL. It uses a local SearXNG instance in Docker for new searches. Results are suggestions to review: a credibility score does not guarantee a company, opening, or application is legitimate.
+
+## v1.1.65 — individual openings
+
+New web searches follow employer career links and supported public Lever and Greenhouse job boards, then save distinct matching postings with their own titles and View links. A general service page, news article, student employment guide, or company careers navigation page does not count as an individual opening. JobPosting data supplies title, location, date, schedule, salary, and remote status where published; details show the evidence and original discovery source. Related O*NET titles can broaden searches while the matched title is recorded. Remote OK remains a separate source.
+
+The search aims for 10 distinct jobs with at least 30% Career Credibility. Lower scoring individual leads can be reviewed during a search, and the automatic filter hides them when the latest search reaches 10 qualifying results. Choose **Show all scores** to see them again. The filter also supports a minimum score and schedule. A collapsed list explains recent skipped pages and optional rejection reasons can help review poor matches. Results include direct salaries only when the source publishes them.
+
+Searches reuse fetched HTML, check a small number of linked pages concurrently, and limit career page exploration per employer. New installations default to shorter request spacing; existing `settings.json` values are preserved during updates. Each page still has a timeout and a failed source is skipped without aborting the entire search. JavaScript-only employer boards and pages that block automated requests may remain inaccessible; a missing date, salary, or work arrangement stays unknown. No login was added in this release.
 
 ### Typical workflow
 

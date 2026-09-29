@@ -2,7 +2,7 @@
 	"searxng_timeout_minutes": 60,
 	"max_search_results": 10,
 	"max_search_pages": 20,
-	"request_delay_seconds": 2,
+	"request_delay_seconds": 0.75,
 	"website_timeout_seconds": 15,
 	"start_docker_automatically": true,
 	"stop_docker_when_finished": true,
