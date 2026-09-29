@@ -141,7 +141,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const upper=raw.toUpperCase();
     return STATE_NAMES[upper]?upper:STATE_CODES[raw.toLowerCase()]||upper;
   }
-  const resultFilter = $("#result-filter"), resultStateFilter = $("#result-state-filter"), resultArrangementFilter = $("#result-arrangement-filter"), resultStatusFilter = $("#result-status-filter"), resultSort = $("#result-sort"), resultMinCredibility = $("#result-min-credibility"), resultScheduleFilter = $("#result-schedule-filter"), resultsCount = $("#results-count"), resultsTableBody = $("#results-table tbody");
+  const resultFilter = $("#result-filter"), resultStateFilter = $("#result-state-filter"), resultArrangementFilter = $("#result-arrangement-filter"), resultStatusFilter = $("#result-status-filter"), resultSort = $("#result-sort"), resultMinCredibility = $("#result-min-credibility"), resultScheduleFilter = $("#result-schedule-filter"), resultNewFilter = $("#result-new-filter"), resultsCount = $("#results-count"), resultsTableBody = $("#results-table tbody");
   function updateClientResults() {
     if (!resultsTableBody) return;
     const query=(resultFilter?.value||"").trim().toLowerCase(),status=resultStatusFilter?.value||"all";
@@ -150,7 +150,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const minScore=Number(resultMinCredibility?.value||0), selectedSchedule=resultScheduleFilter?.value||"all";
     const queryState=STATE_NAMES[query.toUpperCase()]?query.toUpperCase():STATE_CODES[query]||null;
     let rows=$$(".result-row",resultsTableBody);
-    const qualified=rows.filter(row=>row.dataset.searchRun==="true"&&Number(row.dataset.careerCredibility||0)>=3).length;
     rows.forEach((row)=>{
       const rowState=stateCode(row.dataset.state);
       const haystack=`${row.dataset.company||""} ${row.dataset.job||""} ${row.dataset.city||""}`.toLowerCase();
@@ -160,8 +159,9 @@ document.addEventListener("DOMContentLoaded", () => {
       const matches=textMatches&&(selectedState==="all"||rowState===selectedState)
         &&(selectedArrangement==="all"||arrangement===selectedArrangement||(selectedArrangement==="unknown"&&!arrangement))
         &&(status==="all"||row.dataset.status===status)
-        &&(minScore===-1||score>=minScore)&&(minScore!==0||qualified<10||score>=3||row.dataset.saved==="true")
-        &&(selectedSchedule==="all"||schedule.includes(selectedSchedule));
+        &&(minScore===-1||score>=Math.max(3,minScore))
+        &&(selectedSchedule==="all"||(selectedSchedule==="unknown"?!schedule:(selectedSchedule==="freelance"?/freelanc|gig|project.based|independent contractor/.test(schedule):schedule.includes(selectedSchedule))))
+        &&(resultNewFilter?.value!=="new"||row.dataset.new==="true");
       row.hidden=!matches;
       const details=row.nextElementSibling;
       if(details?.classList.contains("details-row")&&row.hidden)details.hidden=true;
@@ -175,8 +175,8 @@ document.addEventListener("DOMContentLoaded", () => {
     codes.sort((a,b)=>(STATE_NAMES[a]||a).localeCompare(STATE_NAMES[b]||b));
     codes.forEach(code=>{const option=document.createElement("option");option.value=code;option.textContent=STATE_NAMES[code]?`${STATE_NAMES[code]} (${code})`:code;resultStateFilter.appendChild(option);});
   }
-  [resultFilter,resultStateFilter,resultArrangementFilter,resultStatusFilter,resultSort,resultMinCredibility,resultScheduleFilter].forEach(control=>control?.addEventListener("input",updateClientResults));
-  [resultStateFilter,resultArrangementFilter,resultStatusFilter,resultSort,resultMinCredibility,resultScheduleFilter].forEach(control=>control?.addEventListener("change",updateClientResults));
+  [resultFilter,resultStateFilter,resultArrangementFilter,resultStatusFilter,resultSort,resultMinCredibility,resultScheduleFilter,resultNewFilter].forEach(control=>control?.addEventListener("input",updateClientResults));
+  [resultStateFilter,resultArrangementFilter,resultStatusFilter,resultSort,resultMinCredibility,resultScheduleFilter,resultNewFilter].forEach(control=>control?.addEventListener("change",updateClientResults));
   updateClientResults();
 
   function normalizeJobTitles(value) {
@@ -312,6 +312,7 @@ document.addEventListener("DOMContentLoaded", () => {
   setupPagination(".rejected-grid",".rejected-card",'[data-pagination="rejected-grid"]',"#rejected-search");
   setupPagination(".blocked-domain-list:not(.blocked-company-list)","li",'[data-pagination="blocked-domain-list"]',"#blocked-domain-search");
   setupPagination(".blocked-company-list","li",'[data-pagination="blocked-company-list"]',"#blocked-company-search");
+  setupPagination(".search-skip-list","li",'[data-pagination="search-skip-list"]',"#search-skip-search");
 
   // Dashboard profile controls. Uploaded documents are parsed in memory and are not retained.
   const profileForm = $("#profile-form");
@@ -338,12 +339,19 @@ document.addEventListener("DOMContentLoaded", () => {
         const chip = document.createElement("span"); chip.className = "skill-chip";
         const label = document.createElement("span"); label.textContent = skill;
         const remove = document.createElement("button"); remove.type = "button"; remove.textContent = "×"; remove.setAttribute("aria-label", `Remove ${skill}`);
-        remove.addEventListener("click", () => { skills.splice(index, 1); renderSkills(); });
+        remove.addEventListener("click", () => { skills.splice(index, 1); renderSkills(); showRelatedSkills(); });
         chip.append(label, remove); skillsList.append(chip);
       }); skillsField.value = JSON.stringify(skills);
     }
     function addSkill(skill) { const value = (skill || "").trim().slice(0, 80); if (value && !skills.some(s => s.toLowerCase() === value.toLowerCase())) { skills.push(value); renderSkills(); } }
-    $("#add-skill").addEventListener("click", () => { addSkill($("#new-skill").value); $("#new-skill").value = ""; });
+    const relatedSkills = {HTML:["CSS","JavaScript","Responsive Design","Accessibility"],CSS:["Sass","Bootstrap","Responsive Design"],JavaScript:["TypeScript","React","jQuery"],"Web Design":["UI Design","UX Design","Figma"],WordPress:["PHP","SEO","Content Management"],"Email Marketing":["Salesforce Marketing Cloud","Litmus"],Git:["GitHub","Docker"]};
+    function showRelatedSkills() {
+      const container=$("#related-skill-suggestions"); if(!container)return;container.replaceChildren();
+      const choices=[...new Set(skills.flatMap(skill=>relatedSkills[skill]||[]))].filter(skill=>!skills.some(saved=>saved.toLowerCase()===skill.toLowerCase())).slice(0,8);
+      if(!choices.length)return;const heading=document.createElement("small");heading.textContent="Related skills to consider (add only if you have them):";container.append(heading);
+      choices.forEach(skill=>{const button=document.createElement("button");button.type="button";button.className="bordered-button secondary-action";button.textContent=`+ ${skill}`;button.addEventListener("click",()=>{addSkill(skill);showRelatedSkills();});container.append(button);});
+    }
+    $("#add-skill").addEventListener("click", () => { addSkill($("#new-skill").value); $("#new-skill").value = ""; showRelatedSkills(); });
     $("#new-skill").addEventListener("keydown", event => { if (event.key === "Enter") { event.preventDefault(); $("#add-skill").click(); } });
     function renderHistory() {
       historyList.replaceChildren();
@@ -351,12 +359,21 @@ document.addEventListener("DOMContentLoaded", () => {
         const details = document.createElement("details"); details.className = "work-entry";
         const summary = document.createElement("summary"); summary.textContent = `${job.role || "New role"}${job.company ? " · " + job.company : ""}`;
         details.append(summary);
-        [["Role", "role"], ["Company", "company"], ["Dates", "dates"], ["Description", "description"]].forEach(([labelText, key]) => {
+        [["Job Title", "role", "e.g. Web Designer"], ["Company", "company", "e.g. Acme Widgets"], ["Dates", "dates", "e.g. Jan 2025 – May 2025"], ["Description", "description", "e.g. Built responsive pages for client websites"]].forEach(([labelText, key, example]) => {
           const label = document.createElement("label"); label.textContent = labelText;
           const input = key === "description" ? document.createElement("textarea") : document.createElement("input");
-          input.value = job[key] || ""; input.maxLength = key === "description" ? 3000 : key === "dates" ? 100 : 150;
+          input.value = job[key] || ""; input.placeholder=example; input.maxLength = key === "description" ? 3000 : key === "dates" ? 100 : 150;
           input.addEventListener("input", () => { job[key] = input.value; if (key === "role" || key === "company") summary.textContent = `${job.role || "New role"}${job.company ? " · " + job.company : ""}`; historyField.value = JSON.stringify(history); });
           label.append(input); details.append(label);
+          if(key==="dates"){
+            const months=document.createElement("div");months.className="history-months";
+            const start=document.createElement("input"),end=document.createElement("input"),current=document.createElement("input");start.type=end.type="month";current.type="checkbox";
+            const known=(job.dates||"").match(/^(\d{4}-\d{2})\s*[–-]\s*(\d{4}-\d{2}|Present)$/i);
+            if(known){start.value=known[1];if(known[2].toLowerCase()==="present")current.checked=true;else end.value=known[2];}
+            const sync=()=>{if(!start.value)return;job.dates=`${start.value} – ${current.checked?"Present":end.value||""}`.trim();input.value=job.dates;end.disabled=current.checked;historyField.value=JSON.stringify(history);};
+            [start,end,current].forEach(control=>control.addEventListener("change",sync));end.disabled=current.checked;
+            for(const [caption,control] of [["Start month",start],["End month",end],["Current job",current]]){const field=document.createElement("label");field.textContent=caption;field.append(control);months.append(field);}details.append(months);
+          }
         });
         const remove = document.createElement("button"); remove.type = "button"; remove.className = "bordered-button secondary-action"; remove.textContent = "Remove Job";
         remove.addEventListener("click", () => { history.splice(index, 1); renderHistory(); }); details.append(remove); historyList.append(details);
@@ -392,7 +409,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const selected = new Set($$("input:checked", resumeContent).map(el => el.dataset.field));
       if (selected.has("name")) { if (!$("#first-name").value) $("#first-name").value = suggestions.first_name || ""; if (!$("#last-name").value) $("#last-name").value = suggestions.last_name || ""; }
       if (selected.has("location") && !$("#home-location").value) { $("#home-location").value = suggestions.home_location || ""; $("#home-location").dispatchEvent(new Event("input")); }
-      if (selected.has("skills")) (suggestions.skills || []).forEach(addSkill);
+      if (selected.has("skills")) { (suggestions.skills || []).forEach(addSkill); showRelatedSkills(); }
       if (selected.has("history")) { (suggestions.work_history || []).forEach(job => { if (!history.some(existing => existing.role.toLowerCase() === job.role.toLowerCase() && existing.company.toLowerCase() === job.company.toLowerCase())) history.push(job); }); renderHistory(); }
       resumeDialog.close(); showToast("Suggestions added for review. Save Profile to keep them.", "success");
     });
@@ -407,6 +424,9 @@ document.addEventListener("DOMContentLoaded", () => {
     canvas.addEventListener("pointerup",()=>dragging=false);
     $("#cancel-avatar").addEventListener("click",()=>cropDialog.close());
     $("#save-avatar").addEventListener("click",()=>{drawCrop();const value=canvas.toDataURL("image/jpeg",0.82);$("#avatar-data").value=value;const avatar=$("#change-avatar");avatar.replaceChildren();const img=document.createElement("img");img.src=value;img.alt="";avatar.append(img);cropDialog.close();showToast("Photo ready. Save Profile to keep it.","success");});
+    const savedAvatar=$("#avatar-data").value;let submittingProfile=false;
+    window.addEventListener("beforeunload",event=>{if(!submittingProfile&&$("#avatar-data").value!==savedAvatar){event.preventDefault();event.returnValue="";}});
+    profileForm.addEventListener("submit",()=>{submittingProfile=true;});
   }
   $$(".save-history-title").forEach(button => button.addEventListener("click", async () => {
     button.disabled = true;
@@ -424,14 +444,15 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  const startButton=$("#start-search"),refreshButton=$("#refresh-search"),updateButton=$("#update-existing"),searchingStatus=$("#searching-status"),activityLabel=$("#activity-label"),progressBar=$("#search-progress-bar");
-  if(startButton&&refreshButton&&updateButton&&searchingStatus&&activityLabel){let wasRunning=document.body.dataset.scraperRunning==="true",currentMode=document.body.dataset.scraperMode||null;
+  const startButton=$("#start-search"),refreshButton=$("#refresh-search"),searchingStatus=$("#searching-status"),activityLabel=$("#activity-label"),progressBar=$("#search-progress-bar");
+  if(startButton&&refreshButton&&searchingStatus&&activityLabel){let wasRunning=document.body.dataset.scraperRunning==="true",currentMode=document.body.dataset.scraperMode||null;
     function getSearchCriteria(){showFormError("");searchCityEditor.addPending?.();const jobTitle=normalizeJobTitles(jobTitleInput?.value||"");const cities=searchCityEditor.getItems();if(!jobTitle){showFormError("Enter at least one job title.");jobTitleInput?.focus();return null;}if(!cities.length){showFormError("Add a city and state or a full state name.");$("#search-city-input")?.focus();return null;}const states=[...new Set(cities.map((i)=>i.scope==="state"?i.city:(i.city.includes(",")?i.city.split(",").pop().trim():"")).filter(Boolean))];const state=states.join(", ")||stateInput?.value.trim()||"United States";if(stateInput)stateInput.value=state;localStorage.setItem("jobFinderJobTitle",jobTitle);localStorage.setItem("jobFinderState",state);return{job_title:jobTitle,state,cities};}
-    function setActivity(running,mode=null){startButton.disabled=running;refreshButton.disabled=running;updateButton.disabled=running;searchingStatus.hidden=true;if(progressBar)progressBar.hidden=true;activityLabel.textContent=mode==="update"?"Updating existing results":mode==="refresh"?"Refreshing results":mode==="replacement"?"Finding a replacement":"Searching";if(running)showLoading(activityLabel.textContent+"…",(mode==="update"||mode==="refresh")?"Checking existing results for current information.":"Job Finder is collecting and validating results.",true);else hideLoading();}
+    function setActivity(running,mode=null){startButton.disabled=running;refreshButton.disabled=running;searchingStatus.hidden=true;if(progressBar)progressBar.hidden=true;activityLabel.textContent=mode==="update"?"Updating existing results":mode==="refresh"?"Refreshing results":mode==="replacement"?"Finding a replacement":"Searching";if(running)showLoading(activityLabel.textContent+"…",(mode==="update"||mode==="refresh")?"Checking existing results for current information.":"Job Finder is collecting and validating results.",true);else hideLoading();}
     async function stopCurrent(){try{await fetch("/stop-search",{method:"POST",headers:{"X-CSRF-Token":csrfToken}});}catch{}setActivity(false);wasRunning=false;currentMode=null;showToast("Job Finder action stopped","info");}
     if(loadingStop)loadingStop.addEventListener("click",stopCurrent);
     async function checkSearchStatus(){try{const response=await fetchWithTimeout("/search-status",{cache:"no-store"},8000);const data=await readJsonResponse(response,"Could not read Job Finder status.","E1301");if(!response.ok)throw new Error(serverMessage(data,"Could not read Job Finder status.","E1301"));const previousMode=currentMode;currentMode=data.mode||null;if(wasRunning||data.running)setActivity(data.running,currentMode);if(data.running&&loadingDetail){const seconds=data.elapsed_seconds||0;const elapsed=`${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,"0")}`;loadingDetail.replaceChildren();
       const progressLine=document.createElement("span");progressLine.className="activity-detail-line";progressLine.textContent=data.progress||"Preparing search";loadingDetail.appendChild(progressLine);
+      if((currentMode==="search"||currentMode==="replacement")&&data.checked!==null){const checkedLine=document.createElement("span");checkedLine.className="activity-detail-line";checkedLine.textContent=`Checked: ${data.checked}`;loadingDetail.appendChild(checkedLine);}
       if((currentMode==="search"||currentMode==="replacement")&&data.passed!==null){const passedLine=document.createElement("span");passedLine.className="activity-detail-line";passedLine.textContent=`Passed: ${data.passed}`;loadingDetail.appendChild(passedLine);}
       const elapsedLine=document.createElement("span");elapsedLine.className="activity-detail-line";elapsedLine.textContent=`${elapsed} elapsed`;loadingDetail.appendChild(elapsedLine);}if(wasRunning&&!data.running){if(data.error)sessionStorage.setItem("jobFinderToast",JSON.stringify({message:data.error,type:"danger"}));else sessionStorage.setItem("jobFinderToast",JSON.stringify({message:previousMode==="update"?"Update complete":previousMode==="refresh"?"Refresh complete":previousMode==="replacement"?"Replacement search finished":data.stop_reason||"Search complete",type:"success"}));location.reload();return;}wasRunning=data.running;}catch(error){console.error(error);}}
     requestReplacement=async()=>{
@@ -470,6 +491,6 @@ document.addEventListener("DOMContentLoaded", () => {
     startButton.addEventListener("click",()=>{const c=getSearchCriteria();if(c)startAction("/start-search","search",c);});refreshButton.addEventListener("click",()=>{
       const companyIds=$$(".result-row").filter(row=>!row.hidden).map(row=>Number(row.dataset.companyId)).filter(Number.isSafeInteger);
       startAction("/refresh-search","refresh",{company_ids:companyIds});
-    });updateButton.addEventListener("click",()=>startAction("/update-existing","update"));setActivity(wasRunning,currentMode);setInterval(checkSearchStatus,2000);
+    });setActivity(wasRunning,currentMode);setInterval(checkSearchStatus,2000);
   }
 });

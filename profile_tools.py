@@ -85,12 +85,14 @@ def resume_suggestions(text):
                      if (match := re.search(r"\b[A-Za-z][A-Za-z .'-]{1,45},\s*(?:[A-Z]{2}|Maryland|Delaware|Virginia|Pennsylvania|New York|California)\b", line))), "")
     # Work experience extraction is deliberately a suggestion: arbitrary resume layouts need human review.
     history = []
-    date_pattern = re.compile(r"\b(?:19|20)\d{2}\s*[-–—]\s*(?:present|current|(?:19|20)\d{2})\b", re.I)
+    month = r"(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)"
+    date_pattern = re.compile(rf"\b(?:{month}\s+)?(?:19|20)\d{{2}}\s*[-–—]\s*(?:{month}\s+)?(?:present|current|(?:19|20)\d{{2}})\b", re.I)
     for i, line in enumerate(lines):
         if date_pattern.search(line):
-            surrounding = [s for s in lines[max(0, i-2):i+1] if s != line and len(s) < 110]
-            if surrounding:
-                history.append({"role": surrounding[-1], "company": surrounding[-2] if len(surrounding) > 1 else "", "dates": line[:100]})
+            preceding = lines[max(0, i-4):i]
+            preceding = [s for s in preceding if len(s) < 110 and not re.match(r"^(?:remote|hybrid|on[- ]?site|[A-Za-z .'-]+,\s*[A-Z]{2})$", s, re.I)]
+            if len(preceding) >= 2:
+                history.append({"role": preceding[-2], "company": preceding[-1], "dates": line[:100]})
         if len(history) >= 12:
             break
     parts = name.split()

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 import os
 from pathlib import Path
 import subprocess
@@ -20,13 +20,14 @@ from mysql.connector import Error
 from profile_tools import SKILL_ALIASES, fit_score, normalize_skills, resume_suggestions
 from onet_data import occupation_skill_suggestions, related_title_suggestions
 from job_listings import NON_JOB_PATH
+from search_skips import TTL_HOURS, latest_decisions
 
 BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR / ".env")
 
 app = Flask(__name__)
 
-APP_VERSION = "1.1.65"
+APP_VERSION = "1.1.67"
 
 app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY") or secrets.token_hex(32)
 app.config["SESSION_COOKIE_HTTPONLY"] = True
@@ -525,6 +526,7 @@ def ensure_profile_tables():
             ("home_location", "VARCHAR(150) NOT NULL DEFAULT ''"),
             ("primary_job_title", "VARCHAR(255) NOT NULL DEFAULT ''"),
             ("avatar_data", "MEDIUMTEXT NULL"),
+            ("work_preferences", "TEXT NULL"),
         ):
             cursor.execute(f"ALTER TABLE user_profile ADD COLUMN IF NOT EXISTS {column} {definition}")
         cursor.execute("""CREATE TABLE IF NOT EXISTS user_profile_skills (
@@ -559,7 +561,7 @@ def get_user_profile():
         "first_name": "",
         "last_name": "",
         "state": "",
-        "home_location": "", "primary_job_title": "", "avatar_data": "", "skills": [], "work_history": [],
+        "home_location": "", "primary_job_title": "", "avatar_data": "", "skills": [], "work_history": [], "work_preferences": [],
         "job_titles": [],
         "cities": [],
     }
@@ -574,13 +576,17 @@ def get_user_profile():
         )
         cursor = connection.cursor(dictionary=True)
         cursor.execute("""
-            SELECT first_name, last_name, state, home_location, primary_job_title, avatar_data
+            SELECT first_name, last_name, state, home_location, primary_job_title, avatar_data, work_preferences
             FROM user_profile
             WHERE id = 1
         """)
         row = cursor.fetchone()
         if row:
             profile.update(row)
+            try:
+                profile["work_preferences"] = json.loads(row.get("work_preferences") or "[]")
+            except ValueError:
+                profile["work_preferences"] = []
 
         cursor.execute("""
             SELECT job_title
@@ -614,7 +620,7 @@ def get_user_profile():
 
 
 def save_user_profile(first_name, last_name, state, job_titles, cities=None, *, home_location=None,
-                      primary_job_title=None, skills=None, work_history=None, avatar_data=None):
+                      primary_job_title=None, skills=None, work_history=None, avatar_data=None, work_preferences=None):
     ensure_profile_tables()
     connection = None
     cursor = None
@@ -639,6 +645,8 @@ def save_user_profile(first_name, last_name, state, job_titles, cities=None, *, 
             cursor.execute("UPDATE user_profile SET primary_job_title = %s WHERE id = 1", (primary_job_title[:255],))
         if avatar_data is not None:
             cursor.execute("UPDATE user_profile SET avatar_data = %s WHERE id = 1", (avatar_data,))
+        if work_preferences is not None:
+            cursor.execute("UPDATE user_profile SET work_preferences = %s WHERE id = 1", (json.dumps(work_preferences),))
         cursor.execute("DELETE FROM user_profile_job_titles WHERE profile_id = 1")
 
         for job_title in job_titles:
@@ -1165,8 +1173,11 @@ def home():
     skipped = []
     if SEARCH_SKIPS_FILE.exists():
         try:
-            for line in SEARCH_SKIPS_FILE.read_text(encoding="utf-8").splitlines()[-50:]:
-                skipped.append(json.loads(line))
+            for item in reversed(list(latest_decisions(SEARCH_SKIPS_FILE).values())):
+                if item.get("reason") != "Passed":
+                    skipped.append(item)
+                if len(skipped) >= 20:
+                    break
         except (OSError, ValueError):
             skipped = []
 
@@ -1180,6 +1191,7 @@ def home():
         profile_cities=profile.get("cities", []),
         profile_job_titles=profile.get("job_titles", []),
         profile_state=profile.get("state", ""),
+        profile_work_preferences=profile.get("work_preferences", []),
     )
 
 
@@ -1214,9 +1226,24 @@ def credibility_scores():
 @app.route("/rejected-listings")
 def rejected_listings():
     ensure_job_tracking_columns()
+    decisions = latest_decisions(SEARCH_SKIPS_FILE)
+    search_skips = []
+    for event in reversed(list(decisions.values())):
+        if event.get("reason") == "Passed":
+            continue
+        checked_at = event.get("checked_at") or ""
+        next_check = "Next search"
+        if checked_at and event.get("reason") in TTL_HOURS:
+            try:
+                expires = datetime.fromisoformat(checked_at.replace("Z", "+00:00")) + timedelta(hours=TTL_HOURS[event["reason"]])
+                next_check = expires.astimezone(ZoneInfo("America/New_York")).strftime("%b %d, %Y %I:%M %p") if expires > datetime.now(timezone.utc) else "Next search"
+            except (ValueError, TypeError):
+                pass
+        search_skips.append({**event, "next_check": next_check})
     return render_template(
         "rejected-listings.html",
         companies=get_rejected_companies(),
+        search_skips=search_skips,
         blocked_domains=get_blocked_domains(),
         blocked_companies=get_blocked_companies(),
         blocked_domain_info=block_details("domains", get_blocked_domains()),
@@ -1377,7 +1404,9 @@ def save_profile():
     save_user_profile(first_name, last_name, state, job_titles, cities,
                       home_location=home_location, primary_job_title=primary,
                       skills=read_list("skills_json"), work_history=read_list("work_history_json"),
-                      avatar_data=avatar if "avatar_data" in request.form else None)
+                      avatar_data=avatar if "avatar_data" in request.form else None,
+                      work_preferences=[value for value in request.form.getlist("work_preferences")
+                                        if value in {"Part-time", "Full-time", "Contract", "Freelance / Gig", "Remote", "Hybrid", "Onsite"}])
     return redirect("/dashboard")
 
 
@@ -1412,7 +1441,7 @@ def parse_resume():
         from io import BytesIO
         if extension == ".pdf":
             from pypdf import PdfReader
-            text = "\n".join(page.extract_text() or "" for page in PdfReader(BytesIO(data)).pages[:20])
+            text = "\n".join(page.extract_text(extraction_mode="layout") or "" for page in PdfReader(BytesIO(data)).pages[:20])
         else:
             from docx import Document
             document = Document(BytesIO(data))
@@ -1824,27 +1853,29 @@ def update_progress_from_log():
 def search_progress_from_log(mode):
     fallback = "Starting replacement search" if mode == "replacement" else "Starting search"
     if not SCRAPER_LOG_FILE.exists():
-        return {"progress": fallback, "passed": 0}
+        return {"progress": fallback, "passed": 0, "checked": 0}
     try:
         with SCRAPER_LOG_FILE.open("rb") as log_file:
             size = log_file.seek(0, 2)
             log_file.seek(max(0, size - 2097152))
             tail = log_file.read().decode("utf-8", errors="replace")
     except OSError:
-        return {"progress": fallback, "passed": 0}
+        return {"progress": fallback, "passed": 0, "checked": 0}
     markers = list(re.finditer(r"\| " + re.escape(mode) + r" \|[^\r\n]*===", tail))
     if not markers:
-        return {"progress": fallback, "passed": 0}
+        return {"progress": fallback, "passed": 0, "checked": 0}
     current = tail[markers[-1].end():]
     candidates = list(re.finditer(r"Checking result (\d+): ([^\r\n]+)", current))
     passed_matches = list(re.finditer(r"Passed validation: (\d+)", current))
     passed = int(passed_matches[-1].group(1)) if passed_matches else 0
-    if candidates:
-        latest = candidates[-1]
-        progress = f"Checking result {latest.group(1)}: {latest.group(2)[:60]}"
+    events = list(re.finditer(r"^(Checking result \d+: |Skipped \([^\r\n]+?\): |Passed validation: \d+ · |Saved lead for review: )([^\r\n]+)", current, re.M))
+    if events:
+        latest = events[-1]
+        progress = (latest.group(1) + latest.group(2))[:220]
     else:
         progress = "Searching for results"
-    return {"progress": progress, "passed": passed}
+    checked = int(candidates[-1].group(1)) if candidates else 0
+    return {"progress": progress, "passed": passed, "checked": checked}
 
 
 @app.route("/search-status")
@@ -1868,6 +1899,7 @@ def search_status():
         "error": scraper_last_error,
         "progress": (update_progress_from_log() if mode in ("update", "refresh") else activity["progress"] if activity else None) if running else None,
         "passed": activity["passed"] if activity else None,
+        "checked": activity["checked"] if activity else None,
         "elapsed_seconds": elapsed,
         "stop_reason": stop_reason,
     })
