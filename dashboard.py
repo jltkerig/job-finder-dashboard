@@ -10,6 +10,7 @@ import json
 import shutil
 import tempfile
 import time
+from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 
 import mysql.connector
@@ -18,13 +19,14 @@ from flask import Flask, abort, jsonify, redirect, render_template, request, ses
 from mysql.connector import Error
 from profile_tools import SKILL_ALIASES, fit_score, normalize_skills, resume_suggestions
 from onet_data import occupation_skill_suggestions, related_title_suggestions
+from job_listings import NON_JOB_PATH
 
 BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR / ".env")
 
 app = Flask(__name__)
 
-APP_VERSION = "1.1.64"
+APP_VERSION = "1.1.65"
 
 app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY") or secrets.token_hex(32)
 app.config["SESSION_COOKIE_HTTPONLY"] = True
@@ -42,6 +44,7 @@ BLOCKED_COMPANIES_FILE = BASE_DIR / "blocked_companies.txt"
 BLOCK_METADATA_FILE = BASE_DIR / "block_metadata.json"
 RECOMMENDED_DOMAINS_FILE = BASE_DIR / "recommended_domains.txt"
 SCRAPER_LOG_FILE = BASE_DIR / "job_finder.log"
+SEARCH_SKIPS_FILE = BASE_DIR / "search_skips.jsonl"
 UPDATE_SCRIPT = BASE_DIR / "update.ps1"
 UPDATE_MARKER = BASE_DIR / ".update-in-progress"
 UPDATE_ZIP_PATTERN = re.compile(r"^job-finder-v(\d+)\.(\d+)\.(\d+)\.zip$", re.IGNORECASE)
@@ -219,6 +222,7 @@ def initialize_database():
                 distance_miles DECIMAL(8,2) NULL,
                 work_arrangement VARCHAR(20) NULL,
                 listing_skills TEXT NULL,
+                listing_details TEXT NULL,
                 usa_credibility INT NULL,
                 date_found TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 last_checked TIMESTAMP NULL DEFAULT NULL,
@@ -228,6 +232,7 @@ def initialize_database():
                 application_status VARCHAR(30) NOT NULL DEFAULT 'None',
                 notes TEXT NULL,
                 is_rejected TINYINT(1) NOT NULL DEFAULT 0,
+                rejection_reason VARCHAR(40) NULL,
                 rejected_at TIMESTAMP NULL DEFAULT NULL
             )
         """)
@@ -343,6 +348,7 @@ def ensure_job_tracking_columns():
             ADD COLUMN IF NOT EXISTS notes TEXT NULL
         """)
         cursor.execute("ALTER TABLE companies ADD COLUMN IF NOT EXISTS listing_skills TEXT NULL")
+        cursor.execute("ALTER TABLE companies ADD COLUMN IF NOT EXISTS listing_details TEXT NULL")
         cursor.execute("""
             ALTER TABLE companies
             ADD COLUMN IF NOT EXISTS source_type VARCHAR(50) NOT NULL DEFAULT 'SearXNG'
@@ -351,6 +357,7 @@ def ensure_job_tracking_columns():
             ALTER TABLE companies
             ADD COLUMN IF NOT EXISTS is_rejected TINYINT(1) NOT NULL DEFAULT 0
         """)
+        cursor.execute("ALTER TABLE companies ADD COLUMN IF NOT EXISTS rejection_reason VARCHAR(40) NULL")
         cursor.execute("""
             ALTER TABLE companies
             ADD COLUMN IF NOT EXISTS rejected_at TIMESTAMP NULL DEFAULT NULL
@@ -847,7 +854,7 @@ def get_rejected_companies():
         cursor.execute("""
             SELECT id, name, career_job_title, career_credibility, domain, career_url,
                    source_url, source_type, country, state, city, latitude, longitude, distance_miles, usa_credibility, work_arrangement, date_found,
-                   last_checked, result_updated_at, rejected_at
+                   last_checked, result_updated_at, rejected_at, rejection_reason
             FROM companies
             WHERE is_rejected = 1
             ORDER BY rejected_at DESC, date_found DESC
@@ -968,6 +975,7 @@ def get_companies():
                 application_status,
                 notes,
                 listing_skills,
+                listing_details,
                 source_type
             FROM companies
             WHERE is_rejected = 0
@@ -977,7 +985,11 @@ def get_companies():
         rows = cursor.fetchall()
         blocked_domains = set(get_blocked_domains())
         blocked_names = {name.casefold() for name in get_blocked_companies()}
-        return [row for row in rows if (row.get("name") or "").casefold() not in blocked_names
+        visible_rows = [row for row in rows if (row.get("name") or "").casefold() not in blocked_names
+                and (row.get("is_kept") or not any(
+                    NON_JOB_PATH.search(urlparse(row.get(key) or "").path)
+                    or (urlparse(row.get(key) or "").hostname or "").startswith("catalystmag.")
+                    for key in ("source_url", "career_url")))
                 and not (re.search(r"/types-of-aid/employment/campus/?(?:[?#]|$)",
                                    (row.get("career_url") or "").lower())
                          and (row.get("career_job_title") or "").strip().casefold() in
@@ -985,6 +997,12 @@ def get_companies():
                 and not any((row.get("domain") or "").lower().removeprefix("www.") == domain
                             or (row.get("domain") or "").lower().endswith("." + domain)
                             for domain in blocked_domains)]
+        for row in visible_rows:
+            try:
+                row["details"] = json.loads(row.get("listing_details") or "{}")
+            except (TypeError, ValueError):
+                row["details"] = {}
+        return visible_rows
 
     except Error as error:
         print()
@@ -1142,10 +1160,21 @@ def home():
     running, mode = scraper_status()
     profile = get_user_profile()
     add_job_fit(companies, profile.get("skills", []))
+    recent_search = get_search_history(limit=1)
+    latest_search_at = recent_search[0].get("searched_at") if recent_search else None
+    skipped = []
+    if SEARCH_SKIPS_FILE.exists():
+        try:
+            for line in SEARCH_SKIPS_FILE.read_text(encoding="utf-8").splitlines()[-50:]:
+                skipped.append(json.loads(line))
+        except (OSError, ValueError):
+            skipped = []
 
     return render_template(
         "index.html",
         companies=companies,
+        skipped=skipped,
+        latest_search_at=latest_search_at,
         scraper_running=running,
         scraper_mode=mode or "",
         profile_cities=profile.get("cities", []),
@@ -1204,6 +1233,9 @@ def reject_listing(company_id):
     connection = None
     cursor = None
     domain = None
+    reason = (request.get_json(silent=True) or {}).get("reason") if request.is_json else request.form.get("reason")
+    if reason not in {"wrong_role", "wrong_location", "not_a_job", "duplicate", "other"}:
+        reason = "other"
     try:
         connection = mysql.connector.connect(
             host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD, database=DB_NAME
@@ -1221,10 +1253,10 @@ def reject_listing(company_id):
             """
             UPDATE companies
             SET is_rejected = 1, is_kept = 0, application_status = 'Rejected',
-                rejected_at = CURRENT_TIMESTAMP
+                rejected_at = CURRENT_TIMESTAMP, rejection_reason = %s
             WHERE id = %s
             """,
-            (company_id,),
+            (reason, company_id),
         )
         connection.commit()
         if wants_json:
@@ -1820,6 +1852,16 @@ def search_status():
     running, mode = scraper_status()
     elapsed = int(time.monotonic() - scraper_started_at) if running and scraper_started_at else 0
     activity = search_progress_from_log(mode) if running and mode in ("search", "replacement") else None
+    stop_reason = None
+    if not running and SCRAPER_LOG_FILE.exists():
+        try:
+            with SCRAPER_LOG_FILE.open("rb") as log_file:
+                size = log_file.seek(0, 2)
+                log_file.seek(max(0, size - 8192))
+                reasons = re.findall(r"Stop reason: ([^\r\n]+)", log_file.read().decode("utf-8", errors="replace"))
+                stop_reason = reasons[-1] if reasons else None
+        except OSError:
+            pass
     return jsonify({
         "running": running,
         "mode": mode,
@@ -1827,6 +1869,7 @@ def search_status():
         "progress": (update_progress_from_log() if mode in ("update", "refresh") else activity["progress"] if activity else None) if running else None,
         "passed": activity["passed"] if activity else None,
         "elapsed_seconds": elapsed,
+        "stop_reason": stop_reason,
     })
 
 
