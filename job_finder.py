@@ -18,6 +18,7 @@ from bs4 import BeautifulSoup
 from mysql.connector import Error
 from dotenv import load_dotenv
 from profile_tools import listing_skills
+from remote_ok import fetch_jobs as fetch_remote_ok_jobs, matching_jobs as matching_remote_ok_jobs
 
 # =========================================================
 # FILES
@@ -600,6 +601,7 @@ def save_company(
     distance_miles=None,
     work_arrangement=None,
     skills=None,
+    source_type="SearXNG",
 ):
     now = datetime.now(timezone.utc)
     cursor = None
@@ -607,8 +609,11 @@ def save_company(
     try:
         cursor = connection.cursor()
 
-        # Treat the same company + job title as the same job even if the URL changes.
-        cursor.execute(
+        # Feed items have stable source URLs; a provider domain is shared by many employers.
+        if source_type == "Remote OK":
+            cursor.execute("SELECT id FROM companies WHERE source_type = %s AND source_url = %s LIMIT 1", (source_type, source_url))
+        else:
+            cursor.execute(
             """
             SELECT id
             FROM companies
@@ -617,18 +622,18 @@ def save_company(
             LIMIT 1
             """,
             (domain, career_job_title or ""),
-        )
+            )
         duplicate = cursor.fetchone()
         if duplicate:
             cursor.execute(
                 """
                 UPDATE companies
                 SET name = %s, career_credibility = %s, career_url = %s, source_url = %s,
-                    source_type = 'SearXNG', country = %s, state = %s, city = %s, latitude = %s, longitude = %s, distance_miles = %s, usa_credibility = %s, work_arrangement = %s,
+                    source_type = %s, country = %s, state = %s, city = %s, latitude = %s, longitude = %s, distance_miles = %s, usa_credibility = %s, work_arrangement = %s,
                     listing_skills = %s, job_open_status = 'Open', last_checked = %s
                 WHERE id = %s
                 """,
-                (name, career_credibility, career_url, source_url, country, state, city, latitude, longitude, distance_miles, usa_credibility, work_arrangement, json.dumps(skills or []), now, duplicate[0]),
+                (name, career_credibility, career_url, source_url, source_type, country, state, city, latitude, longitude, distance_miles, usa_credibility, work_arrangement, json.dumps(skills or []), now, duplicate[0]),
             )
             connection.commit()
             return False
@@ -689,7 +694,7 @@ def save_company(
                 domain,
                 career_url,
                 source_url,
-                "SearXNG",
+                source_type,
                 "Open",
                 country,
                 state,
@@ -1718,6 +1723,7 @@ def update_existing_results(company_ids=None):
                 career_credibility,
                 work_arrangement,
                 listing_skills,
+                source_type,
                 is_kept,
                 job_open_status
             FROM companies
@@ -1741,6 +1747,13 @@ def update_existing_results(company_ids=None):
 
     updated = 0
     failed = 0
+    remote_rows = {row.get("source_url") for row in companies if row.get("source_type") == "Remote OK"}
+    remote_feed = None
+    if remote_rows:
+        try:
+            remote_feed = {str(item.get("url") or item.get("apply_url")): item for item in fetch_remote_ok_jobs()}
+        except (requests.RequestException, ValueError, TypeError) as error:
+            print(f"Remote OK refresh unavailable: {error}")
 
     for index, company in enumerate(companies, start=1):
         company_id = company["id"]
@@ -1753,6 +1766,26 @@ def update_existing_results(company_ids=None):
         print()
         print("=" * 60)
         print(f"Updating {index}/{len(companies)}: {company.get('name') or company.get('domain')}")
+        if company.get("source_type") == "Remote OK":
+            item = (remote_feed or {}).get(source_url)
+            if item:
+                try:
+                    new_skills = listing_skills(item.get("description") or "")
+                    with database.cursor() as feed_cursor:
+                        feed_cursor.execute(
+                            "UPDATE companies SET listing_skills = %s, last_checked = %s WHERE id = %s",
+                            (json.dumps(new_skills), datetime.now(timezone.utc), company_id),
+                        )
+                    database.commit()
+                    updated += 1
+                    print("Remote OK listing still appears in the recent feed.")
+                except Error as error:
+                    database.rollback()
+                    failed += 1
+                    print(f"Could not refresh Remote OK listing: {error}")
+            else:
+                print("Not in Remote OK's recent feed; status left unchanged.")
+            continue
 
         career_credibility = 0
         job_open_status = company.get("job_open_status") or "Open"
@@ -2150,6 +2183,39 @@ def main(job_title=None, state=None, cities_json=None, max_new=None):
     duplicates = 0
     existing_companies = 0
     no_career_page = 0
+
+    # Remote OK publishes a bounded recent feed. Its URL remains the View link
+    # to satisfy the provider's attribution and to avoid inventing employer URLs.
+    if not is_blocked_domain("remoteok.com"):
+        print("Checking Remote OK for matching remote listings...")
+        try:
+            remote_jobs = list(matching_remote_ok_jobs(fetch_remote_ok_jobs(), job_titles, USA_ONLY))
+            print(f"Remote OK matches: {len(remote_jobs)}")
+            remote_saved = 0
+            for job in remote_jobs:
+                if companies_saved >= MAX_SEARCH_RESULTS or remote_saved >= max(1, MAX_SEARCH_RESULTS // 3):
+                    break
+                candidate_number += 1
+                results_checked += 1
+                print(f"Checking result {candidate_number}: {job['title'][:75]} (Remote OK)")
+                if not job["name"] or job["name"].casefold() in BLOCKED_COMPANIES:
+                    continue
+                inserted = save_company(
+                    database, job["name"], job["title"], 6, "remoteok.com",
+                    job["url"], job["url"], "United States" if job["usa_score"] == 6 else None,
+                    None, job["usa_score"], work_arrangement="Remote",
+                    skills=listing_skills(job["html"]), source_type="Remote OK",
+                )
+                passed_count += 1
+                print(f"Passed validation: {passed_count}")
+                if inserted:
+                    companies_saved += 1
+                    remote_saved += 1
+                    print(f"Saved viable company ({companies_saved}/{MAX_SEARCH_RESULTS}).")
+                else:
+                    existing_companies += 1
+        except (requests.RequestException, ValueError, TypeError) as error:
+            print(f"Remote OK unavailable; continuing web search: {error}")
 
     search_queries = []
     city_names = [item.get("city", "").strip() for item in cities if isinstance(item, dict)

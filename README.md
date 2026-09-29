@@ -1,6 +1,6 @@
-# Job Finder v1.1.61
+# Job Finder v1.1.63
 
-Personal job discovery project using Python, MySQL, Flask, Docker, SearXNG, and OpenStreetMap Nominatim.
+Personal job discovery project using Python, MySQL, Flask, Docker, SearXNG, Remote OK, local O*NET occupation data, and OpenStreetMap Nominatim.
 
 ## What Job Finder does
 
@@ -152,3 +152,13 @@ Credibility values display as percentages (the existing 0–10 score multiplied 
 ## v1.1.61
 
 Added a Dashboard skills and work history editor, résumé suggestions with explicit review, a home location and primary title, a cropped profile photo, Save Job Title on recent searches, and a filtered saved-listing refresh with progress. Search and saved jobs show a Job Fit estimate when both user skills and listing-page skills are available. This release also expands the README with a current feature overview.
+
+## v1.1.62
+
+- New searches also check the Remote OK public feed for recent remote positions matching the selected job titles. A few feed matches can be saved alongside the normal web search results. The View link goes to Remote OK as required by its feed terms. Feed listings are attributed on the result and in the footer. An API listing is a lead to review, not an independently verified employer career page; its career and USA credibility values reflect limited feed evidence. A Remote OK row absent from the feed's recent window is **not** automatically marked closed during Update Existing Results.
+- Bundled the August 2026 O*NET 31.0 Database occupation titles and skills files locally. Search title suggestions now use related occupation titles; Dashboard skill suggestions include software examples for the selected primary occupation. These are optional suggestions. Job Fit still compares saved user skills with skills actually detected on the listing, not all skills associated with an occupation. No O*NET Web Services registration or connection is used.
+- O*NET database information has been selected, ranked, and displayed in a modified form. Source: [O*NET 31.0 Database](https://www.onetcenter.org/database.html), U.S. Department of Labor, Employment and Training Administration, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). USDOL/ETA has not approved, endorsed, or tested these modifications. The downloaded source files are in `data/onet-31.0/`; update them when a new release is available.
+
+## v1.1.63
+
+Fixed the Windows PowerShell launcher so an import error from a missing Python package reaches the automatic dependency installation step. It now shows the relevant Python error and reports a clear startup code if installation fails.
