@@ -10,6 +10,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from urllib.parse import urljoin, urlparse
 
 import mysql.connector
@@ -187,7 +188,10 @@ def related_family_titles(typed):
     return extras
 # Job-board sites searched directly (one query per title). Each company board found there is then read in full
 # through its public API. Add more, such as "boards.greenhouse.io", in settings.json under "job_board_sites".
-JOB_BOARD_SITES = settings.get("job_board_sites", ["jobs.ashbyhq.com"])
+JOB_BOARD_SITES = settings.get("job_board_sites", ["jobs.ashbyhq.com", "greenhouse.io", "jobs.lever.co", "apply.workable.com",
+                                                       "jobs.smartrecruiters.com"])
+# Board-site queries return many companies and few pages matter, so they read fewer result pages than title queries.
+SITE_QUERY_PAGES = settings.get("site_query_pages", 2)
 _INTERNSHIP = re.compile(r"\b(?:intern|interns|internship|internships|co-?op)\b", re.I)
 
 
@@ -1088,6 +1092,31 @@ OFFICIAL_BOARD_CREDIBILITY = 8
 def tidy_company_name(name):
     """The company name without a leading entity code."""
     return _LEADING_CODE.sub("", str(name or "")).strip()
+
+
+def verification_label(details, source_type, name, source_url):
+    """Plain-language answer to "is this a real posting by the company?", shown next to the company website."""
+    if source_type == EMPLOYER_SOURCE:
+        return "Company's own careers site"
+    board = details.get("ats_posting")
+    if board:
+        return f"Posted on the company's own {str(board.get('system', '')).title()} hiring board"
+    site = details.get("employer_site")
+    if site and site.get("domain") and get_domain(source_url or "") == site["domain"]:
+        return "Posted on the company's own site"
+    if site:
+        return ("Listed on the company's website" if site.get("posting_found")
+                else "Company website found; this job is not listed there")
+    if source_url and not is_third_party(source_url, name):
+        return "Posted on the company's own site"
+    return "No company website found; not verified"
+
+
+def on_company_site(url, name, details):
+    """True when the page is on the company's own site: a name match, or a subdomain of its verified website."""
+    host = get_domain(url or "")
+    site = ((details or {}).get("employer_site") or {}).get("domain") or ""
+    return bool(url and (not is_third_party(url, name or "") or (site and (host == site or host.endswith("." + site)))))
 
 
 def on_official_board(url):
@@ -2128,6 +2157,27 @@ def load_user_titles(database):
     return list(unique.values())
 
 
+def load_city_targets(database):
+    """(city radius targets, state text) from the most recent search, so Refresh can fill in missing distances."""
+    cursor = None
+    try:
+        cursor = database.cursor()
+        cursor.execute("SELECT state, cities_json FROM search_history ORDER BY searched_at DESC LIMIT 1")
+        latest = cursor.fetchone()
+    except Error:
+        return [], ""
+    finally:
+        if cursor is not None:
+            cursor.close()
+    if not latest:
+        return [], ""
+    try:
+        cities = json.loads(latest[1] or "[]")
+    except ValueError:
+        cities = []
+    return prepare_city_targets(database, latest[0] or "", cities), latest[0] or ""
+
+
 def load_selected_states(database):
     """State codes from the most recent search (state box plus the states of its cities), or an empty set."""
     cursor = None
@@ -2224,12 +2274,32 @@ def apply_link_closed(page_url, page_html):
     return listing_closed(page_url, page_html, get)
 
 
+def fetch_text(url, max_bytes=6_000_000):
+    """Any text file (sitemap.xml, robots.txt) as an object with .url and .text, or None; read politely and size-capped."""
+    if not is_valid_url(url):
+        return None
+    try:
+        wait_for_host(url)
+        response = requests.get(url, headers=HEADERS, timeout=TIMEOUT, stream=True)
+        if not response.ok:
+            return None
+        content = b""
+        for chunk in response.iter_content(chunk_size=65536):
+            content += chunk
+            if len(content) > max_bytes:
+                break
+        response.close()
+        return SimpleNamespace(url=response.url, text=content.decode("utf-8", errors="replace"))
+    except requests.RequestException:
+        return None
+
+
 def find_employer_site(name, job_title, job_url, page_html, titles, location_hint="", allow_search=True, notes=None):
     return resolve_employer_site(
         name, job_title, job_url, page_html, titles, fetch=safe_request,
         search=search_searxng if allow_search else None, score_page=score_career_page,
         is_excluded=is_excluded_employer_host, location_hint=location_hint,
-        allow_search=allow_search, notes=notes)
+        allow_search=allow_search, notes=notes, fetch_raw=fetch_text)
 
 
 # =========================================================
@@ -2297,6 +2367,7 @@ def update_existing_results(company_ids=None):
 
     wanted_titles = expand_job_titles(load_user_titles(database))
     selected_now = load_selected_states(database)
+    city_targets_now, search_state_text = load_city_targets(database)
     clear_employer_cache()
     _debug_run = DebugRun(SEARCH_DEBUG_FILE, "update", JOB_FINDER_VERSION)
     _debug_run.set_inputs(rows_checked=len(companies), update_ids=company_ids,
@@ -2453,6 +2524,8 @@ def update_existing_results(company_ids=None):
         employer_notes = []
         apply_closed = None
         ats_found = False
+        repaired_domain = None
+        landing_html = ""
 
         if source_url and is_valid_url(source_url):
             direct_posting = (company.get("source_type") == EMPLOYER_SOURCE or bool(
@@ -2467,6 +2540,7 @@ def update_existing_results(company_ids=None):
             )
             location_data = merge_location_data(location_data, source_data["location"])
             work_arrangement = work_arrangement or detect_work_arrangement("", source_data.get("landing_html", ""))
+            landing_html = source_data.get("landing_html", "")
             # A job-board repost can outlive the real opening; check where its Apply button leads.
             if is_third_party(source_url, company.get("name") or ""):
                 apply_closed = apply_link_closed(source_url, source_data.get("landing_html", ""))
@@ -2479,7 +2553,8 @@ def update_existing_results(company_ids=None):
                 if employer:
                     career_url = employer["posting_url"] or source_url
                     details["employer_site"] = {"domain": employer["domain"], "careers_url": employer["careers_url"],
-                                                "method": employer["method"]}
+                                                "method": employer["method"],
+                                                "posting_found": bool(employer["posting_url"])}
                     details["original_source"] = source_url
                     details["evidence"] = list(details.get("evidence") or []) + employer["evidence"]
                     print(f"Employer site found: {employer['domain']} ({employer['method']}) -> {career_url}")
@@ -2496,6 +2571,14 @@ def update_existing_results(company_ids=None):
                     f"posting found on the company's own {board_posting['system'].title()} board"]
                 ats_found = True
                 print(f"Company's own posting found: {career_url}")
+        saved_site = details.get("employer_site") or {}
+        listing_host = get_domain(source_url or "")
+        if (saved_site.get("domain") and listing_host != saved_site["domain"]
+                and listing_host.endswith("." + saved_site["domain"])):
+            # The listing is on a subdomain of the company's website (corcoran.gwu.edu under gwu.edu): show that site.
+            saved_site["domain"] = repaired_domain = listing_host
+            saved_site["posting_found"] = True
+            print(f"Company website is {listing_host} (the listing's own site)")
         employer_row = bool(details.get("employer_site"))
         # Rows saved earlier linked View to the employer's careers page; point it back at the job itself.
         saved_careers = (details.get("employer_site") or {}).get("careers_url")
@@ -2569,6 +2652,19 @@ def update_existing_results(company_ids=None):
             location_data["state"] = company.get("state")
             location_data["score"] = company.get("usa_credibility") or 0
 
+        # A row saved before city radii (or with its address at the bottom of the page) gets its distance filled in.
+        found_place = None
+        if (city_targets_now and landing_html and company.get("distance_miles") is None and not company.get("city")
+                and work_arrangement != "Remote"):
+            _, place_city, place_lat, place_lon, place_miles = distance_to_city_targets(
+                database, landing_html, str(details.get("location") or search_title), search_state_text, city_targets_now,
+                allow_footer=on_company_site(source_url, company.get("name"), details))
+            if place_lat is not None:
+                found_place = (place_city, place_lat, place_lon, place_miles)
+                print(f"Distance filled in: {place_city}, {place_miles} miles from the nearest selected city")
+        new_label = verification_label(details, company.get("source_type"), company.get("name"), source_url)
+        details_dirty = bool(employer) or ats_found or bool(repaired_domain) or details.get("verification") != new_label
+        details["verification"] = new_label
         update_cursor = None
         try:
             changed = any((
@@ -2580,6 +2676,7 @@ def update_existing_results(company_ids=None):
                 (company.get("usa_credibility") or 0) != location_data.get("score", 0),
                 employer is not None,
                 repaired_view,
+                found_place is not None,
                 bool(apply_closed),
             ))
             checked_at = datetime.now(timezone.utc)
@@ -2599,6 +2696,10 @@ def update_existing_results(company_ids=None):
                     domain = COALESCE(%s, domain),
                     career_url = COALESCE(%s, career_url),
                     listing_details = COALESCE(%s, listing_details),
+                    city = COALESCE(%s, city),
+                    latitude = COALESCE(%s, latitude),
+                    longitude = COALESCE(%s, longitude),
+                    distance_miles = COALESCE(%s, distance_miles),
                     last_checked = %s,
                     result_updated_at = CASE WHEN %s THEN %s ELSE result_updated_at END
                 WHERE id = %s
@@ -2611,9 +2712,13 @@ def update_existing_results(company_ids=None):
                     location_data.get("score", 0),
                     work_arrangement,
                     json.dumps(skills) if skills is not None else None,
-                    employer["domain"] if employer else None,
+                    employer["domain"] if employer else repaired_domain,
                     career_url if (employer or repaired_view) else None,
-                    json.dumps(details) if employer else None,
+                    json.dumps(details) if details_dirty else None,
+                    found_place[0] if found_place else None,
+                    found_place[1] if found_place else None,
+                    found_place[2] if found_place else None,
+                    found_place[3] if found_place else None,
                     checked_at,
                     changed,
                     checked_at,
@@ -2781,7 +2886,7 @@ def haversine_miles(lat1, lon1, lat2, lon2):
     return radius * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
-def extract_job_city(html, fallback_text=""):
+def extract_job_city(html, fallback_text="", allow_footer=False):
     soup = BeautifulSoup(html or "", "html.parser")
     json_objects = []
     for tag in soup.find_all("script", attrs={"type": "application/ld+json"}):
@@ -2828,13 +2933,18 @@ def extract_job_city(html, fallback_text=""):
 
     # No structured address: look for "City, ST" in the listing's location first, then the page body.
     # A ZIP code or "Location:" wording before the city beats a name like "Contact Jane Doe, MD".
+    # The whole page, footer included, is kept for the last-resort address lookup below (the next call strips it).
+    full_text = soup.get_text(" ", strip=True) if allow_footer else ""
     body = page_body_text(soup)
+    # "Washington, D.C. 20006" is the District's usual spelling; read it as "DC".
+    body = re.sub(r"\bD\.\s?C\.?(?=\s*\d{5}\b|\s|$)", "DC", body)
     leading_noise = {"contact", "email", "call", "address", "location", "located", "office", "offices", "visit", "our",
-                     "at", "in", "based", "dr", "mr", "ms", "mrs", "team", "meet", "join", "apply", "posted"}
+                     "at", "in", "based", "dr", "mr", "ms", "mrs", "team", "meet", "join", "apply", "posted",
+                     "nw", "ne", "sw", "se", "north", "south", "east", "west"}
     candidates = []
     for source, text in ((0, str(fallback_text or "")), (1, body)):
         for match in re.finditer(r"\b([A-Z][A-Za-z'.]+(?:[ -][A-Z][A-Za-z'.]+){0,2}),\s*([A-Z]{2})\b(\s+\d{5})?", text):
-            if match.group(2) not in US_STATE_ABBREVIATIONS:
+            if match.group(2) not in US_STATE_ABBREVIATIONS and match.group(2) != "DC":
                 continue
             words = match.group(1).split(" ")
             while words and words[0].casefold().rstrip(".") in leading_noise:
@@ -2846,6 +2956,20 @@ def extract_job_city(html, fallback_text=""):
     if candidates:
         _, city, region = min(candidates)
         return city, region
+    # On the employer's own site, the street address in the footer is where the office is: use the last
+    # "City, ST 12345" on the page. (On a job board the footer is the board's address, so this is not used.)
+    if allow_footer:
+        full_text = re.sub(r"\bD\.\s?C\.?(?=\s*\d{5}\b)", "DC", full_text)
+        addresses = [match for match in re.finditer(
+            r"\b([A-Z][A-Za-z'.]+(?:[ -][A-Z][A-Za-z'.]+){0,2}),\s*([A-Z]{2})\s+\d{5}\b", full_text)
+            if match.group(2) in US_STATE_ABBREVIATIONS or match.group(2) == "DC"]
+        if addresses:
+            last = addresses[-1]
+            words = last.group(1).split(" ")
+            while words and words[0].casefold().rstrip(".") in leading_noise:
+                words.pop(0)
+            if words:
+                return " ".join(words), last.group(2)
     return None, None
 
 
@@ -2903,10 +3027,10 @@ def prepare_city_targets(database, state, cities):
     return targets
 
 
-def distance_to_city_targets(database, html, fallback_text, state, targets):
+def distance_to_city_targets(database, html, fallback_text, state, targets, allow_footer=False):
     if not targets:
         return True, None, None, None, None
-    city, detected_state = extract_job_city(html, fallback_text)
+    city, detected_state = extract_job_city(html, fallback_text, allow_footer=allow_footer)
     if not city:
         return False, None, None, None, None
     city = clean_region_name(city)
@@ -2974,7 +3098,8 @@ def assess_opening(database, opening, page_html, job_url, search_state, selected
         pass
     elif city_targets:
         within_radius, outcome["city"], outcome["lat"], outcome["lon"], outcome["miles"] = distance_to_city_targets(
-            database, page_html, opening["location"] or opening["title"], search_state, city_targets)
+            database, page_html, opening["location"] or opening["title"], search_state, city_targets,
+            allow_footer=not is_third_party(job_url, opening.get("company") or ""))
     elif statewide_states:
         within_radius = False
     if not within_radius:
@@ -3157,7 +3282,8 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
                 job["location"][:100] or None, job["usa_score"], work_arrangement="Remote",
                 skills=listing_skills(job["html"]), source_type=feed.name,
                 listing_details={"location": job["location"], "posted": job.get("posted"),
-                                 "evidence": [f"{feed.name} feed", "matching title"], "matched_title": matched_title},
+                                 "evidence": [f"{feed.name} feed", "matching title"], "matched_title": matched_title,
+                                 "verification": "From a remote-job feed; the company site was not checked"},
             )
             passed_count += 1
             print(f"Passed validation: {passed_count}")
@@ -3231,6 +3357,7 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
             details = {"schedule": opening["schedule"], "salary": opening["salary"], "posted": opening["posted"],
                        "evidence": opening["evidence"], "location": opening["location"], "matched_title": matched_title,
                        "remote_limited_to": sorted(outcome["remote_limited_to"]),
+                       "verification": "Company's own careers site",
                        "source": employer.adapter.base if hasattr(employer.adapter, "base") else employer.domain}
             inserted = save_company(database, employer.name, opening["title"], outcome["detail_score"], employer.domain,
                                     job_url, job_url, outcome["country"],
@@ -3267,7 +3394,7 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
     known_boards = {config_key(employer.config) for employer in known_employers}
     unreadable_boards = set()
     boards_discovered = 0
-    MAX_BOARDS_PER_RUN = 12
+    MAX_BOARDS_PER_RUN = 20
 
     def discover_board(page_url, company_hint=""):
         """A web result on a hiring platform (UltiPro, Greenhouse, ...): search that employer's whole board."""
@@ -3335,7 +3462,8 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
         return
     web_search_started = True
 
-    search_queries = [f'site:{site} "{title}"' for title in query_titles for site in JOB_BOARD_SITES]
+    # Only the titles you typed are searched on the company-board sites (every board found is then read in full).
+    search_queries = [f'site:{site} "{title}"' for title in selected_titles for site in JOB_BOARD_SITES]
     city_names = [item.get("city", "").strip() for item in cities if isinstance(item, dict)
                   and item.get("city") and item.get("city", "").strip().casefold() not in US_STATES
                   and not _ZIP_CODE.fullmatch(item.get("city", "").strip())]
@@ -3379,7 +3507,8 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
         empty_or_repeating_pages = 0
         dry_pages = 0
 
-        for page in range(1, MAX_SEARCH_PAGES + 1):
+        query_pages = SITE_QUERY_PAGES if search_query.startswith("site:") else MAX_SEARCH_PAGES
+        for page in range(1, query_pages + 1):
             if companies_saved >= MAX_SEARCH_RESULTS or not check_searxng_timer():
                 break
 
@@ -3549,7 +3678,8 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
                             row_career_url = employer["posting_url"] or job_url
                             details["employer_site"] = {"domain": employer["domain"],
                                                         "careers_url": employer["careers_url"],
-                                                        "method": employer["method"]}
+                                                        "method": employer["method"],
+                                                        "posting_found": bool(employer["posting_url"])}
                             details["original_source"] = job_url
                             details["evidence"] = list(details.get("evidence") or []) + employer["evidence"]
                             print(f"Employer site: {employer['domain']} ({employer['method']}) -> {row_career_url}", flush=True)
@@ -3565,6 +3695,7 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
                             details["evidence"] = list(details.get("evidence") or []) + [
                                 f"posting found on the company's own {board_posting['system'].title()} board"]
                             print(f"Company's own posting: {board_posting['url']}", flush=True)
+                        details["verification"] = verification_label(details, None, name, job_url)
                         inserted = save_company(database, name, opening["title"], detail_score,
                                                 row_domain, row_career_url, job_url, country,
                                                 str(state_name or "")[:100] or None, location["score"], city=city,

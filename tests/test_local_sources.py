@@ -163,8 +163,97 @@ class JobBoardQueries(unittest.TestCase):
         queries = self.queries(['jobs.ashbyhq.com'])
         self.assertEqual(queries[:2], ['site:jobs.ashbyhq.com "Web Designer"', 'site:jobs.ashbyhq.com "Visual Designer"'])
 
+    def test_every_company_board_site_is_searched_for_each_title_with_few_pages(self):
+        debug = []
+        run_search({}, 'https://example.com/none', 'Web Designer', max_new=1, debug_out=debug)
+        run = debug[0]['runs'][-1]
+        site_queries = [item for item in run['queries'] if item['query'].startswith('site:')]
+        # The typed title is searched on every board first (related O*NET titles follow).
+        self.assertEqual([item['query'] for item in site_queries[:5]],
+                         [f'site:{site} "Web Designer"' for site in
+                          ('jobs.ashbyhq.com', 'greenhouse.io', 'jobs.lever.co', 'apply.workable.com', 'jobs.smartrecruiters.com')])
+
     def test_the_site_list_can_be_emptied(self):
         self.assertFalse(any(query.startswith('site:') for query in self.queries([])))
+
+
+class SitemapLookup(unittest.TestCase):
+    SITEMAP = ('<urlset><url><loc>https://acme.example/about</loc></url>'
+               '<url><loc>https://acme.example/jobs/senior-graphic-designer-baltimore</loc></url>'
+               '<url><loc>https://acme.example/jobs/web-developer</loc></url></urlset>')
+    JOB_PAGE = '<html><head><title>Senior Graphic Designer | Acme</title></head><body><h1>Senior Graphic Designer</h1></body></html>'
+
+    def pages(self, raw):
+        def fetch_raw(url):
+            return SimpleNamespace(url=url, text=raw[url]) if url in raw else None
+
+        def fetch(url):
+            return SimpleNamespace(url=url, text=self.JOB_PAGE) if 'senior-graphic-designer' in url else None
+        return fetch, fetch_raw
+
+    def test_an_opening_is_found_through_the_sitemap_and_checked_against_its_page(self):
+        import employer_site
+        employer_site.clear_cache()
+        fetch, fetch_raw = self.pages({'https://acme.example/sitemap.xml': self.SITEMAP})
+        found = employer_site._find_in_sitemap('acme.example', 'Senior Graphic Designer', fetch=fetch, fetch_raw=fetch_raw)
+        self.assertEqual(found, 'https://acme.example/jobs/senior-graphic-designer-baltimore')
+
+    def test_nested_sitemaps_and_robots_files_are_followed(self):
+        import employer_site
+        employer_site.clear_cache()
+        index = '<sitemapindex><sitemap><loc>https://acme.example/job-sitemap.xml</loc></sitemap></sitemapindex>'
+        fetch, fetch_raw = self.pages({'https://acme.example/robots.txt': 'Sitemap: https://acme.example/sitemap_main.xml',
+                                       'https://acme.example/sitemap_main.xml': index,
+                                       'https://acme.example/job-sitemap.xml': self.SITEMAP})
+        self.assertIsNotNone(employer_site._find_in_sitemap('acme.example', 'Graphic Designer', fetch=fetch, fetch_raw=fetch_raw))
+
+    def test_a_page_that_does_not_name_the_job_is_not_accepted(self):
+        import employer_site
+        employer_site.clear_cache()
+        fetch_raw = lambda url: SimpleNamespace(url=url, text=self.SITEMAP) if url.endswith('/sitemap.xml') else None
+        wrong_page = lambda url: SimpleNamespace(url=url, text='<title>Careers | Acme</title><h1>Join us</h1>')
+        self.assertIsNone(employer_site._find_in_sitemap('acme.example', 'Senior Graphic Designer', fetch=wrong_page, fetch_raw=fetch_raw))
+
+    def test_no_sitemap_means_no_result(self):
+        import employer_site
+        employer_site.clear_cache()
+        self.assertIsNone(employer_site._find_in_sitemap('acme.example', 'Graphic Designer', fetch=lambda u: None, fetch_raw=lambda u: None))
+
+
+class SubdomainSites(unittest.TestCase):
+    def setUp(self):
+        import employer_site
+        employer_site.clear_cache()
+
+    def test_a_listing_on_a_subdomain_of_the_employers_site_shows_that_subdomain(self):
+        import employer_site
+        posting = 'https://corcoran.gwu.edu/web-designer-university-maryland'
+        pages = {'https://www.gwu.edu/': '<title>The George Washington University | GW</title><a href="/careers">Careers</a>',
+                 'https://www.gwu.edu/careers': '<title>Careers | GW</title><h1>Careers</h1>'}
+        fetch = lambda url: SimpleNamespace(url=url, text=pages[url]) if url in pages else None
+        html = '<a href="https://www.gwu.edu/">Company website</a>'
+        site = employer_site.resolve_employer_site('George Washington University', 'Web Designer', posting, html, ['Web Designer'],
+                                                   fetch=fetch, score_page=lambda u, t: {'score': 0})
+        self.assertEqual((site['domain'], site['posting_url']), ('corcoran.gwu.edu', posting))
+        self.assertTrue(any('own site' in line for line in site['evidence']))
+
+    def test_the_label_for_a_listing_on_the_companys_own_subdomain(self):
+        label = finder.verification_label({'employer_site': {'domain': 'corcoran.gwu.edu', 'posting_found': True}}, None,
+                                          'Corcoran School', 'https://corcoran.gwu.edu/web-designer')
+        self.assertEqual(label, "Posted on the company's own site")
+
+
+class Verification(unittest.TestCase):
+    def label(self, details=None, source_type=None, source='https://jobs.example/board/1', name='Acme Design'):
+        return finder.verification_label(details or {}, source_type, name, source)
+
+    def test_each_case_is_said_plainly(self):
+        self.assertEqual(self.label(source_type='Employer careers'), "Company's own careers site")
+        self.assertIn('Ashby', self.label({'ats_posting': {'system': 'ashby'}}))
+        self.assertEqual(self.label({'employer_site': {'posting_found': True}}), "Listed on the company's website")
+        self.assertIn('not listed there', self.label({'employer_site': {'posting_found': False}}))
+        self.assertEqual(self.label(source='https://www.acmedesign.com/jobs/1'), "Posted on the company's own site")
+        self.assertIn('not verified', self.label())
 
 
 class TitleCoverage(unittest.TestCase):

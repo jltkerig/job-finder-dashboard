@@ -14,6 +14,11 @@ engines:
     disabled: false
   - name: yahoo
     disabled: false
+  # Two more general web engines that answered job searches without rate limits when tested; Yep is a US index.
+  - name: yep
+    disabled: false
+  - name: yandex
+    disabled: false
   # Never useful for finding jobs; Wikidata and Google CSE only produced errors and timeouts.
   - name: wikipedia
     disabled: true

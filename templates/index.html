@@ -10,7 +10,7 @@
 <body data-page="search" data-scraper-running="{{ 'true' if scraper_running else 'false' }}" data-scraper-mode="{{ scraper_mode }}" data-work-preferences="{{ profile_work_preferences|tojson|forceescape }}">
   <div id="search-progress-bar" class="search-progress-bar" hidden></div>
   <nav class="top-nav" aria-label="Main navigation"><div class="nav-inner"><a class="nav-link active" href="/">Search</a><a class="nav-link" href="/dashboard">Dashboard</a><a class="nav-link" href="/rejected-listings">Settings</a><a class="nav-link" href="/tuning">Tuning</a></div></nav>
-  <header><div class="header-content"><div><h1>Job Finder</h1></div><div class="header-update-area"><button id="check-update" class="bordered-button update-check-button" type="button">Search for Latest Version</button><span id="update-check-status" class="update-check-status" hidden aria-live="polite"></span></div></div></header>
+  <header><div class="header-content"><div><h1>Job Finder</h1></div></div></header>
 
   <main><section class="company-section">
     <div class="search-panel">
@@ -40,7 +40,7 @@
         <td data-label="Company">{{ company.name or "Unknown" }}</td>
         <td data-label="Job"><strong>{{ company.career_job_title or "Unknown" }}</strong>{% if company.details.schedule or company.details.salary %}<small class="job-meta">{% if company.details.schedule %}{{ company.details.schedule|replace("_", " ")|title }}{% endif %}{% if company.details.schedule and company.details.salary %} · {% endif %}{{ company.details.salary or "" }}</small>{% endif %}</td>
         <td data-label="Work Location">{{ company.work_arrangement or '—' }}{% if company.details and company.details.remote_limited_to %}<br><small>{{ company.details.remote_limited_to|join(', ') }} only</small>{% endif %}</td>
-        <td data-label="Domain">{% if domain_url %}<a href="{{ domain_url }}" target="_blank" rel="noopener noreferrer">{{ company.domain }}</a>{% else %}Unknown{% endif %}</td>
+        <td data-label="Domain">{% if domain_url %}<a href="{{ domain_url }}" target="_blank" rel="noopener noreferrer">{{ company.domain }}</a>{% else %}Unknown{% endif %}{% if company.details and company.details.verification %}<br><small class="verification" title="Whether this posting was found on the company's own website or hiring board">{{ company.details.verification }}</small>{% endif %}</td>
         <td data-label="Career Credibility"><a class="credibility-link" href="/credibility-scores" aria-label="How career credibility is calculated"><span class="credibility-badge credibility-{{ 'high' if (company.career_credibility or 0) >= 8 else 'medium' if (company.career_credibility or 0) >= 5 else 'low' }}">{{ (company.career_credibility if company.career_credibility is not none else 0) * 10 }}%</span></a></td>
         <td data-label="Location">{% if company.city %}{{ company.city }}, {% endif %}{{ company.state or "Unknown" }}</td>
         <td data-label="Distance">{% if company.distance_miles is not none %}{{ '%.1f'|format(company.distance_miles) }} mi{% else %}—{% endif %}</td>
