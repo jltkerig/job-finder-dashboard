@@ -25,7 +25,8 @@ class _NonJobPath:
 
 NON_JOB_PATH = _NonJobPath()
 JOB_PATH = re.compile(r"/(?:jobs?|positions?|openings?|careers?)/(?:[^/?#]+/)*[^/?#]+/?$", re.I)
-SKIP_QUERY_KEYS = {"utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "fbclid", "gclid"}
+SKIP_QUERY_KEYS = {"utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "utm_id", "fbclid", "gclid",
+                   "applyrequired", "trk", "trackingid", "refid", "mc_cid", "mc_eid", "gh_src", "lever-source"}
 
 
 def is_pdf_url(url):

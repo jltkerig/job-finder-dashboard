@@ -30,6 +30,8 @@ from closed_jobs import listing_closed
 from db_schema import ensure_unique_source_index
 from employer_site import clear_cache as clear_employer_cache, is_third_party, resolve_employer_site
 from search_debug import DebugRun
+from remote_states import restriction_states
+from board_health import BoardHealth, HEALTH_FILE as BOARD_HEALTH_FILE
 
 # =========================================================
 # FILES
@@ -159,7 +161,9 @@ USA_ONLY = settings.get(
 USER_AGENT = "PersonalJobFinder/1.0"
 MAX_HTML_SIZE = 2_000_000
 _page_cache = {}
+_prefetched = {}  # Update/Refresh: pages downloaded ahead of the row that needs them (used once)
 _timings = {}
+_board_health = BoardHealth()
 
 
 class timed:
@@ -510,6 +514,23 @@ def stop_searxng():
 
     if result is not None and result.returncode == 0:
         print("SearXNG stopped.")
+
+
+def search_stop_reason(saved, blocked_message):
+    """Why the search ended, with what to change when that is something the user can act on."""
+    if stop_requested():
+        return "Stopped by user"
+    if saved >= MAX_SEARCH_RESULTS:
+        return f"{saved} of {MAX_SEARCH_RESULTS} distinct jobs found"
+    if blocked_message:
+        return blocked_message
+    minutes = round(SEARXNG_MAX_RUNTIME / 60)
+    if searxng_start_time is not None and time.time() - searxng_start_time >= SEARXNG_MAX_RUNTIME:
+        return f"Search time limit reached ({minutes} minutes). Raise the time limit on the Tuning page to search longer."
+    if not check_searxng_timer():
+        return "The search engine stopped unexpectedly. Check that Docker Desktop is running, then start the search again."
+    return ("Search sources exhausted: every query was checked. Try more job titles, more cities or a larger radius "
+            "to find more.")
 
 
 def check_searxng_timer():
@@ -906,6 +927,7 @@ def safe_request(url):
 
 
 def _safe_request(url):
+    global _last_failure_status
     if not update_existing_mode and not check_searxng_timer():
         return None
 
@@ -915,7 +937,43 @@ def _safe_request(url):
     key = canonical_url(url)
     if not update_existing_mode and key in _page_cache:
         return _page_cache[key]
+    if update_existing_mode:
+        # A page fetched a moment ago for this same row is fresh enough; each is handed out only once.
+        with _host_lock:
+            ready = _prefetched.pop(key, None)
+        if ready is not None:
+            response, failure_status = ready
+            if response is None:
+                _last_failure_status = failure_status
+            return response
+    return _fetch_page(url, key)
 
+
+def prefetch_for_update(urls):
+    """Download the pages the next rows will need, several at a time (Update and Refresh only)."""
+    todo = [url for url in dict.fromkeys(urls) if url and is_valid_url(url) and not is_pdf_url(url)
+            and canonical_url(url) not in _prefetched]
+    if len(todo) < 2:
+        return
+
+    def fetch(url):
+        key = canonical_url(url)
+        failure = []
+        try:
+            response = _fetch_page(url, key, failure)
+        except Exception:
+            response = None
+        with _host_lock:
+            _prefetched[key] = (response, failure[0] if failure else None)
+
+    with timed("Page downloads (added up across parallel downloads)"):
+        with ThreadPoolExecutor(max_workers=PREFETCH_WORKERS) as pool:
+            list(pool.map(fetch, todo))
+
+
+def _fetch_page(url, key, failure=None):
+    """Download one page. A failed download's HTTP status goes into `failure` (a list), or _last_failure_status."""
+    global _last_failure_status
     try:
         wait_for_host(url)
 
@@ -969,14 +1027,32 @@ def _safe_request(url):
 
     except requests.RequestException as error:
         # Lets callers tell a removed page (404/410) from a temporary failure.
-        global _last_failure_status
-        _last_failure_status = getattr(error.response, "status_code", None)
+        code = getattr(error.response, "status_code", None)
+        if failure is not None:
+            failure.append(code)
+        else:
+            _last_failure_status = code
         return None
 
 
 # =========================================================
 # COMPANY NAME DETECTION
 # =========================================================
+
+
+# Legal-entity codes some applicant systems put in front of a company name ("003 Humana Inc.").
+_LEADING_CODE = re.compile(r"^\s*0\d{1,4}\s+(?=[A-Za-z])")  # zero-padded only: "84 Lumber" is a real name
+# A posting on a recognised applicant-system board (Workday, Greenhouse, ...) is the employer's own listing.
+OFFICIAL_BOARD_CREDIBILITY = 8
+
+
+def tidy_company_name(name):
+    """The company name without a leading entity code."""
+    return _LEADING_CODE.sub("", str(name or "")).strip()
+
+
+def on_official_board(url):
+    return bool(identify_board(url))
 
 
 def clean_company_name(
@@ -986,7 +1062,7 @@ def clean_company_name(
     if not name:
         return None
 
-    cleaned = name.strip()
+    cleaned = tidy_company_name(name)
 
     separators = [
         " | ",
@@ -1220,7 +1296,7 @@ _STATE_ABBREVIATION = re.compile(
     r"|\b(" + "|".join(sorted(US_STATE_ABBREVIATIONS - _WORD_LIKE_STATES)) + r")\b")
 
 
-def remote_state_restrictions(text, job_state=None):
+def remote_state_restrictions(text, job_state=None, places=()):
     """States a remote job says its applicant must live in, or an empty set if it names none.
 
     "Cannot be out of state" with no state named means the job's own state.
@@ -1235,7 +1311,8 @@ def remote_state_restrictions(text, job_state=None):
             restricted |= named
         elif job_state and _OUT_OF_STATE.search(window):
             restricted.add(job_state)
-    return restricted
+    # Location strings such as "Work At Home-Florida" and lists such as "open in the following states: ..."
+    return restricted | restriction_states(places, text)
 
 
 def selected_state_codes(state_text, cities, statewide_states):
@@ -1877,7 +1954,12 @@ def find_external_company_site(soup, base_url):
     return candidates[0][1]
 
 
-def inspect_company_site(homepage, search_title, domain):
+def inspect_company_site(homepage, search_title, domain, deep=True):
+    """Read a page and, when deep, the site's about/contact pages, sitemap and robots.txt for location and career links.
+
+    A direct job posting is not read deeply: its own page already says where the job is, and the extra pages
+    (often ten or more requests to one site) only add the company's head-office address.
+    """
     response = safe_request(homepage)
 
     if response is None:
@@ -1914,9 +1996,9 @@ def inspect_company_site(homepage, search_title, domain):
                 seen.add(full_url)
                 career_candidates.append(full_url)
 
-    support_links = discover_support_links(soup, homepage)
-    sitemap_links = discover_sitemap_links(homepage)
-    robots_links = discover_robots_links(homepage)
+    support_links = discover_support_links(soup, homepage) if deep else []
+    sitemap_links = discover_sitemap_links(homepage) if deep else []
+    robots_links = discover_robots_links(homepage) if deep else []
 
     for support_url in support_links + sitemap_links + robots_links:
         support_response = safe_request(support_url)
@@ -1996,6 +2078,45 @@ def load_user_titles(database):
     return list(unique.values())
 
 
+def load_selected_states(database):
+    """State codes from the most recent search (state box plus the states of its cities), or an empty set."""
+    cursor = None
+    try:
+        cursor = database.cursor()
+        cursor.execute("SELECT state, cities_json FROM search_history ORDER BY searched_at DESC LIMIT 1")
+        latest = cursor.fetchone()
+        if not latest:
+            return set()
+        try:
+            cities = json.loads(latest[1] or "[]")
+        except ValueError:
+            cities = []
+        return selected_state_codes(latest[0] or "", cities, set())
+    except Error:
+        return set()
+    finally:
+        if cursor is not None:
+            cursor.close()
+
+
+def stale_remote_limit(company, details, selected_states, http):
+    """States a saved remote job is limited to when none of them is selected, else None.
+
+    Older rows were saved before "Work At Home-<State>" locations were read; a Workday posting can be rechecked.
+    """
+    if (company.get("is_kept") or company.get("work_arrangement") != "Remote" or "remote_limited_to" in details
+            or not selected_states or company.get("source_type") in FEED_NAMES):
+        return None
+    config = identify_board(company.get("source_url") or "")
+    if not config or config.get("system") != "workday":
+        return None
+    try:
+        limits = Employer(dict(config, name=company.get("name") or "Employer")).remote_limits(company["source_url"], http)
+    except (requests.RequestException, ValueError, KeyError, TypeError):
+        return None
+    return limits if limits and not (limits & selected_states) else None
+
+
 def is_irrelevant_lead(company, details, wanted):
     """An unsaved lead from before titles were checked whose title matches none of the user's."""
     title = (company.get("career_job_title") or "").strip()
@@ -2040,7 +2161,7 @@ def is_excluded_employer_host(host):
 def apply_link_closed(page_url, page_html):
     """Follow a job-board listing's Apply button; return why it is closed, or None if it looks open."""
     def get(url):
-        time.sleep(REQUEST_DELAY)
+        wait_for_host(url)
         try:
             return requests.get(url, headers=HEADERS, timeout=TIMEOUT, allow_redirects=False)
         except requests.RequestException:
@@ -2120,6 +2241,7 @@ def update_existing_results(company_ids=None):
     print(f"Found {len(companies)} existing results to verify.")
 
     wanted_titles = expand_job_titles(load_user_titles(database))
+    selected_now = load_selected_states(database)
     clear_employer_cache()
     _debug_run = DebugRun(SEARCH_DEBUG_FILE, "update", JOB_FINDER_VERSION)
     _debug_run.set_inputs(rows_checked=len(companies), update_ids=company_ids,
@@ -2140,6 +2262,10 @@ def update_existing_results(company_ids=None):
                 print(f"{feed.name} refresh unavailable: {error}")
 
     for index, company in enumerate(companies, start=1):
+        if (index - 1) % 20 == 0:
+            prefetch_for_update([url for row in companies[index - 1:index + 19]
+                                 if row.get("source_type") not in FEED_NAMES and row.get("source_type") != EMPLOYER_SOURCE
+                                 for url in (row.get("source_url"), row.get("career_url"))])
         company_id = company["id"]
         career_url = company.get("career_url")
         source_url = company.get("source_url")
@@ -2154,8 +2280,11 @@ def update_existing_results(company_ids=None):
         print()
         print("=" * 60)
         print(f"Updating {index}/{len(companies)}: {company.get('name') or company.get('domain')}")
+        remote_limit = None
+        if not (is_irrelevant_lead(company, details, wanted_titles) or is_wrong_location_lead(company, details)):
+            remote_limit = stale_remote_limit(company, details, selected_now, employer_http)
         reject_reason = ("wrong_role" if is_irrelevant_lead(company, details, wanted_titles)
-                         else "wrong_location" if is_wrong_location_lead(company, details) else None)
+                         else "wrong_location" if is_wrong_location_lead(company, details) or remote_limit else None)
         if reject_reason:
             try:
                 rejected = reject_irrelevant_row(database, company_id, reject_reason)
@@ -2168,12 +2297,24 @@ def update_existing_results(company_ids=None):
                 updated += 1
                 rejected_count += 1
                 why = ("matches none of your job titles" if reject_reason == "wrong_role"
+                       else f"is remote but only open to residents of {', '.join(sorted(remote_limit))}" if remote_limit
                        else f"is located outside the United States ({details.get('location')})")
                 print(f"Rejected: '{search_title}' {why}. It is in Rejected Listings for review.")
                 _debug_run.lead(action="rejected", id=company_id, title=search_title,
                                 company=company.get("name"), url=source_url or career_url,
                                 reason=reject_reason, detail=why)
                 continue
+        tidy_name = tidy_company_name(company.get("name"))
+        if tidy_name and tidy_name != company.get("name"):
+            try:
+                with database.cursor() as rename_cursor:
+                    rename_cursor.execute("UPDATE companies SET name = %s WHERE id = %s", (tidy_name, company_id))
+                database.commit()
+                print(f"Company name tidied: {company.get('name')} -> {tidy_name}")
+                company["name"] = tidy_name
+            except Error as error:
+                database.rollback()
+                print(f"Could not tidy the company name: {error}")
         if company.get("source_type") == EMPLOYER_SOURCE:
             employer = employer_for_url(source_url or "", employers)
             try:
@@ -2256,10 +2397,15 @@ def update_existing_results(company_ids=None):
         apply_closed = None
 
         if source_url and is_valid_url(source_url):
+            direct_posting = (company.get("source_type") == EMPLOYER_SOURCE or bool(
+                {"JobPosting data", "job detail page", "direct listing link"} & set(details.get("evidence") or [])))
+            # A row with missing location data still gets the deep read, so refresh keeps filling it in.
+            direct_posting = direct_posting and bool(company.get("country")) and bool(company.get("usa_credibility"))
             source_data = inspect_company_site(
                 homepage=source_url,
                 search_title=search_title,
                 domain=company.get("domain") or get_domain(source_url),
+                deep=not direct_posting,
             )
             location_data = merge_location_data(location_data, source_data["location"])
             work_arrangement = work_arrangement or detect_work_arrangement("", source_data.get("landing_html", ""))
@@ -2273,7 +2419,7 @@ def update_existing_results(company_ids=None):
                     wanted_titles or [search_title], location_hint=str(details.get("location") or ""),
                     allow_search=False, notes=employer_notes)
                 if employer:
-                    career_url = employer["posting_url"] or employer["careers_url"]
+                    career_url = employer["posting_url"] or employer["careers_url"] or source_url
                     details["employer_site"] = {"domain": employer["domain"], "careers_url": employer["careers_url"],
                                                 "method": employer["method"]}
                     details["original_source"] = source_url
@@ -2304,6 +2450,8 @@ def update_existing_results(company_ids=None):
                 active_posting = bool(details and matching_posting)
                 if active_posting:
                     career_credibility = max(CAREER_CREDIBILITY_THRESHOLD, career_credibility)
+                    if on_official_board(career_url):
+                        career_credibility = max(OFFICIAL_BOARD_CREDIBILITY, career_credibility)
                 # An employer page that does not list the job says nothing about the original listing.
                 if details and not active_posting and not employer_row:
                     job_open_status = "Unknown"
@@ -2448,7 +2596,21 @@ _failed_geocode_queries = set()
 
 
 def _normalize_geocode_query(value):
-    return re.sub(r"\s+", " ", (value or "").strip()).lower()[:255]
+    # The suffix retires cached answers saved before places were ranked by kind (see pick_place).
+    return re.sub(r"\s+", " ", (value or "").strip()).lower()[:240] + " [v2]"
+
+
+# How much a kind of place looks like the town or city a person means (lower is better).
+_PLACE_KIND_RANK = {"city": 0, "town": 0, "administrative": 0, "municipality": 1, "borough": 1, "suburb": 2,
+                    "census_designated_place": 2, "village": 3, "hamlet": 4, "statistical": 5, "neighbourhood": 5}
+
+
+def pick_place(results):
+    """The best match among several: a real city or town beats a village or statistical area of the same name.
+
+    Nominatim ranked a tiny "Bel Air" in Allegany County above Bel Air in Harford County, 100 miles away.
+    """
+    return min(results, key=lambda item: (_PLACE_KIND_RANK.get(item.get("type"), 4), -float(item.get("importance") or 0)))
 
 
 def _place_name(value):
@@ -2499,7 +2661,7 @@ def geocode_location(database, query, require_place_match=False):
     try:
         response = requests.get(
             NOMINATIM_URL,
-            params={"q": query, "format": "jsonv2", "limit": 1, "countrycodes": "us"},
+            params={"q": query, "format": "jsonv2", "limit": 5, "countrycodes": "us"},
             headers={"User-Agent": f"JobFinder/{JOB_FINDER_VERSION} (https://github.com/jltkerig/web-scraper)"},
             timeout=15,
         )
@@ -2509,7 +2671,7 @@ def geocode_location(database, query, require_place_match=False):
         if not results:
             _failed_geocode_queries.add(key)
             return None
-        result = results[0]
+        result = pick_place(results)
         lat, lon = float(result["lat"]), float(result["lon"])
         display_name = result.get("display_name", "")[:1000]
         cursor = database.cursor()
@@ -2608,6 +2770,36 @@ def extract_job_city(html, fallback_text=""):
     return None, None
 
 
+_ZIP_CODE = re.compile(r"\d{5}(?:-\d{4})?")
+_REGION_WORDS = re.compile(r"\b(?:greater|metropolitan|metro|area|region|metroplex)\b", re.I)
+# Regions people use in place of a city, mapped to the city that anchors them.
+_REGION_ALIASES = {"dmv": "Washington, DC", "dc metro": "Washington, DC", "washington dc": "Washington, DC",
+                   "national capital": "Washington, DC", "tri-state": None, "delmarva": None}
+
+
+def clean_region_name(place):
+    """"Greater Baltimore Area" -> "Baltimore"; "DMV" -> "Washington, DC". Other places come back unchanged."""
+    text = re.sub(r"\s+", " ", str(place or "")).strip()
+    key = _REGION_WORDS.sub(" ", text).strip(" ,-").casefold()
+    key = re.sub(r"\s+", " ", key)
+    if key in _REGION_ALIASES:
+        return _REGION_ALIASES[key] or text
+    if _REGION_WORDS.search(text) and key:
+        return re.sub(r"\s+", " ", _REGION_WORDS.sub(" ", text)).strip(" ,-")
+    return text
+
+
+def geocode_queries(city, state_text):
+    """What to ask the geocoder for a typed location: a ZIP code, "City, ST", or a county/city with each searched state."""
+    city = str(city or "").strip()
+    if _ZIP_CODE.fullmatch(city):
+        return [f"{city[:5]}, United States"]
+    if "," in city:
+        return [city]
+    states = [part.strip() for part in re.split(r"[,/;]", state_text or "") if part.strip()]
+    return [f"{city}, {state_name}" for state_name in states] or [city]
+
+
 def prepare_city_targets(database, state, cities):
     targets = []
     allowed = {10, 15, 20, 30, 50}
@@ -2621,8 +2813,11 @@ def prepare_city_targets(database, state, cities):
             continue
         if city.casefold() in US_STATES:
             continue  # A state name is a statewide target, not a city-radius center.
-        query = city if "," in city else f"{city}, {state}"
-        point = geocode_location(database, query)
+        point = None
+        for query in geocode_queries(city, state):
+            point = geocode_location(database, query)
+            if point:
+                break
         if point:
             targets.append({"city": city, "radius": radius, **point})
             print(f"City radius: {city} — {radius} miles")
@@ -2635,6 +2830,11 @@ def distance_to_city_targets(database, html, fallback_text, state, targets):
     city, detected_state = extract_job_city(html, fallback_text)
     if not city:
         return False, None, None, None, None
+    city = clean_region_name(city)
+    if "," in city:
+        # A region alias can carry its own state ("Washington, DC").
+        city, _, alias_state = city.partition(",")
+        detected_state = alias_state.strip() or detected_state
     query_state = detected_state or state
     point = geocode_location(database, f"{city}, {query_state}", require_place_match=True)
     if not point:
@@ -2669,6 +2869,10 @@ def assess_opening(database, opening, page_html, job_url, search_state, selected
     location = analyze_usa_location(page_html, extra_text=opening["location"], source_label=f"job posting {job_url}", page_url=job_url)
     # An individual opening was already confirmed, so it meets the career-credibility threshold.
     detail_score = max(CAREER_CREDIBILITY_THRESHOLD, score_career_page(job_url, page_html)["score"])
+    # A confirmed opening on the employer's own applicant-system board (or read from an employer careers API)
+    # is strong evidence even when the page is script-rendered and scores little on its text.
+    if on_official_board(job_url) or any("careers site (" in str(line) for line in opening.get("evidence") or ()):
+        detail_score = max(detail_score, OFFICIAL_BOARD_CREDIBILITY)
     # The listing's own location beats anything found elsewhere on the page.
     state_name = (find_state_from_text(opening["location"] or "") or location["state"] or opening["location"] or None)
     code = US_STATES.get(str(state_name or "").casefold(), str(state_name or "").upper())
@@ -2677,7 +2881,8 @@ def assess_opening(database, opening, page_html, job_url, search_state, selected
     # states. A statewide match passes even when city radii are also selected.
     within_radius, skip_reason = True, "Outside selected location"
     if arrangement == "Remote":
-        limited_to = remote_state_restrictions(text, code if code in US_STATE_ABBREVIATIONS else None)
+        limited_to = remote_state_restrictions(text, code if code in US_STATE_ABBREVIATIONS else None,
+                                               opening.get("locations") or [opening.get("location")])
         limited_to |= set(opening.get("remote_states") or ())
         outcome["remote_limited_to"] = limited_to
         if limited_to and selected_states and not (limited_to & selected_states):
@@ -2818,12 +3023,14 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
         # aggregator sites can stay blocked there; switch one off here: "remote_feeds": {"Remotive": false}.
         if not settings.get("remote_feeds", {}).get(feed.name, True):
             print(f"{feed.name} is turned off in settings.json.")
+            _board_health.note(feed.name, "Remote feed", "off")
             continue
         print(f"Checking {feed.name} for matching remote listings...")
         try:
             feed_jobs = list(feed.matching(feed.fetch(), job_titles, USA_ONLY))
         except (requests.RequestException, ValueError, TypeError) as error:
             print(f"{feed.name} unavailable; continuing: {error}")
+            _board_health.failed(feed.name, "Remote feed", error)
             continue
         print(f"{feed.name} matches: {len(feed_jobs)}")
         feed_saved = 0
@@ -2865,6 +3072,7 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
                 print(f"Saved viable company ({companies_saved}/{MAX_SEARCH_RESULTS}).")
             else:
                 existing_companies += 1
+        _board_health.note(feed.name, "Remote feed", "ok" if feed_jobs else "no matches", len(feed_jobs), feed_saved)
 
     # Big employers' own career sites (watched_employers.json): Workday and Oracle searches. They go through
     # the same U.S., location and remote checks as web results.
@@ -2881,6 +3089,7 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
             employer_openings = employer.find_openings(job_titles, employer_http)
         except (requests.RequestException, ValueError, KeyError, TypeError) as error:
             print(f"{employer.name} careers unavailable; continuing: {error}")
+            _board_health.failed(employer.name, "Discovered board" if employer.discovered else "Employer board", error)
             return 0
         print(f"{employer.name} title matches: {len(employer_openings)}")
         if employer.discovered:
@@ -2921,6 +3130,7 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
                                   if matching_job_title(opening["title"], [wanted])), job_titles[0])
             details = {"schedule": opening["schedule"], "salary": opening["salary"], "posted": opening["posted"],
                        "evidence": opening["evidence"], "location": opening["location"], "matched_title": matched_title,
+                       "remote_limited_to": sorted(outcome["remote_limited_to"]),
                        "source": employer.adapter.base if hasattr(employer.adapter, "base") else employer.domain}
             inserted = save_company(database, employer.name, opening["title"], outcome["detail_score"], employer.domain,
                                     job_url, job_url, outcome["country"],
@@ -2944,6 +3154,8 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
                 print(f"Saved job {companies_saved}/{MAX_SEARCH_RESULTS}: {job_url}")
             else:
                 existing_companies += 1
+        _board_health.note(employer.name, "Discovered board" if employer.discovered else "Employer board",
+                           "ok" if employer_openings else "no matches", len(employer_openings), employer_saved)
 
         return employer_saved
 
@@ -3021,7 +3233,8 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
 
     search_queries = []
     city_names = [item.get("city", "").strip() for item in cities if isinstance(item, dict)
-                  and item.get("city") and item.get("city", "").strip().casefold() not in US_STATES]
+                  and item.get("city") and item.get("city", "").strip().casefold() not in US_STATES
+                  and not _ZIP_CODE.fullmatch(item.get("city", "").strip())]
     for title in job_titles:
         title_queries = []
         for city_name in city_names:
@@ -3037,6 +3250,10 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
             f'{title} hiring {state}',
             f'"{title}" freelance project {state}',
             f'"{title}" contract gig {state}',
+            # Local employers whose openings the big job sites often miss.
+            f'"{title}" state government jobs {state}',
+            f'"{title}" university jobs {state}',
+            f'"{title}" hospital health system careers {state}',
         ])
         for candidate_query in title_queries:
             if candidate_query not in search_queries:
@@ -3191,7 +3408,7 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
                         if is_blocked_domain(get_domain(job_url)):
                             debug_skip("Blocked domain", job_url, opening["title"])
                             continue
-                        name = opening["company"] or company_name
+                        name = tidy_company_name(opening["company"]) or company_name
                         if name.casefold() in BLOCKED_COMPANIES:
                             debug_skip("Blocked company", job_url, opening["title"])
                             continue
@@ -3205,6 +3422,7 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
                             continue
                         arrangement, location, detail_score = outcome["arrangement"], outcome["location"], outcome["detail_score"]
                         country, state_name, remote_limited_to = outcome["country"], outcome["state_name"], outcome["remote_limited_to"]
+                        details["remote_limited_to"] = sorted(remote_limited_to)
                         city, lat, lon, miles = outcome["city"], outcome["lat"], outcome["lon"], outcome["miles"]
                         # A repost on a job board can outlive the real opening; check where Apply leads.
                         closed = apply_link_closed(job_url, page.text) if is_third_party(job_url, name) else None
@@ -3223,7 +3441,7 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
                         row_domain, row_career_url = get_domain(job_url), job_url
                         if employer:
                             row_domain = employer["domain"]
-                            row_career_url = employer["posting_url"] or employer["careers_url"]
+                            row_career_url = employer["posting_url"] or employer["careers_url"] or job_url
                             details["employer_site"] = {"domain": employer["domain"],
                                                         "careers_url": employer["careers_url"],
                                                         "method": employer["method"]}
@@ -3282,10 +3500,7 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
     print("=" * 60)
     print("SEARCH COMPLETE")
     print()
-    stop_reason = ("Stopped by user" if stop_requested()
-                   else f"{companies_saved} of {MAX_SEARCH_RESULTS} distinct jobs found" if companies_saved >= MAX_SEARCH_RESULTS
-                   else blocked_message if blocked_message
-                   else "Search time limit reached" if not check_searxng_timer() else "Search sources exhausted")
+    stop_reason = search_stop_reason(companies_saved, blocked_message)
     print(f"Stop reason: {stop_reason}")
     if _debug_run is not None:
         _debug_run.stop_reason = stop_reason
@@ -3320,6 +3535,7 @@ def main(job_title=None, state=None, cities_json=None, max_new=None):
     global web_search_started, _debug_run
     web_search_started = False
     clear_employer_cache()
+    _board_health.clear()
     _debug_run = DebugRun(SEARCH_DEBUG_FILE, "replacement" if max_new == 1 else "search", JOB_FINDER_VERSION)
     try:
         _run_search(job_title=job_title, state=state, cities_json=cities_json, max_new=max_new)
@@ -3333,6 +3549,7 @@ def main(job_title=None, state=None, cities_json=None, max_new=None):
             stop_docker_desktop()
         _debug_run.finish(_debug_run.stop_reason or "ended early (setup failed or a stop was requested)")
         _debug_run = None
+        _board_health.write(BOARD_HEALTH_FILE, "replacement" if max_new == 1 else "search")
 
 
 def parse_arguments():

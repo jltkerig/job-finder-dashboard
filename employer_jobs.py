@@ -19,6 +19,7 @@ import requests
 from bs4 import BeautifulSoup
 
 from job_listings import extract_jobs, matching_title
+from remote_states import is_remote_place, place_states
 
 SOURCE_TYPE = "Employer careers"
 CONFIG_FILE = Path(__file__).resolve().parent / "watched_employers.json"
@@ -112,11 +113,15 @@ def _schedule(text):
 def _opening(employer, *, title, url, locations, html, posted="", schedule="", arrangement=None, country="",
              remote_states=(), category=""):
     locations = [place for place in dict.fromkeys(locations) if place]
+    # "Work At Home-Massachusetts" style places make a job remote and name the states it is open to.
+    remote_states = set(remote_states) | place_states(locations)
+    if arrangement is None and locations and all(is_remote_place(place) for place in locations):
+        arrangement = "Remote"
     return {"title": title[:255], "url": url, "company": employer.name, "location": locations[0] if locations else "",
             "locations": locations, "type": arrangement, "schedule": schedule, "salary": "", "posted": posted or None,
             "evidence": [f"{employer.name} careers site ({employer.system.title()})", "title matches search"],
             "description": _plain(html), "html": str(html or ""), "country": country,
-            "remote_states": set(remote_states), "category": category}
+            "remote_states": remote_states, "category": category}
 
 
 class Workday:
@@ -163,6 +168,15 @@ class Workday:
         return _opening(employer, title=info["title"], url=url, locations=locations, html=info.get("jobDescription"),
                         posted=info.get("startDate"), schedule=_schedule(info.get("timeType")), arrangement=arrangement,
                         country=country, remote_states=states)
+
+    def remote_limits(self, url, http):
+        """States named by the posting's "Work At Home-<State>" style locations (empty when it names none)."""
+        match = re.search(r"/job/.+$", urlparse(url).path)
+        response = http.get(self.base + match.group(0)) if match else None
+        if response is None or response.status_code != 200:
+            return set()
+        info = response.json().get("jobPostingInfo") or {}
+        return place_states([str(info.get("location") or "")] + [str(place) for place in info.get("additionalLocations") or []])
 
     def status(self, url, http):
         match = re.search(r"/job/.+$", urlparse(url).path)
@@ -812,6 +826,11 @@ class Employer:
     def status(self, url, http):
         """'Open', 'Closed' or 'Unknown' for one of this employer's posting URLs."""
         return self.adapter.status(url, http)
+
+    def remote_limits(self, url, http):
+        """States a remote posting is limited to, when this system lists them per location; else an empty set."""
+        check = getattr(self.adapter, "remote_limits", None)
+        return check(url, http) if check else set()
 
 
 _ID_FIELDS = ("system", "host", "tenant", "site", "board", "slug", "company", "eu", "cid", "ccId", "guid")

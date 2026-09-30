@@ -10,7 +10,7 @@ import json
 import shutil
 import tempfile
 import time
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 from zoneinfo import ZoneInfo
 
 import mysql.connector
@@ -22,6 +22,7 @@ from onet_data import occupation_skill_suggestions, related_title_suggestions
 from job_listings import NON_JOB_PATH, is_pdf_url
 from db_schema import ensure_unique_source_index
 from job_feeds import FEED_NAMES
+from board_health import STATUSES as HEALTH_STATUSES, read_health
 from search_skips import TTL_HOURS, latest_decisions
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -29,7 +30,7 @@ load_dotenv(BASE_DIR / ".env")
 
 app = Flask(__name__)
 
-APP_VERSION = "1.1.83"
+APP_VERSION = "1.1.91"
 
 app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY") or secrets.token_hex(32)
 app.config["SESSION_COOKIE_HTTPONLY"] = True
@@ -63,6 +64,7 @@ scraper_started_at = None
 scraper_stopping = False
 # job_finder.py watches for this file and shuts down cleanly when it appears.
 STOP_REQUEST_FILE = BASE_DIR / ".stop-requested"
+SETTINGS_FILE = BASE_DIR / "settings.json"
 GRACEFUL_STOP_SECONDS = 90
 # Schema checks that already succeeded in this process; they only need to run once.
 _schema_ready = set()
@@ -1250,6 +1252,77 @@ def user_dashboard():
     )
 
 
+# Search tuning options that live in settings.json: key -> (label, help, kind, minimum, maximum, default).
+TUNING_FIELDS = {
+    "searxng_timeout_minutes": ("Search time limit (minutes)", "A search stops after this long.", int, 1, 240, 60),
+    "max_search_results": ("Jobs to find per search", "A search stops once it has saved this many new jobs.", int, 1, 100, 10),
+    "max_search_pages": ("Result pages per query", "How many pages of results to read for each search query.", int, 1, 50, 20),
+    "request_delay_seconds": ("Pause between requests to one site (seconds)", "Lower is faster; keep at 1 or more to stay polite.", float, 0, 10, 1),
+    "search_query_delay_seconds": ("Pause between search-engine queries (seconds)", "Too low can get the engines to rate-limit Job Finder.", float, 0, 10, 2),
+    "website_timeout_seconds": ("Wait for a slow page (seconds)", "A page that has not answered by then is skipped.", int, 5, 60, 15),
+    "parallel_page_fetches": ("Pages downloaded at once", "More is faster but uses more of your connection.", int, 1, 12, 6),
+    "stop_after_empty_queries": ("Stop after this many empty queries in a row", "Many empty queries usually mean the engines are refusing us.", int, 2, 30, 8),
+}
+TUNING_SWITCHES = {
+    "usa_only": ("U.S. jobs only", "Skip jobs that are outside the United States or unverified.", True),
+    "start_docker_automatically": ("Start Docker automatically", "Starts Docker Desktop for the web search.", True),
+    "stop_docker_when_finished": ("Stop Docker when finished", "Closes Docker Desktop after the search.", True),
+}
+
+
+def read_tuning_settings():
+    try:
+        return json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def apply_tuning_form(form, current):
+    """Return (new settings, error). Only the known options change; every other key in the file is kept."""
+    updated = dict(current)
+    for key, (label, _, kind, low, high, _default) in TUNING_FIELDS.items():
+        raw = str(form.get(key, "")).strip()
+        try:
+            value = kind(raw)
+        except ValueError:
+            return None, f"{label} must be a number."
+        if not low <= value <= high:
+            return None, f"{label} must be between {low} and {high}."
+        updated[key] = int(value) if kind is int or float(value).is_integer() else value
+    for key in TUNING_SWITCHES:
+        updated[key] = form.get(key) == "on"
+    return updated, None
+
+
+@app.route("/tuning")
+def tuning_page():
+    current = read_tuning_settings()
+    health = read_health()
+    if health:
+        try:
+            health["updated_text"] = datetime.fromisoformat(health["updated"]).astimezone().strftime("%b %d, %Y %I:%M %p")
+        except (KeyError, ValueError):
+            health["updated_text"] = health.get("updated", "")
+    return render_template("tuning.html", fields=TUNING_FIELDS, switches=TUNING_SWITCHES, values=current,
+                           health=health, statuses=HEALTH_STATUSES, saved=request.args.get("saved"),
+                           error=request.args.get("error"))
+
+
+@app.route("/tuning/settings", methods=["POST"])
+def save_tuning_settings():
+    updated, error = apply_tuning_form(request.form, read_tuning_settings())
+    if error:
+        return redirect("/tuning?error=" + quote(error) + "#search-settings")
+    temporary = Path(str(SETTINGS_FILE) + ".tmp")
+    try:
+        temporary.write_text(json.dumps(updated, indent="\t") + "\n", encoding="utf-8")
+        os.replace(temporary, SETTINGS_FILE)
+    except OSError as error:
+        log_error_code("E4101", f"Could not save settings.json: {error}")
+        return redirect("/tuning?error=" + quote("Could not save the settings file.") + "#search-settings")
+    return redirect("/tuning?saved=1#search-settings")
+
+
 @app.route("/credibility-scores")
 def credibility_scores():
     return render_template("credibility-scores.html")
@@ -1924,21 +1997,25 @@ def update_progress_from_log():
 def search_progress_from_log(mode):
     fallback = "Starting replacement search" if mode == "replacement" else "Starting search"
     if not SCRAPER_LOG_FILE.exists():
-        return {"progress": fallback, "passed": 0, "checked": 0}
+        return {"progress": fallback, "passed": 0, "checked": 0, "saved": 0, "limit": None}
     try:
         with SCRAPER_LOG_FILE.open("rb") as log_file:
             size = log_file.seek(0, 2)
             log_file.seek(max(0, size - 2097152))
             tail = log_file.read().decode("utf-8", errors="replace")
     except OSError:
-        return {"progress": fallback, "passed": 0, "checked": 0}
+        return {"progress": fallback, "passed": 0, "checked": 0, "saved": 0, "limit": None}
     markers = list(re.finditer(r"\| " + re.escape(mode) + r" \|[^\r\n]*===", tail))
     if not markers:
-        return {"progress": fallback, "passed": 0, "checked": 0}
+        return {"progress": fallback, "passed": 0, "checked": 0, "saved": 0, "limit": None}
     current = tail[markers[-1].end():]
     candidates = list(re.finditer(r"Checking result (\d+): ([^\r\n]+)", current))
     passed_matches = list(re.finditer(r"Passed validation: (\d+)", current))
     passed = int(passed_matches[-1].group(1)) if passed_matches else 0
+    # "Passed" counts every job that passed, including ones already in the list; only new saves count toward the limit.
+    saved_matches = list(re.finditer(r"Saved (?:job |viable company \()(\d+)/(\d+)", current))
+    saved = int(saved_matches[-1].group(1)) if saved_matches else 0
+    limit = int(saved_matches[-1].group(2)) if saved_matches else None
     events = list(re.finditer(r"^(Checking result \d+: |Skipped \([^\r\n]+?\): |Passed validation: \d+ · |Saved lead for review: )([^\r\n]+)", current, re.M))
     if events:
         latest = events[-1]
@@ -1946,7 +2023,7 @@ def search_progress_from_log(mode):
     else:
         progress = "Searching for results"
     checked = int(candidates[-1].group(1)) if candidates else 0
-    return {"progress": progress, "passed": passed, "checked": checked}
+    return {"progress": progress, "passed": passed, "checked": checked, "saved": saved, "limit": limit}
 
 
 @app.route("/search-status")
@@ -1971,6 +2048,8 @@ def search_status():
         "error": scraper_last_error,
         "progress": (update_progress_from_log() if mode in ("update", "refresh") else activity["progress"] if activity else None) if running else None,
         "passed": activity["passed"] if activity else None,
+        "saved": activity["saved"] if activity else None,
+        "limit": activity["limit"] if activity else None,
         "checked": activity["checked"] if activity else None,
         "elapsed_seconds": elapsed,
         "stop_reason": stop_reason,

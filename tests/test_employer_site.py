@@ -70,10 +70,17 @@ class EmployerSite(unittest.TestCase):
         self.assertIsNone(result)
         self.assertFalse(any('linkedin' in url for url in calls))
 
-    def test_site_without_a_careers_page_gives_nothing(self):
+    def test_site_without_a_careers_page_is_still_named_as_the_employer(self):
         notes = []
-        self.assertIsNone(resolve(pages={'https://www.youcanic.com/': HOME}, notes=notes))
+        site = resolve(pages={'https://www.youcanic.com/': HOME}, notes=notes)
         self.assertTrue(any('no careers page' in note for note in notes))
+        self.assertEqual((site['domain'], site['careers_url'], site['posting_url']), ('youcanic.com', None, None))
+        self.assertTrue(any('apply through the listing' in line for line in site['evidence']))
+
+    def test_generic_trailing_words_are_dropped_when_guessing_the_domain(self):
+        home = '<html><head><title>Wholesale Supplies Online | SZCO</title></head><body><h1>SZCO</h1></body></html>'
+        site = resolve('Szco Supplies Inc', {'https://szco.com/': home})
+        self.assertEqual(site['domain'], 'szco.com')
 
     def test_department_names_do_not_trigger_domain_guesses(self):
         calls = []

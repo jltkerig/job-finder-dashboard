@@ -5,5 +5,6 @@ search_skips.jsonl
 .stop-requested
 search_debug.json
 discovered_employers.json
+board_health.json
 feed_cache/
 *.log

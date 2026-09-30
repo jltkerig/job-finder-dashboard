@@ -286,7 +286,7 @@ class UltiProSearch(unittest.TestCase):
 
 class EmployerList(unittest.TestCase):
     def test_the_defaults_are_used_when_there_is_no_file(self):
-        names = [employer.name for employer in load_employers(Path('does-not-exist.json'))]
+        names = [employer.name for employer in load_employers(Path('does-not-exist.json'), Path('no-discovered.json'))]
         self.assertIn('The Home Depot', names)
         self.assertEqual(len(names), len(DEFAULT_EMPLOYERS))
 
@@ -296,14 +296,14 @@ class EmployerList(unittest.TestCase):
             path.write_text(json.dumps([
                 dict(HOME_DEPOT), dict(HOME_DEPOT, name='Off', enabled=False), {'name': 'Broken'},
                 dict(HOME_DEPOT, name='Unknown system', system='taleo')]), encoding='utf-8')
-            self.assertEqual([e.name for e in load_employers(path)], ['The Home Depot'])
+            self.assertEqual([e.name for e in load_employers(path, Path('no-discovered.json'))], ['The Home Depot'])
 
     def test_the_shipped_file_matches_the_defaults(self):
         shipped = json.loads((Path(employer_jobs.__file__).parent / 'watched_employers.json').read_text(encoding='utf-8'))
         self.assertEqual(shipped, DEFAULT_EMPLOYERS)
 
     def test_a_posting_url_finds_its_employer(self):
-        employers = load_employers(Path('does-not-exist.json'))
+        employers = load_employers(Path('does-not-exist.json'), Path('no-discovered.json'))
         self.assertEqual(employer_for_url('https://troweprice.wd5.myworkdayjobs.com/TRowePrice/job/x/y_1', employers).name, 'T. Rowe Price')
         self.assertIsNone(employer_for_url('https://example.com/job/1', employers))
 

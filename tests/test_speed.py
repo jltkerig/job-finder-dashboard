@@ -68,5 +68,73 @@ class Prefetch(unittest.TestCase):
         self.assertNotIn('https://x.example/0', finder._page_cache)
 
 
+
+
+class UpdatePrefetch(unittest.TestCase):
+    def setUp(self):
+        finder._prefetched.clear()
+
+    def tearDown(self):
+        finder._prefetched.clear()
+        finder._last_failure_status = None
+
+    def test_rows_read_pages_that_were_downloaded_ahead_and_only_once(self):
+        calls = []
+
+        def download(url, key, failure=None):
+            calls.append(url)
+            if 'gone' in url:
+                if failure is not None:
+                    failure.append(404)
+                return None
+            return SimpleNamespace(url=url, text='page ' + url)
+        urls = ['https://a.example/job', 'https://b.example/job', 'https://gone.example/job']
+        with patch.object(finder, '_fetch_page', download), patch.object(finder, 'update_existing_mode', True):
+            finder.prefetch_for_update(urls)
+            self.assertEqual(sorted(calls), sorted(urls))
+            self.assertEqual(finder.safe_request('https://a.example/job').text, 'page https://a.example/job')
+            self.assertIsNone(finder.safe_request('https://gone.example/job'))
+            self.assertEqual(finder._last_failure_status, 404)  # the caller can still tell a removed page apart
+            finder.safe_request('https://a.example/job')  # already handed out: downloaded fresh, not reused
+        self.assertEqual(calls.count('https://a.example/job'), 2)
+
+    def test_a_single_page_is_not_worth_a_pool(self):
+        with patch.object(finder, '_fetch_page', lambda *a, **k: self.fail('should not download')):
+            finder.prefetch_for_update(['https://a.example/job'])
+
+
+class DirectPostings(unittest.TestCase):
+    PAGE = SimpleNamespace(url='https://jobs.example/opening/1', text='<html><title>Web Designer | Acme</title><a href="/about">About</a>'
+                                                                       '<p>Baltimore, MD</p></html>')
+
+    def inspect(self, deep):
+        calls = []
+        with patch.object(finder, 'safe_request', lambda url: calls.append(url) or self.PAGE), \
+                patch.object(finder, 'discover_support_links', lambda soup, url: ['https://jobs.example/about']), \
+                patch.object(finder, 'discover_sitemap_links', lambda url: ['https://jobs.example/sitemap.xml']), \
+                patch.object(finder, 'discover_robots_links', lambda url: []), \
+                patch.object(finder, 'find_external_company_site', lambda soup, url: None):
+            finder.inspect_company_site('https://jobs.example/opening/1', 'Web Designer', 'jobs.example', deep=deep)
+        return calls
+
+    def test_a_direct_posting_is_read_without_the_sites_other_pages(self):
+        self.assertEqual(self.inspect(deep=False), ['https://jobs.example/opening/1'])
+
+    def test_a_possible_lead_still_gets_the_deep_read(self):
+        self.assertEqual(len(self.inspect(deep=True)), 3)
+
+
+class NamesAndBoards(unittest.TestCase):
+    def test_a_leading_entity_code_is_dropped_from_the_company_name(self):
+        self.assertEqual(finder.tidy_company_name('003 Humana Inc.'), 'Humana Inc.')
+        self.assertEqual(finder.tidy_company_name('3M Company'), '3M Company')
+        self.assertEqual(finder.tidy_company_name('84 Lumber'), '84 Lumber')  # only zero-padded codes are dropped
+
+    def test_recognised_applicant_boards_count_as_official(self):
+        self.assertTrue(finder.on_official_board('https://humana.wd5.myworkdayjobs.com/en-US/Humana_External_Career_Site/job/Remote/x_R-1'))
+        self.assertTrue(finder.on_official_board('https://boards.greenhouse.io/acme/jobs/1'))
+        self.assertFalse(finder.on_official_board('https://example.com/careers/designer'))
+
+
 if __name__ == '__main__':
     unittest.main()
