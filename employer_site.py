@@ -28,6 +28,7 @@ _cache = {}
 
 
 def clear_cache():
+    _sitemap_cache.clear()
     _cache.clear()
 
 
@@ -299,8 +300,71 @@ def _find_posting(careers_url, job_title, titles, *, fetch):
     return None
 
 
+_JOB_PATH = re.compile(r"job|career|position|opening|vacanc|employment|hiring|apply|join|work-with", re.I)
+_TITLE_FILLER = {"and", "the", "for", "of", "an", "in", "at", "to", "with", "senior", "sr", "jr", "junior", "lead", "ii", "iii"}
+_sitemap_cache = {}
+MAX_SITEMAP_FILES = 8
+
+
+def _sitemap_urls(origin, fetch_raw):
+    """Page addresses listed in a site's sitemap files (robots.txt and the usual names), cached per site."""
+    if origin in _sitemap_cache:
+        return _sitemap_cache[origin]
+    queue = []
+    robots = fetch_raw(origin + "/robots.txt")
+    if robots is not None:
+        queue += [line.split(":", 1)[1].strip() for line in robots.text.splitlines() if line.lower().startswith("sitemap:")]
+    queue += [origin + path for path in ("/sitemap.xml", "/sitemap_index.xml", "/wp-sitemap.xml", "/job-sitemap.xml")]
+    urls, seen, files = [], set(), 0
+    while queue and files < MAX_SITEMAP_FILES:
+        address = queue.pop(0)
+        if address in seen:
+            continue
+        seen.add(address)
+        response = fetch_raw(address)
+        files += 1
+        if response is None:
+            continue
+        nested = []
+        for loc in re.findall(r"<loc>\s*([^<\s]+)\s*</loc>", response.text, flags=re.I)[:8000]:
+            last = loc.rsplit("/", 1)[-1].lower()
+            if last.endswith(".xml") or last.endswith(".xml.gz") or "sitemap" in last:
+                nested.append(loc)
+            else:
+                urls.append(loc)
+        # Sitemap files about jobs or careers are read first.
+        queue = sorted(nested, key=lambda loc: 0 if _JOB_PATH.search(loc) else 1) + queue
+    _sitemap_cache[origin] = urls
+    return urls
+
+
+def _find_in_sitemap(domain, job_title, *, fetch, fetch_raw):
+    """The page for this opening, found in the employer's sitemap and checked against the page itself."""
+    words = [word for word in re.findall(r"[a-z0-9]+", str(job_title or "").casefold()) if word not in _TITLE_FILLER and len(word) > 1]
+    if not domain or not words:
+        return None
+    candidates = []
+    for url in _sitemap_urls(f"https://{domain}", fetch_raw):
+        path = urlparse(url).path
+        if not _JOB_PATH.search(path):
+            continue
+        path_words = set(re.findall(r"[a-z0-9]+", path.casefold()))
+        if all(word in path_words for word in words):
+            candidates.append((len(path_words), url))
+    for _, url in sorted(candidates)[:3]:
+        page = fetch(url)
+        if page is None:
+            continue
+        soup = BeautifulSoup(page.text, "html.parser")
+        heading = " ".join(tag.get_text(" ", strip=True) for tag in soup.select("title, h1")).casefold()
+        if all(word in re.findall(r"[a-z0-9]+", heading) for word in words):
+            return getattr(page, "url", url) or url
+    return None
+
+
 def resolve_employer_site(company, job_title, posting_url, posting_html, titles, *, fetch, search=None,
-                          score_page=None, is_excluded=None, location_hint="", allow_search=True, notes=None):
+                          score_page=None, is_excluded=None, location_hint="", allow_search=True, notes=None,
+                          fetch_raw=None):
     """Return {domain, careers_url, posting_url, method, evidence} for the employer's own site, or None.
 
     fetch(url) returns a response with .url and .text, or None. search(query) returns SearXNG-style
@@ -343,7 +407,20 @@ def resolve_employer_site(company, job_title, posting_url, posting_html, titles,
     if site is None:
         return None
     result = dict(site, evidence=list(site["evidence"]))
+    # A listing on a subdomain of the employer's website (corcoran.gwu.edu under gwu.edu) is on the employer's own site:
+    # that subdomain is the website to show, and the listing is the posting.
+    listing_host = bare_host(posting_url)
+    if site["domain"] and listing_host != site["domain"] and listing_host.endswith("." + site["domain"]):
+        result["domain"] = listing_host
+        result["posting_url"] = posting_url
+        result["evidence"].append(f"this listing is on the employer's own site ({listing_host})")
+        return result
     result["posting_url"] = _find_posting(site["careers_url"], job_title, titles, fetch=fetch) if site["careers_url"] else None
     if result["posting_url"]:
         result["evidence"].append("this opening found on the employer's site")
+    elif fetch_raw is not None:
+        # Not on the careers page: the sitemap lists pages no search ranks and no page links to.
+        result["posting_url"] = _find_in_sitemap(site["domain"], job_title, fetch=fetch, fetch_raw=fetch_raw)
+        if result["posting_url"]:
+            result["evidence"].append("this opening found in the employer's sitemap")
     return result

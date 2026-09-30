@@ -126,6 +126,27 @@ class RemoteJobsInSearch(unittest.TestCase):
         self.assertEqual(saved, {self.URL})
 
 
+class FooterAddresses(unittest.TestCase):
+    PAGE = ('<html><body><main><h1>Web Designer</h1><p>Design our websites.</p></main>'
+            '<footer>Corcoran School of the Arts &amp; Design 500 17th Street, NW Washington, D.C. 20006 Phone: 202-994-1700</footer>'
+            '</body></html>')
+
+    def test_the_footer_address_is_used_only_on_the_employers_own_site(self):
+        self.assertEqual(finder.extract_job_city(self.PAGE, 'Web Designer', allow_footer=True), ('Washington', 'DC'))
+        # On a job board the footer is the board's address, not the job's.
+        self.assertEqual(finder.extract_job_city(self.PAGE, 'Web Designer'), (None, None))
+
+    def test_the_listings_own_location_still_wins_over_the_footer(self):
+        page = self.PAGE.replace('<p>Design our websites.</p>', '<p>Location: Baltimore, MD 21201</p>')
+        self.assertEqual(finder.extract_job_city(page, '', allow_footer=True), ('Baltimore', 'MD'))
+
+    def test_a_subdomain_of_the_verified_company_site_counts_as_its_own_site(self):
+        details = {'employer_site': {'domain': 'gwu.edu'}}
+        self.assertTrue(finder.on_company_site('https://corcoran.gwu.edu/web-designer', 'Corcoran School of the Arts & Design', details))
+        self.assertFalse(finder.on_company_site('https://graphic-design.thecreativeloft.com/job/1', 'Corcoran School of the Arts & Design', details))
+        self.assertTrue(finder.on_company_site('https://www.acmedesign.com/jobs/1', 'Acme Design', {}))
+
+
 class PlaceChoice(unittest.TestCase):
     def test_a_real_town_beats_a_bigger_ranked_village_of_the_same_name(self):
         results = [

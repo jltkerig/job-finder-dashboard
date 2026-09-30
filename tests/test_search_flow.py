@@ -35,7 +35,7 @@ def run_search(pages, search_url, job_title, *, cities_json='[]', max_new=2, loc
         'rejected_posting_urls': lambda db: set(), 'prepare_city_targets': lambda db, state, cities: list(city_targets),
         'start_docker_desktop': lambda: True, 'start_searxng': lambda: True,
         'stop_searxng': lambda: None, 'stop_docker_desktop': lambda: None,
-        'check_searxng_timer': lambda: True, 'FEEDS': (), 'load_employers': lambda: [], 'company_board_posting': lambda name, title: None,
+        'check_searxng_timer': lambda: True, 'FEEDS': (), 'load_employers': lambda: [], 'company_board_posting': lambda name, title: None, 'fetch_text': lambda *a, **k: None,
         'search_searxng': lambda *args: [{'title': 'Result', 'url': search_url}],
         'safe_request': lambda url: SimpleNamespace(url=url, text=pages[url]) if url in pages else None,
         'analyze_usa_location': location,
@@ -167,7 +167,7 @@ class EmployerSearch(unittest.TestCase):
 
     def search(self, employer, distance=None):
         captured, skips = [], []
-        near_baltimore = distance or (lambda db, html, place, state, targets: (
+        near_baltimore = distance or (lambda db, html, place, state, targets, **kw: (
             ('Baltimore' in place), 'Baltimore', 39.29, -76.61, 0.0) if 'Baltimore' in place else (False, 'Atlanta', 33.7, -84.4, 600.0))
         run_search({}, 'https://example.com/none', 'Web Designer', max_new=3, cities_json=self.CITIES,
                    city_targets=[{'city': 'Baltimore, MD', 'radius': 20}], distance=near_baltimore,

@@ -220,64 +220,6 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   async function fetchWithTimeout(url,options={},timeoutMs=8000,externalController=null){const controller=externalController||new AbortController();const timer=setTimeout(()=>controller.abort(),timeoutMs);try{return await fetch(url,{...options,signal:controller.signal});}finally{clearTimeout(timer);}}
 
-  const checkUpdateButton = $("#check-update"), updateCheckStatus = $("#update-check-status");
-  if (checkUpdateButton && updateCheckStatus) {
-    let availableUpdate = null;
-    function offerUpdate(data, changed = false) {
-      availableUpdate = data;
-      checkUpdateButton.textContent = `Update to v${data.latest_version}`;
-      checkUpdateButton.classList.add("update-available");
-      showStatusModal(changed ? "Newer update found" : "Update found",
-        `Job Finder v${data.latest_version} is available. Select Update to install it.`,
-        "success", { confirmLabel: "Update", onConfirm: () => checkUpdateButton.click() });
-    }
-    checkUpdateButton.addEventListener("click", async () => {
-      checkUpdateButton.disabled = true;
-      updateCheckStatus.hidden = false;
-      try {
-        if (availableUpdate) {
-          showStatusModal("Applying update", `Installing Job Finder v${availableUpdate.latest_version}. Please wait while files are replaced and the dashboard restarts.`, "info", { loading: true, closable: false });
-          const response = await fetchWithTimeout("/install-update", {
-            method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
-            body: JSON.stringify({ file_name: availableUpdate.file_name })
-          }, 12000);
-          const data = await readJsonResponse(response, "Could not install the update.", "E1405");
-          if (response.status === 409 && data.status === "update_changed" && data.file_name && data.latest_version) {
-            offerUpdate(data, true);
-            return;
-          }
-          if (!response.ok) throw new Error(serverMessage(data, "Could not install the update.", "E1405"));
-          checkUpdateButton.textContent = "Updating…";
-          setTimeout(() => location.reload(), 5000);
-          return;
-        }
-        currentUpdateController = new AbortController();
-        showStatusModal("Searching for latest version…", "Checking your update folders for the newest Job Finder ZIP.", "info", {
-          loading: true, stopLabel: "Stop", closable: false,
-          onStop: async () => { currentUpdateController?.abort(); checkUpdateButton.textContent = "Search for Latest Version"; checkUpdateButton.disabled = false; updateCheckStatus.hidden = true; }
-        });
-        checkUpdateButton.textContent = "Checking…";
-        const response = await fetchWithTimeout("/check-update", { cache: "no-store" }, 8000, currentUpdateController);
-        const data = await readJsonResponse(response, "Could not check for updates.", "E1401");
-        if (!response.ok) throw new Error(serverMessage(data, "Could not check for updates.", "E1401"));
-        if (data.status === "update_available") offerUpdate(data);
-        else {
-          checkUpdateButton.textContent = "Search for Latest Version";
-          showStatusModal(data.status === "none_found" ? "No update files found" : "You’re up to date",
-            data.message || "No newer update was found.", data.status === "none_found" ? "info" : "success");
-        }
-      } catch (error) {
-        availableUpdate = null;
-        checkUpdateButton.textContent = "Search for Latest Version";
-        checkUpdateButton.classList.remove("update-available");
-        if (error?.name !== "AbortError") showStatusModal("Could not check for updates", error.message || "The update check failed.", "danger");
-      } finally {
-        currentUpdateController = null;
-        if (checkUpdateButton.textContent !== "Updating…") checkUpdateButton.disabled = false;
-      }
-    });
-  }
-
   function setupPagination(listSelector,itemSelector,controlsSelector,searchSelector) {
     const list=$(listSelector),controls=$(controlsSelector),search=$(searchSelector);
     if(!list||!controls)return;
