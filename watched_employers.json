@@ -1,0 +1,136 @@
+[
+  {
+    "name": "The Home Depot",
+    "system": "workday",
+    "host": "homedepot.wd5.myworkdayjobs.com",
+    "tenant": "homedepot",
+    "site": "CareerDepot",
+    "domain": "homedepot.com",
+    "title_keywords": [
+      "engineer",
+      "developer",
+      "software",
+      "data",
+      "analyst",
+      "architect",
+      "ux",
+      "ui",
+      "design",
+      "product",
+      "technolog",
+      "devops",
+      "cloud",
+      "security",
+      "machine learning",
+      "web",
+      "digital",
+      "content",
+      "creative",
+      "graphic",
+      "visual",
+      "producer",
+      "program"
+    ],
+    "exclude_locations": [
+      "DFC",
+      "DISTRIBUTION",
+      "FULFILLMENT",
+      "SUPPLY CHAIN"
+    ],
+    "extra_titles": [
+      "UX Designer",
+      "UI Designer",
+      "Digital Designer",
+      "Front End Developer",
+      "Web Developer"
+    ]
+  },
+  {
+    "name": "Capital One",
+    "system": "workday",
+    "host": "capitalone.wd12.myworkdayjobs.com",
+    "tenant": "capitalone",
+    "site": "Capital_One",
+    "domain": "capitalone.com"
+  },
+  {
+    "name": "T. Rowe Price",
+    "system": "workday",
+    "host": "troweprice.wd5.myworkdayjobs.com",
+    "tenant": "troweprice",
+    "site": "TRowePrice",
+    "domain": "troweprice.com"
+  },
+  {
+    "name": "Barclays",
+    "system": "workday",
+    "host": "barclays.wd3.myworkdayjobs.com",
+    "tenant": "barclays",
+    "site": "External_Career_Site_Barclays",
+    "domain": "barclays.com"
+  },
+  {
+    "name": "WSFS Bank",
+    "system": "workday",
+    "host": "wsfsbank.wd1.myworkdayjobs.com",
+    "tenant": "wsfsbank",
+    "site": "wsfscareers",
+    "domain": "wsfsbank.com"
+  },
+  {
+    "name": "DuPont",
+    "system": "workday",
+    "host": "dupont.wd5.myworkdayjobs.com",
+    "tenant": "dupont",
+    "site": "Jobs",
+    "domain": "dupont.com"
+  },
+  {
+    "name": "ChristianaCare",
+    "system": "workday",
+    "host": "christianacare.wd5.myworkdayjobs.com",
+    "tenant": "christianacare",
+    "site": "CCHS",
+    "domain": "christianacare.org"
+  },
+  {
+    "name": "JPMorgan Chase",
+    "system": "oracle",
+    "host": "jpmc.fa.oraclecloud.com",
+    "site": "CX_1001",
+    "domain": "jpmorganchase.com"
+  },
+  {
+    "name": "Sinclair",
+    "system": "oracle",
+    "host": "edyy.fa.us2.oraclecloud.com",
+    "site": "CX_2002",
+    "domain": "sbgi.net"
+  },
+  {
+    "name": "Chemours",
+    "system": "workday",
+    "host": "chemours.wd103.myworkdayjobs.com",
+    "tenant": "chemours",
+    "site": "Chemours",
+    "domain": "chemours.com"
+  },
+  {
+    "name": "Under Armour",
+    "system": "successfactors",
+    "host": "careers.underarmour.com",
+    "domain": "underarmour.com"
+  },
+  {
+    "name": "McCormick",
+    "system": "successfactors",
+    "host": "careers.mccormick.com",
+    "domain": "mccormick.com"
+  },
+  {
+    "name": "Allegis Group",
+    "system": "icims",
+    "host": "careers-allegisgroup.icims.com",
+    "domain": "allegisgroup.com"
+  }
+]

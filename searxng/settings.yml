@@ -5,3 +5,19 @@ search:
     - html
     - json
 
+engines:
+  # Switched off by default, but they answer job searches. DuckDuckGo and Brave alone are easily
+  # rate-limited (CAPTCHA / "too many requests"), which used to end a search with no results.
+  - name: bing
+    disabled: false
+  - name: google
+    disabled: false
+  - name: yahoo
+    disabled: false
+  # Never useful for finding jobs; Wikidata and Google CSE only produced errors and timeouts.
+  - name: wikipedia
+    disabled: true
+  - name: wikidata
+    disabled: true
+  - name: google cse
+    disabled: true

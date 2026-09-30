@@ -2,3 +2,7 @@
 __pycache__/
 *.pyc
 search_skips.jsonl
+.stop-requested
+search_debug.json
+feed_cache/
+*.log

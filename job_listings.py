@@ -8,9 +8,29 @@ from bs4 import BeautifulSoup
 
 
 ATS_HOSTS = ("greenhouse.io", "lever.co", "ashbyhq.com", "workdayjobs.com", "smartrecruiters.com", "icims.com", "jobvite.com", "bamboohr.com")
-NON_JOB_PATH = re.compile(r"/(?:news|blog|stories|magazine|services?|financial-aid|financialaid|types-of-aid|work-study)(?:/|$)", re.I)
+_ALWAYS_NON_JOB = re.compile(r"/(?:news|blog|stories|magazine|financial-aid|financialaid|types-of-aid|work-study)(?:/|$)", re.I)
+_SERVICES_PATH = re.compile(r"/services?(?:/|$)", re.I)
+_JOB_CONTEXT = re.compile(r"/(?:jobs?|careers?|positions?|openings?|vacanc(?:y|ies)|opportunit(?:y|ies)|employment)(?:/|$)", re.I)
+
+
+class _NonJobPath:
+    """Paths that are articles or service pages. A /services/ folder under /careers/ still holds real jobs."""
+
+    def search(self, path):
+        path = str(path or "")
+        if _ALWAYS_NON_JOB.search(path):
+            return True
+        return bool(_SERVICES_PATH.search(path) and not _JOB_CONTEXT.search(path))
+
+
+NON_JOB_PATH = _NonJobPath()
 JOB_PATH = re.compile(r"/(?:jobs?|positions?|openings?|careers?)/(?:[^/?#]+/)*[^/?#]+/?$", re.I)
 SKIP_QUERY_KEYS = {"utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "fbclid", "gclid"}
+
+
+def is_pdf_url(url):
+    """PDFs are never job pages Job Finder can read, so searches skip them unfetched."""
+    return urlparse(url or "").path.casefold().endswith(".pdf")
 
 
 def canonical_url(url):
@@ -40,29 +60,139 @@ def _is_type(node, name):
     return any(str(kind).split("/")[-1].casefold() == name.casefold() for kind in kinds)
 
 
-def _tokens(value):
+_DROPPED_WORDS = {"senior", "junior", "remote", "hybrid", "job", "jobs", "the", "a"}
+# Words that put a title in a different trade from a designer/developer search.
+OFF_FIELD_WORDS = {"interior", "landscape", "fashion", "apparel", "industrial", "mechanical", "electrical", "structural",
+                   "architectural", "jewelry", "floral", "kitchen", "furniture", "merchandising", "merchandiser"}
+# Extra words that may sit around or between the searched words without changing the job.
+COMPATIBLE_EXTRA_WORDS = {
+    "ux", "ui", "digital", "creative", "visual", "interaction", "interactive", "graphic", "content", "product", "brand",
+    "marketing", "email", "motion", "print", "wordpress", "and", "or", "frontend", "front", "end", "specialist",
+    "associate", "lead", "staff", "principal", "intern", "web", "website", "ii", "iii", "iv", "v", "i"}
+
+
+def _token_list(value):
     text = str(value or "").casefold()
     for old, new in ((r"front[ -]?end", "frontend"), (r"back[ -]?end", "backend"),
                      (r"full[ -]?stack", "fullstack")):
         text = re.sub(r"\b" + old + r"\b", new, text)
-    return set(re.findall(r"[a-z0-9]+", text)) - {"senior", "junior", "remote", "hybrid", "job", "jobs", "the", "a"}
+    return [word for word in re.findall(r"[a-z0-9]+", text) if word not in _DROPPED_WORDS]
+
+
+def _tokens(value):
+    return set(_token_list(value))
 
 
 def matching_title(title, wanted):
-    actual = _tokens(title)
-    return any(words and (words <= actual or (len(words) >= 3 and len(words & actual) >= len(words) - 1))
-               for words in (_tokens(w) for w in wanted))
+    """The searched words must appear together (Web Producer is not Web Series Producer)."""
+    actual_list = _token_list(title)
+    actual = set(actual_list)
+    # "Lead, Digital Designer (Apparel & Footwear)": the bracketed department is not part of the job's name.
+    core = set(_token_list(re.split(r"\s[-–|]\s|\(", str(title or ""))[0]))
+    for phrase in wanted:
+        words_list = _token_list(phrase)
+        words = set(words_list)
+        if not words or (core & OFF_FIELD_WORDS) - words:
+            continue
+        size = len(words_list)
+        if any(actual_list[i:i + size] == words_list for i in range(len(actual_list) - size + 1)):
+            return True
+        extras = actual - words
+        if words <= actual and all(word in COMPATIBLE_EXTRA_WORDS or word.isdigit() for word in extras):
+            return True
+        if size >= 3 and len(words & actual) >= size - 1:
+            return True
+    return False
+
+
+# A trailing ISO country code ("London, GB"). Codes that are also US state abbreviations
+# (CA, DE, IN, ...) are left out on purpose: "Wilmington, DE" is Delaware.
+NON_US_COUNTRY_CODE = re.compile(
+    r",\s*(?:gb|uk|fr|ie|au|nz|jp|cn|br|mx|za|it|es|nl|se|no|dk|fi|pl|pt|ch|at|be|sg|ae|ro|cz|hu|gr|tr|ph|ng|ke|"
+    r"eg|kr|tw|hk|th|vn|my|pk|bd|ua|ru)\s*$", re.I)
 
 
 def excludes_us(location, description=""):
     """Reject explicit non-US-only restrictions; ambiguous locations stay unverified."""
     location = str(location or "")
     evidence = f"{location} {str(description or '')[:1500]}".casefold()
-    if re.search(r"\b(?:united states|usa|u\.s\.|us only|worldwide|anywhere|global)\b", location.casefold()):
+    # "u.s." ends in punctuation, so a trailing \b would never match it.
+    if re.search(r"\b(?:united states|usa|us only|worldwide|anywhere|global)\b|\bu\.s\.(?!\w)", location.casefold()):
         return False
-    non_us = r"\b(?:canada|united kingdom|uk|germany|france|india|australia|philippines|brazil|europe|emea)\b"
-    return bool(re.search(non_us, location.casefold()) or
-                re.search(r"(?:remote|applicants?|candidates?).{0,45}(?:only|must be|based in).{0,35}" + non_us, evidence))
+    countries = (r"canada|united kingdom|uk|great britain|england|scotland|wales|ireland|germany|france|spain|"
+                 r"italy|netherlands|poland|portugal|sweden|norway|denmark|finland|switzerland|austria|belgium|india|"
+                 r"australia|new zealand|philippines|brazil|mexico|japan|china|singapore|israel|europe|emea|apac|latam")
+    # In the description the country must be the thing the applicant has to satisfy
+    # ("must be based in Canada"), not just a place mentioned later in the sentence.
+    requirement = (r"(?:remote|applicants?|candidates?).{0,45}?(?:only|must be|must reside|must live|based|located|"
+                   r"residing)\s+(?:(?:based|located|residing)\s+)?(?:in|of)\s+(?:the\s+)?(?:" + countries + r")\b"
+                   r"|\b(?:residents?|citizens?)\s+of\s+(?:the\s+)?(?:" + countries + r")\b"
+                   r"|\b(?:" + countries + r")\b[\s\-–,()]*(?:residents?\s+)?only\b")
+    return bool(re.search(r"\b(?:" + countries + r")\b", location.casefold()) or NON_US_COUNTRY_CODE.search(location)
+                or re.search(requirement, evidence))
+
+
+_HYBRID_WORDS = re.compile(r"\b(?:hybrid|part(?:ly|ially) remote|split between (?:home|remote) and (?:the )?office)\b", re.I)
+_REMOTE_WORDS = re.compile(r"\b(?:remote|work(?:ing)? from home|wfh|telecommut(?:e|ing)|home[ -]based|distributed team)\b", re.I)
+_ONSITE_WORDS = re.compile(r"\b(?:on[ -]?site|in[ -]?office|in[ -]?person|office[ -]based|on[ -]?premises)\b", re.I)
+_DESCRIBED_REMOTE = re.compile(
+    r"\b(?:fully remote|100% remote|remote[- ]first|remote (?:position|role|job|opportunity)"
+    r"|(?:this|the) (?:role|position|job|opportunity) is (?:fully |100% )?remote|work from home|wfh"
+    r"|telecommut(?:e|ing))\b", re.I)
+# "remote work stipend" is a perk of a job, not where the job is done.
+_REMOTE_PERKS = re.compile(
+    r"\bremote[- ](?:work(?:ing)?\s+)?(?:stipend|allowance|policy|policies|equipment|set-?up|tools|culture|benefits?|perks?|reimbursement)\b"
+    r"|\bwork[- ]from[- ]home\s+(?:stipend|allowance|equipment|set-?up|reimbursement)\b", re.I)
+# "Remote" as part of a job's subject ("remote sensing"), not its location.
+_REMOTE_SUBJECT = re.compile(
+    r"\bremote[- ](?:sensing|sensors?|controls?|controlled|operated|operations?|monitoring|desktop|access|areas?|communities|villages?)\b", re.I)
+_NEGATED_REMOTE = re.compile(
+    r"\b(?:not|isn'?t|aren'?t|cannot be|can'?t be|non)[- ](?:(?:a|an|the|fully|100%|completely|entirely|eligible for)\s+)*remote\b"
+    r"|\bno (?:remote|work[- ]from[- ]home|telecommut\w*)\b|\bremote (?:work |working )?(?:is|are) (?:not|unavailable)\b"
+    r"|\b(?:does|do|will) not (?:offer|allow|support|permit) (?:remote|work[- ]from[- ]home|telecommut\w*)\b"
+    r"|\bwithout remote\b", re.I)
+# In-person interviews, events and occasional travel do not make a job on-site.
+_ONSITE_OCCASIONS = re.compile(
+    r"\b(?:in[- ]person|on[- ]?site)\s+(?:interviews?|meetings?|events?|training|orientation|onboarding|assessments?|rounds?|retreats?|offsites?|team\s+\w+)\b"
+    r"|\binterviews?\s+(?:will be\s+|are\s+)?(?:conducted\s+|held\s+)?(?:in[- ]person|on[- ]?site)\b"
+    r"|\b(?:occasional(?:ly)?|periodic(?:ally)?|quarterly|annual(?:ly)?|monthly)\s+(?:in[- ]person|on[- ]?site|travel)\b", re.I)
+
+
+def clean_arrangement_text(text):
+    """The text with perks, subjects, interview wording and negated 'remote' taken out, and whether remote was negated."""
+    text = str(text or "")
+    for pattern in (_REMOTE_PERKS, _REMOTE_SUBJECT, _ONSITE_OCCASIONS):
+        text = pattern.sub(" ", text)
+    negated = bool(_NEGATED_REMOTE.search(text))
+    return _NEGATED_REMOTE.sub(" NOTREMOTE ", text), negated
+
+
+def arrangement_types(text):
+    """Which of Remote, Hybrid and Onsite the text states outright."""
+    text, negated = clean_arrangement_text(text)
+    text = _HYBRID_WORDS.sub("HYBRID", text)
+    found = set()
+    for name, pattern in (("Hybrid", _HYBRID_WORDS), ("Remote", _REMOTE_WORDS), ("Onsite", _ONSITE_WORDS)):
+        if pattern.search(text):
+            found.add(name)
+    if negated and "Hybrid" not in found:
+        found.discard("Remote")
+        found.add("Onsite")  # "not remote" means the work is done in person
+    return found
+
+
+def posting_arrangement(title, location, location_type, description, remote_flag):
+    """Hybrid, Remote, Onsite or None for a JobPosting."""
+    description = str(description or "")[:2500]
+    description_text, description_negated = clean_arrangement_text(description)
+    title_and_place = arrangement_types(f"{title} {location}")
+    if _HYBRID_WORDS.search(f"{location_type} {title} {location} {description}"):
+        return "Hybrid"
+    if remote_flag or "Remote" in title_and_place or _DESCRIBED_REMOTE.search(description_text):
+        return "Remote"
+    if "Onsite" in title_and_place or description_negated or _ONSITE_WORDS.search(description_text):
+        return "Onsite"
+    return None
 
 
 def _plain(value):
@@ -116,10 +246,30 @@ def _freshness(value):
         return None
 
 
+def has_job_posting(soup):
+    """True when the page carries a JobPosting record (schema.org structured data)."""
+    for script in soup.find_all("script", type="application/ld+json"):
+        try:
+            data = json.loads(script.string or script.get_text())
+        except (ValueError, TypeError):
+            continue
+        if any(_is_type(node, "JobPosting") for node in _nodes(data)):
+            return True
+    return False
+
+
+def is_article_page(soup):
+    """A page marked as an article, unless it also holds a real job posting.
+
+    Some career sites (Home Depot's, for one) mark every job page og:type=article.
+    """
+    return bool(soup.find("meta", attrs={"property": "og:type", "content": "article"})) and not has_job_posting(soup)
+
+
 def extract_jobs(url, html, wanted):
     """Only return individual postings with a matching title and direct URL."""
     soup = BeautifulSoup(html, "html.parser")
-    if soup.find("meta", attrs={"property": "og:type", "content": "article"}):
+    if is_article_page(soup):
         return []
     results = []
     seen = set()
@@ -142,17 +292,12 @@ def extract_jobs(url, html, wanted):
             remote = any(token in _plain(node.get("jobLocationType")).casefold() for token in ("remote", "telecommute"))
             if remote:
                 location = _locations(node.get("applicantLocationRequirements")) or location or "Remote"
-            if re.search(r"\bremote\b", location, re.I):
+            if re.search(r"\bremote\b", clean_arrangement_text(location)[0], re.I):
                 remote = True
             employer = _plain(node.get("hiringOrganization"))
             description = BeautifulSoup(_plain(node.get("description")), "html.parser").get_text(" ", strip=True)
-            work_text = f"{title} {location} {description[:2500]}"
             location_type = _plain(node.get("jobLocationType"))
-            arrangement = ("Hybrid" if re.search(r"\bhybrid\b", f"{location_type} {work_text}", re.I)
-                           else "Remote" if remote or re.search(r"\b(?:remote|telecommut(?:e|ing)|work from home|wfh)\b", f"{title} {location}", re.I)
-                           or re.search(r"\b(?:fully remote|remote position|remote role|remote work|work from home|telecommut(?:e|ing))\b", description[:2500], re.I)
-                           else "Onsite" if re.search(r"\b(?:on[- ]?site|in[- ]?office|in[- ]?person|office[- ]based)\b", work_text, re.I)
-                           else None)
+            arrangement = posting_arrangement(title, location, location_type, description, remote)
             evidence = ["JobPosting data", "title matches search", "direct listing link"]
             posted = _freshness(node.get("datePosted"))
             if posted:
@@ -198,7 +343,7 @@ def job_links(url, html, limit=24):
         if not href or (host != origin and not any(host.endswith(h) for h in ATS_HOSTS)):
             continue
         path = urlparse(href).path
-        if NON_JOB_PATH.search(path):
+        if NON_JOB_PATH.search(path) or is_pdf_url(href):
             continue
         text = link.get_text(" ", strip=True)
         if JOB_PATH.search(path) or ("job" in path.casefold() and len(_tokens(text)) >= 2) or (any(host.endswith(h) for h in ATS_HOSTS) and len(_tokens(text)) >= 2):
@@ -215,6 +360,7 @@ def pagination_links(url, html, limit=3):
         if label not in {"next", "next page", "2", "3"} and "next" not in (link.get("rel") or []):
             continue
         target = canonical_url(urljoin(url, link["href"]))
-        if target and urlparse(target).hostname == origin and target != canonical_url(url):
+        if (target and urlparse(target).hostname == origin and target != canonical_url(url)
+                and not is_pdf_url(target)):
             result.append(target)
     return list(dict.fromkeys(result))[:limit]

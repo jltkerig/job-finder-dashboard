@@ -34,12 +34,33 @@ SKILL_ALIASES = {
 }
 
 
+# Skills that are also everyday words ("react quickly", "a notion of", "bootstrap the brand").
+AMBIGUOUS_SKILLS = {"React", "Angular", "Notion", "Confluence", "Bootstrap", "Litmus"}
+_TECH_AFTER = re.compile(r"^\s*(?:[,;/|)•·]|\.(?:\s|$)|\s+(?:and|or|&)\s|\s+(?:Native|Developer|Engineer|framework|library|JS|Hooks|Router|CSS)\b|$)")
+_TECH_BEFORE = re.compile(r"(?:experience (?:with|in)|proficien\w+ (?:in|with)|knowledge of|familiar\w* with|expertise in|"
+                          r"skills?:|using|such as|including|e\.g\.,?)\s*(?:[\w.+#-]+[,/]\s*)*$", re.I)
+
+
+def _named_as_skill(text, skill):
+    """An everyday-word skill counts only when capitalized and used like a tool (a list, 'experience with')."""
+    for match in re.finditer(r"(?<![\w])" + re.escape(skill) + r"(?![\w])", text):
+        if _TECH_AFTER.match(text[match.end(): match.end() + 40]) or _TECH_BEFORE.search(text[max(0, match.start() - 60): match.start()]):
+            return True
+    return False
+
+
 def detect_skills(text):
     text = text[:250000]
     found = []
     for skill, aliases in SKILL_ALIASES.items():
-        if any(re.search(r"(?<![\w])" + re.escape(alias) + r"(?![\w])", text, re.I) for alias in aliases):
-            found.append(skill)
+        for alias in aliases:
+            if skill in AMBIGUOUS_SKILLS and alias == skill.casefold():
+                matched = _named_as_skill(text, skill)
+            else:
+                matched = re.search(r"(?<![\w])" + re.escape(alias) + r"(?![\w])", text, re.I)
+            if matched:
+                found.append(skill)
+                break
     return found
 
 

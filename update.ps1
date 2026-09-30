@@ -9,6 +9,10 @@ $PythonDir = Split-Path $ProjectDir -Parent
 $BackupRoot = Join-Path $PythonDir "job-finder-backups"
 $TempRoot = Join-Path $env:TEMP ("job-finder-update-" + [guid]::NewGuid().ToString("N"))
 $UpdateLog = Join-Path $ProjectDir "update.log"
+# Logs the running dashboard or a search keeps appending to. They are backed up
+# but not hash-checked, or every backup would fail as "changed during backup".
+$VolatileFiles = @("update.log", "dashboard.log", "dashboard-error.log", "job_finder.log", "startup.log") |
+    ForEach-Object { Join-Path $ProjectDir $_ }
 $backup = $null
 $backupVerified = $false
 $installationStarted = $false
@@ -79,8 +83,8 @@ try {
     $backupDirectories = @($originalItems | Where-Object { $_.PSIsContainer } | ForEach-Object {
         $_.FullName.Substring($ProjectDir.Length + 1)
     })
-    # update.log is actively appended and is never deleted by rollback.
-    $backupFiles = @($originalItems | Where-Object { -not $_.PSIsContainer -and $_.FullName -ne $UpdateLog } | ForEach-Object {
+    # Log files are actively appended; update.log is also never deleted by rollback.
+    $backupFiles = @($originalItems | Where-Object { -not $_.PSIsContainer -and $_.FullName -notin $VolatileFiles } | ForEach-Object {
         [PSCustomObject]@{
             Path = $_.FullName.Substring($ProjectDir.Length + 1)
             Hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash
@@ -95,13 +99,13 @@ try {
             throw "Project changed during backup: $($entry.Path)"
         }
     }
-    $currentPaths = @(Get-ChildItem -LiteralPath $ProjectDir -Recurse -Force | ForEach-Object { $_.FullName })
-    $originalPaths = @($originalItems | ForEach-Object { $_.FullName })
+    $currentPaths = @(Get-ChildItem -LiteralPath $ProjectDir -Recurse -Force | ForEach-Object { $_.FullName } | Where-Object { $_ -notin $VolatileFiles })
+    $originalPaths = @($originalItems | ForEach-Object { $_.FullName } | Where-Object { $_ -notin $VolatileFiles })
     if (Compare-Object $originalPaths $currentPaths) { throw "Project contents changed during backup." }
     $backupVerified = $true
     Write-UpdateLog "Backup verified at $backup"
 
-    $preserve = @(".env", "settings.json", "blocked_domains.txt", "blocked_companies.txt", "blocked_country_domains.txt", "block_metadata.json", "dashboard.log", "dashboard-error.log", "job_finder.log", "search_skips.jsonl", "update.log")
+    $preserve = @(".env", "settings.json", "blocked_domains.txt", "blocked_companies.txt", "blocked_country_domains.txt", "block_metadata.json", "dashboard.log", "dashboard-error.log", "job_finder.log", "search_skips.jsonl", "search_debug.json", "watched_employers.json", "update.log")
 
     New-Item -ItemType Directory -Path $TempRoot -Force | Out-Null
     Expand-Archive -LiteralPath $ZipPath -DestinationPath $TempRoot -Force
