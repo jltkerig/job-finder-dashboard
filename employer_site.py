@@ -93,7 +93,9 @@ def can_guess_domain(company):
 
 _GENERIC_TAIL = {"technologies", "technology", "tech", "solutions", "systems", "services", "labs", "lab", "studio",
                  "studios", "software", "digital", "media", "consulting", "partners", "group", "design", "designs",
-                 "agency", "associates", "international", "global", "worldwide"}
+                 "agency", "associates", "international", "global", "worldwide", "supplies", "supply", "products",
+                 "enterprises", "industries", "goods", "brands", "wholesale", "distribution", "distributors",
+                 "company", "co", "corp", "corporation", "holdings", "usa"}
 
 
 def _names_match(company, text):
@@ -180,12 +182,20 @@ def _candidates(company, posting_url, posting_html, *, search, location_hint, al
             if usable(url):
                 yield url, "school domain guess", False
     if can_guess_domain(company):
-        slug = name_slug(company)
-        for tld in GUESS_TLDS:
-            for prefix in ("", "www."):
-                url = f"https://{prefix}{slug}.{tld}/"
-                if usable(url):
-                    yield url, "domain guess", False
+        # "Szco Supplies Inc" -> szcosupplies, then szco (without its generic ending words).
+        slugs = [name_slug(company)]
+        tokens = name_tokens(company)
+        while len(tokens) > 1 and tokens[-1] in _GENERIC_TAIL:
+            tokens = tokens[:-1]
+            trimmed = "".join(tokens)
+            if len(trimmed) >= 4 and trimmed not in slugs:
+                slugs.append(trimmed)
+        for slug in slugs:
+            for tld in GUESS_TLDS:
+                for prefix in ("", "www."):
+                    url = f"https://{prefix}{slug}.{tld}/"
+                    if usable(url):
+                        yield url, "domain guess", False
     if allow_search and search:
         seen = set()
         for result in (search(f'"{company}" {location_hint}'.strip()) or [])[:8]:
@@ -320,7 +330,12 @@ def resolve_employer_site(company, job_title, posting_url, posting_html, titles,
                         "evidence": [f"employer site: {bare_host(getattr(home, 'url', ''))} ({method})",
                                      "careers page found on the employer's site"]}
             else:
-                notes.append(f"{bare_host(getattr(home, 'url', ''))} found ({method}) but it has no careers page")
+                host = bare_host(getattr(home, "url", ""))
+                notes.append(f"{host} found ({method}) but it has no careers page")
+                # The employer is still identified; the listing stays the way to apply.
+                site = {"domain": host, "careers_url": None, "method": method,
+                        "evidence": [f"employer site: {host} ({method})",
+                                     "no careers page on the employer's site; apply through the listing"]}
         else:
             notes.append("no employer website could be verified")
         _cache[key] = site
@@ -328,7 +343,7 @@ def resolve_employer_site(company, job_title, posting_url, posting_html, titles,
     if site is None:
         return None
     result = dict(site, evidence=list(site["evidence"]))
-    result["posting_url"] = _find_posting(site["careers_url"], job_title, titles, fetch=fetch)
+    result["posting_url"] = _find_posting(site["careers_url"], job_title, titles, fetch=fetch) if site["careers_url"] else None
     if result["posting_url"]:
         result["evidence"].append("this opening found on the employer's site")
     return result

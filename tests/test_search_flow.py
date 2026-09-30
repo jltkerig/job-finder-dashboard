@@ -49,6 +49,7 @@ def run_search(pages, search_url, job_title, *, cities_json='[]', max_new=2, loc
     with ExitStack() as stack:
         debug_file = Path(stack.enter_context(tempfile.TemporaryDirectory())) / 'search_debug.json'
         stack.enter_context(patch.object(finder, 'SEARCH_DEBUG_FILE', debug_file))
+        stack.enter_context(patch.object(finder, 'BOARD_HEALTH_FILE', debug_file.with_name('board_health.json')))
         for name, function in patches.items():
             stack.enter_context(patch.object(finder, name, function))
         stack.enter_context(patch.object(finder, 'MAX_SEARCH_PAGES', 1))

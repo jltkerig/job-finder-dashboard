@@ -43,6 +43,45 @@ function Write-UpdateLog([string]$Message) {
     Add-Content -Path $UpdateLog -Value $line -Encoding UTF8
 }
 
+function Export-DatabaseBackup([string]$Name) {
+    # Saves the job_finder database next to the file backup so a bad update can be undone completely.
+    # It never stops the update: if the export cannot run, that is logged and the update continues.
+    $sqlPath = Join-Path $BackupRoot ($Name + " - database.sql")
+    $config = Join-Path $env:TEMP ("job-finder-db-" + [guid]::NewGuid().ToString("N") + ".cnf")
+    try {
+        $db = @{ DB_HOST = "127.0.0.1"; DB_PORT = "3306"; DB_USER = "root"; DB_PASSWORD = ""; DB_NAME = "job_finder" }
+        $envFile = Join-Path $ProjectDir ".env"
+        if (Test-Path -LiteralPath $envFile) {
+            foreach ($line in Get-Content -LiteralPath $envFile) {
+                if ($line -match '^\s*(DB_[A-Z_]+)\s*=\s*(.*)$') { $db[$Matches[1]] = $Matches[2].Trim().Trim('"').Trim("'") }
+            }
+        }
+        $dump = @("C:\xampp\mysql\bin\mysqldump.exe", "C:\xampp\mysql\bin\mariadb-dump.exe") | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+        if (-not $dump) {
+            $found = Get-Command mysqldump.exe, mariadb-dump.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($found) { $dump = $found.Source }
+        }
+        if (-not $dump) { Write-UpdateLog "Database backup skipped: mysqldump was not found."; return }
+        # The password goes in a temporary options file, not on the command line where other programs could read it.
+        $escaped = $db.DB_PASSWORD.Replace('\', '\\').Replace('"', '\"')
+        Set-Content -LiteralPath $config -Value ("[client]`nhost=" + $db.DB_HOST + "`nport=" + $db.DB_PORT + "`nuser=" + $db.DB_USER + "`npassword=`"" + $escaped + "`"") -Encoding ASCII
+        & $dump "--defaults-extra-file=$config" --single-transaction --routines "--result-file=$sqlPath" $db.DB_NAME 2>$null
+        if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $sqlPath) -or (Get-Item -LiteralPath $sqlPath).Length -lt 200) {
+            Remove-Item -LiteralPath $sqlPath -Force -ErrorAction SilentlyContinue
+            Write-UpdateLog "Database backup failed (is MySQL running?); continuing with the file backup only."
+            return
+        }
+        Write-UpdateLog "Database backup saved: $sqlPath"
+        # Keep the ten newest database backups.
+        Get-ChildItem -LiteralPath $BackupRoot -Filter "* - database.sql" -File | Sort-Object LastWriteTime -Descending |
+            Select-Object -Skip 10 | Remove-Item -Force -ErrorAction SilentlyContinue
+    } catch {
+        Write-UpdateLog ("Database backup failed: " + $_.Exception.Message + "; continuing with the file backup only.")
+    } finally {
+        Remove-Item -LiteralPath $config -Force -ErrorAction SilentlyContinue
+    }
+}
+
 function Restore-Backup {
     if ($backupVerified -and $installationStarted) {
         # Recheck the saved bytes before removing any partially installed files.
@@ -104,8 +143,9 @@ try {
     if (Compare-Object $originalPaths $currentPaths) { throw "Project contents changed during backup." }
     $backupVerified = $true
     Write-UpdateLog "Backup verified at $backup"
+    Export-DatabaseBackup (Split-Path $backup -Leaf)
 
-    $preserve = @(".env", "settings.json", "blocked_domains.txt", "blocked_companies.txt", "blocked_country_domains.txt", "block_metadata.json", "dashboard.log", "dashboard-error.log", "job_finder.log", "search_skips.jsonl", "search_debug.json", "watched_employers.json", "discovered_employers.json", "update.log")
+    $preserve = @(".env", "settings.json", "blocked_domains.txt", "blocked_companies.txt", "blocked_country_domains.txt", "block_metadata.json", "dashboard.log", "dashboard-error.log", "job_finder.log", "search_skips.jsonl", "search_debug.json", "watched_employers.json", "discovered_employers.json", "board_health.json", "update.log")
 
     New-Item -ItemType Directory -Path $TempRoot -Force | Out-Null
     Expand-Archive -LiteralPath $ZipPath -DestinationPath $TempRoot -Force

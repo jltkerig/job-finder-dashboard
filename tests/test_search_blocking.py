@@ -35,7 +35,7 @@ class BlockedEngines(unittest.TestCase):
             index = seen.index(query)
             return [{'title': 'x', 'url': f'https://example.com/files/{index}.pdf'}] if page == 1 and index % 4 == 0 else []
         _, run = self.search(fake, 5)
-        self.assertEqual(run['stop_reason'], 'Search sources exhausted')
+        self.assertTrue(run['stop_reason'].startswith('Search sources exhausted'))
         self.assertGreater(len(run['queries']), 5)
         self.assertFalse(run['summary']['search_engines_blocking'])
 

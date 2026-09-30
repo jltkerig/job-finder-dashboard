@@ -126,5 +126,22 @@ class RemoteJobsInSearch(unittest.TestCase):
         self.assertEqual(saved, {self.URL})
 
 
+class PlaceChoice(unittest.TestCase):
+    def test_a_real_town_beats_a_bigger_ranked_village_of_the_same_name(self):
+        results = [
+            {'display_name': 'Bel Air, Triple Lakes, Allegany County', 'lat': '39.5797', 'lon': '-78.8531', 'importance': 0.376, 'type': 'statistical'},
+            {'display_name': 'Bel Air, Allegany County, 21556', 'lat': '39.5731', 'lon': '-78.8497', 'importance': 0.376, 'type': 'village'},
+            {'display_name': 'Bel Air, Harford County, 21014', 'lat': '39.5355', 'lon': '-76.3490', 'importance': 0.187, 'type': 'administrative'},
+        ]
+        self.assertIn('Harford County', finder.pick_place(results)['display_name'])
+
+    def test_importance_breaks_ties_between_places_of_the_same_kind(self):
+        results = [{'display_name': 'A', 'importance': 0.2, 'type': 'city'}, {'display_name': 'B', 'importance': 0.7, 'type': 'city'}]
+        self.assertEqual(finder.pick_place(results)['display_name'], 'B')
+
+    def test_cached_answers_from_before_the_ranking_fix_are_not_reused(self):
+        self.assertTrue(finder._normalize_geocode_query('Bel Air, MD').endswith('[v2]'))
+
+
 if __name__ == '__main__':
     unittest.main()
