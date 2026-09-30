@@ -224,6 +224,66 @@ class SuccessFactorsSearch(unittest.TestCase):
         self.assertEqual(employer.status(self.JOB, FakeHttp(pages={self.JOB: '<p>Job not found</p>'})), 'Closed')
 
 
+AGORA = next(config for config in DEFAULT_EMPLOYERS if config["name"] == "The Agora Companies")
+
+
+def agora_job(number, title, city='Baltimore', state='MD', country=('USA', 'United States')):
+    return {'Id': f'id-{number}', 'Title': title, 'FullTime': True, 'JobCategoryName': 'Web', 'PostedDate': '2026-09-23T13:58:19.003Z',
+            'BriefDescription': 'Brief.', 'Locations': [{'Address': {'City': city, 'State': {'Code': state},
+                                                                    'Country': {'Code': country[0], 'Name': country[1]}}}]}
+
+
+class UltiProHttp(FakeHttp):
+    def __init__(self, jobs, pages=None):
+        super().__init__(pages=pages)
+        self.jobs = jobs
+        self.posts = []
+
+    def post_json(self, url, payload):
+        skip = payload['opportunitySearch']['Skip']
+        self.posts.append(skip)
+        return Response({'opportunities': self.jobs[skip: skip + 50], 'totalCount': len(self.jobs)})
+
+
+class UltiProSearch(unittest.TestCase):
+    def test_every_opening_is_read_once_and_title_matching_picks_from_them(self):
+        jobs = [agora_job(n, 'Web Designer' if n == 3 else f'Sales Associate {n}') for n in range(60)]
+        http = UltiProHttp(jobs)
+        found = Employer(AGORA).find_openings(['Web Designer', 'Graphic Designer'], http)
+        self.assertEqual([o['title'] for o in found], ['Web Designer'])
+        self.assertEqual(http.posts, [0, 50])  # 60 openings = two pages, fetched once for both keywords
+
+    def test_the_address_and_the_full_description_come_through(self):
+        page = '"RequisitionNumber":"WEB001","Description":"\\u003cp\\u003eBuild \\u0026 design pages\\u003c/p\\u003e","Other":1'
+        url = 'https://recruiting.ultipro.com/WAD1002WADM/JobBoard/be1bb296-2bff-4732-8fa5-4c8775112887/OpportunityDetail?opportunityId=id-1'
+        opening = Employer(AGORA).find_openings(['Web Designer'], UltiProHttp([agora_job(1, 'Web Designer')], pages={url: page}))[0]
+        self.assertEqual((opening['location'], opening['country'], opening['posted'], opening['schedule']),
+                         ('Baltimore, MD, US', 'United States', '2026-09-23', 'FULL_TIME'))
+        self.assertEqual(opening['description'], 'Build & design pages')
+        self.assertEqual(opening['url'], url)
+
+    def test_the_brief_description_is_used_when_the_page_has_none(self):
+        opening = Employer(AGORA).find_openings(['Web Designer'], UltiProHttp([agora_job(1, 'Web Designer')]))[0]
+        self.assertEqual(opening['description'], 'Brief.')
+
+    def test_other_countries_keep_their_country_name(self):
+        job = agora_job(1, 'Web Designer', city='Lisbon', state='', country=('PRT', 'Portugal'))
+        opening = Employer(AGORA).find_openings(['Web Designer'], UltiProHttp([job]))[0]
+        self.assertEqual((opening['location'], opening['country']), ('Lisbon, Portugal', 'Portugal'))
+
+    def test_status(self):
+        url = 'https://recruiting.ultipro.com/WAD1002WADM/JobBoard/be1bb296-2bff-4732-8fa5-4c8775112887/OpportunityDetail?opportunityId=x'
+        employer = Employer(AGORA)
+        self.assertEqual(employer.status(url, FakeHttp(pages={url: '"RequisitionNumber":"A","Description":"x"'})), 'Open')
+        self.assertEqual(employer.status(url, FakeHttp(pages={url: '<p>Not found</p>'})), 'Closed')
+        self.assertEqual(employer.status(url, FakeHttp(pages={url: Response(status=404)})), 'Closed')
+
+    def test_only_this_employers_board_is_recognised(self):
+        employer = Employer(AGORA)
+        self.assertTrue(employer.adapter.owns('https://recruiting.ultipro.com/WAD1002WADM/JobBoard/x/OpportunityDetail?opportunityId=1'))
+        self.assertFalse(employer.adapter.owns('https://recruiting.ultipro.com/OTHERTENANT/JobBoard/x/OpportunityDetail'))
+
+
 class EmployerList(unittest.TestCase):
     def test_the_defaults_are_used_when_there_is_no_file(self):
         names = [employer.name for employer in load_employers(Path('does-not-exist.json'))]

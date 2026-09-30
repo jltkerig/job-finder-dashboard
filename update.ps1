@@ -105,7 +105,7 @@ try {
     $backupVerified = $true
     Write-UpdateLog "Backup verified at $backup"
 
-    $preserve = @(".env", "settings.json", "blocked_domains.txt", "blocked_companies.txt", "blocked_country_domains.txt", "block_metadata.json", "dashboard.log", "dashboard-error.log", "job_finder.log", "search_skips.jsonl", "search_debug.json", "watched_employers.json", "update.log")
+    $preserve = @(".env", "settings.json", "blocked_domains.txt", "blocked_companies.txt", "blocked_country_domains.txt", "block_metadata.json", "dashboard.log", "dashboard-error.log", "job_finder.log", "search_skips.jsonl", "search_debug.json", "watched_employers.json", "discovered_employers.json", "update.log")
 
     New-Item -ItemType Directory -Path $TempRoot -Force | Out-Null
     Expand-Archive -LiteralPath $ZipPath -DestinationPath $TempRoot -Force

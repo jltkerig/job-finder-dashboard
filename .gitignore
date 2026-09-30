@@ -4,5 +4,6 @@ __pycache__/
 search_skips.jsonl
 .stop-requested
 search_debug.json
+discovered_employers.json
 feed_cache/
 *.log

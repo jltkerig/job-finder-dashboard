@@ -132,5 +132,13 @@
     "system": "icims",
     "host": "careers-allegisgroup.icims.com",
     "domain": "allegisgroup.com"
+  },
+  {
+    "name": "The Agora Companies",
+    "system": "ultipro",
+    "host": "recruiting.ultipro.com",
+    "tenant": "WAD1002WADM",
+    "board": "be1bb296-2bff-4732-8fa5-4c8775112887",
+    "domain": "theagora.com"
   }
 ]
