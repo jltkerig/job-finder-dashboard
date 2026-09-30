@@ -35,7 +35,7 @@ def run_search(pages, search_url, job_title, *, cities_json='[]', max_new=2, loc
         'rejected_posting_urls': lambda db: set(), 'prepare_city_targets': lambda db, state, cities: list(city_targets),
         'start_docker_desktop': lambda: True, 'start_searxng': lambda: True,
         'stop_searxng': lambda: None, 'stop_docker_desktop': lambda: None,
-        'check_searxng_timer': lambda: True, 'FEEDS': (), 'load_employers': lambda: [],
+        'check_searxng_timer': lambda: True, 'FEEDS': (), 'load_employers': lambda: [], 'company_board_posting': lambda name, title: None,
         'search_searxng': lambda *args: [{'title': 'Result', 'url': search_url}],
         'safe_request': lambda url: SimpleNamespace(url=url, text=pages[url]) if url in pages else None,
         'analyze_usa_location': location,
@@ -223,15 +223,16 @@ class EmployerSites(unittest.TestCase):
         saved = run_search(pages, self.JOB, 'Web Designer', max_new=1, records=records, debug_out=debug)
         return saved, records, debug[0]['runs'][-1]
 
-    def test_job_board_listing_links_to_the_employers_careers_page(self):
+    def test_job_board_listing_keeps_its_own_link_and_names_the_employers_site(self):
         saved, records, run = self.search({'https://www.youcanic.com/': self.HOME,
                                            'https://www.youcanic.com/careers/': self.CAREERS})
         args = records[0]
-        self.assertEqual((args[4], args[5], args[6]),
-                         ('youcanic.com', 'https://www.youcanic.com/careers/', self.JOB))
+        # View goes to the job itself; a careers page that does not list it is shown as the employer's site only.
+        self.assertEqual((args[4], args[5], args[6]), ('youcanic.com', self.JOB, self.JOB))
         self.assertEqual(saved, {self.JOB})
         lead = run['leads'][0]
-        self.assertEqual(lead['view_link'], 'https://www.youcanic.com/careers/')
+        self.assertEqual(lead['view_link'], self.JOB)
+        self.assertEqual(lead['employer_site']['careers_url'], 'https://www.youcanic.com/careers/')
         self.assertEqual(lead['employer_site']['method'], 'domain guess')
         self.assertEqual(lead['found_by_query'], run['queries'][0]['query'])
 

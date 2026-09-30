@@ -57,6 +57,32 @@ def _occupation_codes(title):
     return []
 
 
+@lru_cache(maxsize=1)
+def _known_words():
+    _, titles, _, _ = _catalog()
+    return {word for name in titles for word in name.split() if len(word) >= 3}
+
+
+def spelling_fix(title):
+    """The title with misspelled words corrected against O*NET's job-title words, or the title itself when it reads fine.
+
+    "production specalist" -> "production specialist". A word is changed only when it is not a known word and one
+    known word is a very close match.
+    """
+    import difflib
+    known = _known_words()
+    words = str(title or "").split()
+    fixed = []
+    for word in words:
+        bare = re.sub(r"[^a-z]", "", word.casefold())
+        if len(bare) >= 5 and bare not in known:
+            close = difflib.get_close_matches(bare, known, n=1, cutoff=0.86)
+            if close:
+                word = close[0].upper() if word.isupper() else close[0].capitalize() if word[:1].isupper() else close[0]
+        fixed.append(word)
+    return " ".join(fixed)
+
+
 def occupation_skill_suggestions(title, limit=25):
     """Offer examples associated with the occupation, never inferred job requirements."""
     _, _, _, software = _catalog()
