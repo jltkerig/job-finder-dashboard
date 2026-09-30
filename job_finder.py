@@ -6,6 +6,7 @@ import os
 import re
 import subprocess
 import sys
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
@@ -18,7 +19,7 @@ from mysql.connector import Error
 from dotenv import load_dotenv
 from profile_tools import listing_skills
 from employer_jobs import (SOURCE_TYPE as EMPLOYER_SOURCE, Http as EmployerHttp, Employer, config_key, employer_for_url,
-                           load_employers, save_discovered)
+                           load_employers, record_board_result, save_discovered)
 from ats_discovery import identify as identify_board, identify_unreadable, pretty_name as board_name
 from job_feeds import FEEDS, FEED_NAMES
 from job_listings import arrangement_types, canonical_url, extract_jobs, is_article_page, is_pdf_url, job_links, pagination_links, excludes_us, matching_title as matching_job_title
@@ -135,7 +136,8 @@ MAX_SEARCH_RESULTS = settings["max_search_results"]
 MAX_SEARCH_PAGES = settings.get("max_search_pages", 20)
 REQUEST_DELAY = settings["request_delay_seconds"]
 # Pause between search-engine requests, and how many empty queries in a row mean the engines are blocking us.
-QUERY_DELAY = settings.get("search_query_delay_seconds", 3)
+QUERY_DELAY = settings.get("search_query_delay_seconds", 2)
+PREFETCH_WORKERS = settings.get("parallel_page_fetches", 6)
 EMPTY_QUERY_LIMIT = settings.get("stop_after_empty_queries", 8)
 TIMEOUT = settings["website_timeout_seconds"]
 
@@ -157,6 +159,27 @@ USA_ONLY = settings.get(
 USER_AGENT = "PersonalJobFinder/1.0"
 MAX_HTML_SIZE = 2_000_000
 _page_cache = {}
+_timings = {}
+
+
+class timed:
+    """Adds the time spent inside a with-block to _timings[name] (safe to use from several threads)."""
+
+    def __init__(self, name):
+        self.name = name
+
+    def __enter__(self):
+        self.started = time.monotonic()
+
+    def __exit__(self, *exc):
+        with _host_lock:
+            _timings[self.name] = _timings.get(self.name, 0.0) + time.monotonic() - self.started
+
+
+def timing_summary():
+    return {name: round(seconds, 1) for name, seconds in _timings.items()}
+_host_lock = threading.Lock()
+_host_next_request = {}
 _last_failure_status = None
 
 HEADERS = {"User-Agent": USER_AGENT}
@@ -835,7 +858,54 @@ def has_blocked_country_domain(domain):
 # =========================================================
 
 
+def wait_for_host(url):
+    """Space out requests to one site by REQUEST_DELAY; requests to different sites do not wait for each other."""
+    host = (urlparse(url).netloc or "").casefold()
+    with _host_lock:
+        now = time.monotonic()
+        start = max(now, _host_next_request.get(host, 0.0))
+        _host_next_request[host] = start + REQUEST_DELAY
+    if start > now:
+        time.sleep(start - now)
+
+
+def remember_page(key, response):
+    """Keep a fetched page (or a failed fetch) for this search; the oldest entry goes when the cache is full."""
+    if update_existing_mode:
+        return
+    with _host_lock:
+        if key not in _page_cache and len(_page_cache) >= 250:
+            _page_cache.pop(next(iter(_page_cache)))
+        _page_cache[key] = response
+
+
+def prefetch_pages(urls, workers=None):
+    """Download several pages at once so the checks that follow find them in the cache."""
+    if update_existing_mode:
+        return
+    todo = [url for url in dict.fromkeys(urls) if url and is_valid_url(url) and not is_pdf_url(url)
+            and canonical_url(url) not in _page_cache]
+    if len(todo) < 2:
+        return
+
+    def fetch(url):
+        try:
+            response = safe_request(url)
+            if response is None and check_searxng_timer():
+                remember_page(canonical_url(url), None)
+        except Exception:
+            pass
+
+    with ThreadPoolExecutor(max_workers=workers or PREFETCH_WORKERS) as pool:
+        list(pool.map(fetch, todo))
+
+
 def safe_request(url):
+    with timed("Page downloads (added up across parallel downloads)"):
+        return _safe_request(url)
+
+
+def _safe_request(url):
     if not update_existing_mode and not check_searxng_timer():
         return None
 
@@ -847,7 +917,7 @@ def safe_request(url):
         return _page_cache[key]
 
     try:
-        time.sleep(REQUEST_DELAY)
+        wait_for_host(url)
 
         response = requests.get(
             url,
@@ -893,8 +963,7 @@ def safe_request(url):
 
         response._content = content
 
-        if not update_existing_mode and len(_page_cache) < 250:
-            _page_cache[key] = response
+        remember_page(key, response)
 
         return response
 
@@ -1394,6 +1463,11 @@ def search_blocked_message(empty_queries):
 
 
 def search_searxng(query, page=1):
+    with timed("Search engine queries (including polite pauses)"):
+        return _search_searxng(query, page)
+
+
+def _search_searxng(query, page=1):
     global _last_search_time
     if not check_searxng_timer():
         return []
@@ -2809,6 +2883,8 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
             print(f"{employer.name} careers unavailable; continuing: {error}")
             return 0
         print(f"{employer.name} title matches: {len(employer_openings)}")
+        if employer.discovered:
+            record_board_result(employer.config, len(employer_openings))
         employer_saved = 0
         for opening in employer_openings:
             if (companies_saved >= MAX_SEARCH_RESULTS or employer_saved_total >= total_cap
@@ -2906,22 +2982,38 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
         save_discovered({k: v for k, v in config.items() if k != "discovered"})
         search_employer(employer, 3, MAX_SEARCH_RESULTS)
 
-    for employer in known_employers:
-        search_employer(employer, max(1, MAX_SEARCH_RESULTS // 3), employer_cap)
-        if employer_saved_total >= employer_cap:
-            break
+    def search_known_employers():
+        try:
+            with timed("Employer career boards"):
+                for employer in known_employers:
+                    search_employer(employer, max(1, MAX_SEARCH_RESULTS // 3), employer_cap)
+                    if employer_saved_total >= employer_cap:
+                        break
+        except Exception as error:
+            print(f"Employer career search stopped early: {error}", flush=True)
+
+    # Employer boards are searched while Docker and SearXNG start (starting them takes a while), so neither waits
+    # for the other. The web search begins only after both have finished.
+    employer_thread = threading.Thread(target=search_known_employers, daemon=True)
+    employer_thread.start()
+    docker_up = False if stop_requested() else start_docker_desktop()
+    searxng_up = docker_up and start_searxng()
+    employer_thread.join()
 
     if stop_requested():
         print("Stop requested before the web search started.")
+        if docker_up:
+            stop_searxng()
+            stop_docker_desktop()
         database.close()
         return
 
     # The remote feed works without Docker. Search it first so a Docker failure
     # does not prevent independent API results from being saved.
-    if not start_docker_desktop():
+    if not docker_up:
         database.close()
         return
-    if not start_searxng():
+    if not searxng_up:
         database.close()
         stop_docker_desktop()
         return
@@ -2964,6 +3056,7 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
             _debug_run.query(search_query)
 
         empty_or_repeating_pages = 0
+        dry_pages = 0
 
         for page in range(1, MAX_SEARCH_PAGES + 1):
             if companies_saved >= MAX_SEARCH_RESULTS or not check_searxng_timer():
@@ -3001,6 +3094,8 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
                 continue
 
             empty_or_repeating_pages = 0
+            mostly_seen = len(results) >= 5 and len(new_results) / len(results) < 0.2
+            passed_before = passed_count
             seen_result_urls.update(result.get("url") for result in new_results)
             pages_checked += 1
             # PDFs are ignored outright: not fetched, counted, or recorded as skips.
@@ -3009,6 +3104,11 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
             results_checked += len(web_results)
             print(f"Checking search page {page} ({len(web_results)} new results"
                   + (f", {pdfs_ignored} PDFs ignored" if pdfs_ignored else "") + ")...")
+
+            # Download this page's results in parallel; the checks below then read them from the cache.
+            prefetch_pages([url for url in (canonical_url(result.get("url") or "") for result in web_results)
+                            if url and not is_blocked_domain(get_domain(url)) and not has_blocked_country_domain(get_domain(url))
+                            and not cached_skip(_skip_decisions, url)][:24])
 
             for result in web_results:
                 if companies_saved >= MAX_SEARCH_RESULTS or not check_searxng_timer():
@@ -3076,10 +3176,8 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
                         pending.extend(pagination_links(page.url, page.text))
                         pending.extend(public_board_links(page.url, job_titles))
                         prefetch = list(dict.fromkeys(candidate for candidate in pending
-                                                       if candidate not in checked and candidate not in fetched_pages))[:2]
-                        if len(prefetch) == 2:
-                            with ThreadPoolExecutor(max_workers=2) as pool:
-                                list(pool.map(safe_request, prefetch))
+                                                       if candidate not in checked and candidate not in fetched_pages))[:4]
+                        prefetch_pages(prefetch, workers=4)
                     elif not openings:
                         record_skip("No matching individual opening", page.url, title)
                     for opening in openings:
@@ -3163,6 +3261,14 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
                 if not checked:
                     no_career_page += 1
 
+            dry_pages = 0 if passed_count > passed_before else dry_pages + 1
+            if mostly_seen:
+                print("Most results on this page were already seen; moving to the next query.", flush=True)
+                break
+            if dry_pages >= 3:
+                print("Three search pages in a row gave no matching jobs; moving to the next query.", flush=True)
+                break
+
     if companies_saved < MAX_SEARCH_RESULTS:
         print()
         print(
@@ -3187,10 +3293,12 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
             "results_checked": results_checked, "search_pages_checked": pages_checked,
             "websites_checked": websites_checked, "passed_validation": passed_count,
             "saved_new": companies_saved, "already_saved": existing_companies,
-            "search_engines_blocking": bool(blocked_message)}
+            "search_engines_blocking": bool(blocked_message), "seconds_spent": timing_summary()}
 
     print(f"Search results checked: {results_checked}")
     print(f"Search pages checked: {pages_checked}")
+    for timing_name, timing_seconds in timing_summary().items():
+        print(f"Time: {timing_name}: {timing_seconds:.0f}s")
 
     print(f"Aggregators skipped: " f"{blocked_sites}")
 

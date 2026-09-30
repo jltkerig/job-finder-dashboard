@@ -25,6 +25,7 @@ CONFIG_FILE = Path(__file__).resolve().parent / "watched_employers.json"
 # Boards found in web searches; managed by Job Finder and searched again on later runs.
 DISCOVERED_FILE = Path(__file__).resolve().parent / "discovered_employers.json"
 MAX_DISCOVERED = 40
+MIN_SEARCHES_BEFORE_DROP = 5  # a found board with no title match after this many searches is no longer searched
 USER_AGENT = "Mozilla/5.0 (compatible; PersonalJobFinder/1.1; local job search)"
 MAX_KEYWORDS = 16
 MAX_PAGES = 3
@@ -835,8 +836,10 @@ def load_employers(path=CONFIG_FILE, discovered_path=DISCOVERED_FILE):
     configs = _read_list(path)
     if configs is None:
         configs = DEFAULT_EMPLOYERS
-    configs = list(configs) + [dict(config, discovered=True) for config in (_read_list(discovered_path) or [])
-                               if isinstance(config, dict)]
+    found = [config for config in (_read_list(discovered_path) or []) if isinstance(config, dict)
+             and not (config.get("searches", 0) >= MIN_SEARCHES_BEFORE_DROP and not config.get("matches"))]
+    found.sort(key=lambda config: config.get("matches", 0), reverse=True)  # boards that matched your titles first
+    configs = list(configs) + [dict(config, discovered=True) for config in found]
     employers, seen = [], set()
     for config in configs:
         if not isinstance(config, dict) or config.get("enabled", True) is False:
@@ -865,10 +868,29 @@ def save_discovered(config, path=DISCOVERED_FILE, cap=MAX_DISCOVERED):
             break
     else:
         stored.append(dict({k: v for k, v in config.items() if k != "discovered"}, first_seen=today, last_seen=today))
-    stored.sort(key=lambda item: item.get("last_seen", ""), reverse=True)
+    stored.sort(key=lambda item: (item.get("matches", 0), item.get("last_seen", "")), reverse=True)
     temporary = Path(str(path) + ".tmp")
     try:
         temporary.write_text(json.dumps(stored[:cap], indent=2) + "\n", encoding="utf-8")
+        os.replace(temporary, path)
+    except OSError:
+        pass
+
+
+def record_board_result(config, matches, path=DISCOVERED_FILE):
+    """Count one search of a discovered board and how many of its openings matched, so useful boards rank first."""
+    stored = [item for item in (_read_list(path) or []) if isinstance(item, dict)]
+    key = config_key(config)
+    for item in stored:
+        if config_key(item) == key:
+            item["searches"] = int(item.get("searches", 0)) + 1
+            item["matches"] = int(item.get("matches", 0)) + int(matches)
+            break
+    else:
+        return
+    temporary = Path(str(path) + ".tmp")
+    try:
+        temporary.write_text(json.dumps(stored, indent=2) + "\n", encoding="utf-8")
         os.replace(temporary, path)
     except OSError:
         pass
