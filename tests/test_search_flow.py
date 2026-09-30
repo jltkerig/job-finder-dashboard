@@ -140,6 +140,7 @@ class FeedSearch(unittest.TestCase):
 
 class FakeEmployer:
     name, domain, extra_titles = 'Acme Bank', 'acmebank.com', []
+    config = {'system': 'workday', 'host': 'acme.example', 'tenant': 'acme', 'site': 'careers'}
     adapter = SimpleNamespace(base='https://acme.example/api')
 
     def __init__(self, openings=None, error=None):

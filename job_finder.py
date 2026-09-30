@@ -17,7 +17,9 @@ from bs4 import BeautifulSoup
 from mysql.connector import Error
 from dotenv import load_dotenv
 from profile_tools import listing_skills
-from employer_jobs import SOURCE_TYPE as EMPLOYER_SOURCE, Http as EmployerHttp, employer_for_url, load_employers
+from employer_jobs import (SOURCE_TYPE as EMPLOYER_SOURCE, Http as EmployerHttp, Employer, config_key, employer_for_url,
+                           load_employers, save_discovered)
+from ats_discovery import identify as identify_board, identify_unreadable, pretty_name as board_name
 from job_feeds import FEEDS, FEED_NAMES
 from job_listings import arrangement_types, canonical_url, extract_jobs, is_article_page, is_pdf_url, job_links, pagination_links, excludes_us, matching_title as matching_job_title
 from ats_feeds import public_board_links
@@ -2795,20 +2797,22 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
     employer_saved_total = 0
     employer_cap = max(1, MAX_SEARCH_RESULTS // 3)
     employer_http = EmployerHttp()
-    for employer in load_employers():
-        if employer_saved_total >= employer_cap or companies_saved >= MAX_SEARCH_RESULTS or stop_requested():
-            break
+    def search_employer(employer, per_employer_cap, total_cap):
+        """Search one employer's board and save passing openings; returns how many were saved."""
+        nonlocal candidate_number, results_checked, companies_saved, existing_companies, passed_count, employer_saved_total
+        if employer_saved_total >= total_cap or companies_saved >= MAX_SEARCH_RESULTS or stop_requested():
+            return 0
         print(f"Checking {employer.name} careers...")
         try:
             employer_openings = employer.find_openings(job_titles, employer_http)
         except (requests.RequestException, ValueError, KeyError, TypeError) as error:
             print(f"{employer.name} careers unavailable; continuing: {error}")
-            continue
+            return 0
         print(f"{employer.name} title matches: {len(employer_openings)}")
         employer_saved = 0
         for opening in employer_openings:
-            if (companies_saved >= MAX_SEARCH_RESULTS or employer_saved_total >= employer_cap
-                    or employer_saved >= max(1, MAX_SEARCH_RESULTS // 3)):
+            if (companies_saved >= MAX_SEARCH_RESULTS or employer_saved_total >= total_cap
+                    or employer_saved >= per_employer_cap):
                 break
             job_url = canonical_url(opening["url"])
             candidate_number += 1
@@ -2864,6 +2868,48 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
                 print(f"Saved job {companies_saved}/{MAX_SEARCH_RESULTS}: {job_url}")
             else:
                 existing_companies += 1
+
+        return employer_saved
+
+    known_employers = load_employers()
+    known_boards = {config_key(employer.config) for employer in known_employers}
+    unreadable_boards = set()
+    boards_discovered = 0
+    MAX_BOARDS_PER_RUN = 6
+
+    def discover_board(page_url, company_hint=""):
+        """A web result on a hiring platform (UltiPro, Greenhouse, ...): search that employer's whole board."""
+        nonlocal boards_discovered
+        if boards_discovered >= MAX_BOARDS_PER_RUN or stop_requested():
+            return
+        config = identify_board(page_url)
+        if not config:
+            unreadable = identify_unreadable(page_url)
+            if unreadable and config_key(unreadable) not in unreadable_boards:
+                unreadable_boards.add(config_key(unreadable))
+                print(f"Found a {unreadable['system'].title()} job board that Job Finder cannot read yet: {page_url[:110]}", flush=True)
+            return
+        key = config_key(config)
+        if key in known_boards:
+            return
+        known_boards.add(key)
+        boards_discovered += 1
+        hint = re.sub(r"\s+", " ", str(company_hint or "")).strip()
+        generic = not hint or len(hint) > 60 or hint.casefold() in {"job opportunities", "careers", "jobs", "job board"}
+        name = board_name(config) if generic or config["system"] != "ultipro" else hint
+        config = dict(config, name=name, discovered=True)
+        try:
+            employer = Employer(config)
+        except KeyError:
+            return
+        print(f"Found {config['system'].title()} job board for {name}; searching its openings...", flush=True)
+        save_discovered({k: v for k, v in config.items() if k != "discovered"})
+        search_employer(employer, 3, MAX_SEARCH_RESULTS)
+
+    for employer in known_employers:
+        search_employer(employer, max(1, MAX_SEARCH_RESULTS // 3), employer_cap)
+        if employer_saved_total >= employer_cap:
+            break
 
     if stop_requested():
         print("Stop requested before the web search started.")
@@ -2982,6 +3028,7 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
                 if recent_skip:
                     print(f"Skipped (recent check: {recent_skip['reason']}): {title[:70]} {url[:120]}", flush=True)
                     continue
+                discover_board(url, title)
                 websites_checked += 1
                 landing = safe_request(url)
                 if landing is None:
@@ -3013,6 +3060,8 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
                 checked = set()
                 while pending and len(checked) < 18 and companies_saved < MAX_SEARCH_RESULTS and check_searxng_timer():
                     page_url = pending.pop(0)
+                    if page_url != url:
+                        discover_board(page_url, company_name)
                     if page_url in checked or page_url in fetched_pages or is_pdf_url(page_url):
                         continue
                     checked.add(page_url)
