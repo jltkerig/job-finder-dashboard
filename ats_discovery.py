@@ -62,6 +62,10 @@ def identify(url):
         match = re.search(r"/jobs/[A-Za-z]+/([0-9a-f]{8}-[0-9a-f-]{27})", parsed.path, re.I)
         return {"system": "paylocity", "guid": match.group(1).lower()} if match else None
 
+    if host.endswith("governmentjobs.com") and len(parts) >= 2 and parts[0].casefold() == "careers" \
+            and parts[1].casefold() not in {"home", "search", "jobs", "api"}:
+        return {"system": "neogov", "agency": parts[1].casefold()}
+
     if host == "apply.workable.com":
         return {"system": "workable", "slug": parts[0]} if parts and parts[0].casefold() not in _NOT_A_BOARD | {"j", "j"} else None
 
@@ -99,7 +103,7 @@ def identify_unreadable(url):
 
 def pretty_name(config):
     """A readable company name from a board's address parts, used when nothing better is known."""
-    raw = (config.get("slug") or config.get("company") or config.get("tenant") or "")
+    raw = (config.get("slug") or config.get("company") or config.get("agency") or config.get("tenant") or "")
     if config.get("system") == "icims":
         raw = re.sub(r"^(?:careers|jobs|career)-", "", config["host"].split(".")[0])
     if config.get("system") == "ultipro":

@@ -30,7 +30,7 @@ load_dotenv(BASE_DIR / ".env")
 
 app = Flask(__name__)
 
-APP_VERSION = "1.1.91"
+APP_VERSION = "1.1.94"
 
 app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY") or secrets.token_hex(32)
 app.config["SESSION_COOKIE_HTTPONLY"] = True
@@ -1265,6 +1265,8 @@ TUNING_FIELDS = {
 }
 TUNING_SWITCHES = {
     "usa_only": ("U.S. jobs only", "Skip jobs that are outside the United States or unverified.", True),
+    "exclude_internships": ("Skip internships and co-ops", "Leave out jobs titled intern, internship or co-op.", True),
+    "related_titles": ("Also match closely related titles", "Recognise titles such as Multimedia Designer or Production Artist when you typed Designer or Production Specialist.", True),
     "start_docker_automatically": ("Start Docker automatically", "Starts Docker Desktop for the web search.", True),
     "stop_docker_when_finished": ("Stop Docker when finished", "Closes Docker Desktop after the search.", True),
 }

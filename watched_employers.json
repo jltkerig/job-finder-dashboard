@@ -140,5 +140,145 @@
     "tenant": "WAD1002WADM",
     "board": "be1bb296-2bff-4732-8fa5-4c8775112887",
     "domain": "theagora.com"
+  },
+  {
+    "name": "Baltimore County Government",
+    "system": "neogov",
+    "agency": "baltimorecounty",
+    "domain": "baltimorecountymd.gov"
+  },
+  {
+    "name": "Howard County Government",
+    "system": "neogov",
+    "agency": "howardcountymd",
+    "domain": "howardcountymd.gov"
+  },
+  {
+    "name": "Anne Arundel County",
+    "system": "neogov",
+    "agency": "annearundel",
+    "domain": "aacounty.org"
+  },
+  {
+    "name": "Carroll County Government",
+    "system": "neogov",
+    "agency": "carrollcounty",
+    "domain": "carrollcountymd.gov"
+  },
+  {
+    "name": "State of Delaware",
+    "system": "neogov",
+    "agency": "delaware",
+    "domain": "delaware.gov"
+  },
+  {
+    "name": "Harford Community College",
+    "system": "neogov",
+    "agency": "harfordcc",
+    "domain": "harford.edu"
+  },
+  {
+    "name": "Community College of Baltimore County",
+    "system": "neogov",
+    "agency": "ccbcmd",
+    "domain": "ccbc.edu"
+  },
+  {
+    "name": "Howard Community College",
+    "system": "neogov",
+    "agency": "howardcc",
+    "domain": "howardcc.edu"
+  },
+  {
+    "name": "Baltimore City Community College",
+    "system": "neogov",
+    "agency": "bccc",
+    "domain": "bccc.edu"
+  },
+  {
+    "name": "Carroll Community College",
+    "system": "neogov",
+    "agency": "carrollcc",
+    "domain": "carrollcc.edu"
+  },
+  {
+    "name": "City of Baltimore",
+    "system": "workday",
+    "host": "baltimorecity.wd1.myworkdayjobs.com",
+    "tenant": "baltimorecity",
+    "site": "External",
+    "domain": "baltimorecity.gov"
+  },
+  {
+    "name": "Franklin Templeton",
+    "system": "workday",
+    "host": "franklintempleton.wd5.myworkdayjobs.com",
+    "tenant": "franklintempleton",
+    "site": "Primary-External-1",
+    "domain": "franklintempleton.com"
+  },
+  {
+    "name": "M&T Bank",
+    "system": "workday",
+    "host": "mtb.wd5.myworkdayjobs.com",
+    "tenant": "mtb",
+    "site": "MTB",
+    "domain": "mtb.com"
+  },
+  {
+    "name": "Loyola University Maryland",
+    "system": "workday",
+    "host": "loyola.wd5.myworkdayjobs.com",
+    "tenant": "loyola",
+    "site": "External",
+    "domain": "loyola.edu"
+  },
+  {
+    "name": "University of Baltimore",
+    "system": "workday",
+    "host": "marylandconnect.wd1.myworkdayjobs.com",
+    "tenant": "marylandconnect",
+    "site": "UBaltCareers",
+    "domain": "ubalt.edu"
+  },
+  {
+    "name": "University of Maryland, College Park",
+    "system": "workday",
+    "host": "umd.wd1.myworkdayjobs.com",
+    "tenant": "umd",
+    "site": "UMCP",
+    "domain": "umd.edu"
+  },
+  {
+    "name": "University of Maryland Global Campus",
+    "system": "workday",
+    "host": "umgc.wd1.myworkdayjobs.com",
+    "tenant": "umgc",
+    "site": "UMGC_Careers",
+    "domain": "umgc.edu"
+  },
+  {
+    "name": "University of Maryland, Baltimore",
+    "system": "workday",
+    "host": "umb.wd1.myworkdayjobs.com",
+    "tenant": "umb",
+    "site": "UMBExternal",
+    "domain": "umaryland.edu"
+  },
+  {
+    "name": "Stanley Black & Decker",
+    "system": "workday",
+    "host": "sbdinc.wd1.myworkdayjobs.com",
+    "tenant": "sbdinc",
+    "site": "Stanley_Black_Decker_Career_Site",
+    "domain": "stanleyblackanddecker.com"
+  },
+  {
+    "name": "Medifast",
+    "system": "workday",
+    "host": "medifastinc.wd108.myworkdayjobs.com",
+    "tenant": "medifastinc",
+    "site": "Medifast",
+    "domain": "medifastinc.com"
   }
 ]

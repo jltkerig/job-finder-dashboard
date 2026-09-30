@@ -64,6 +64,26 @@ DEFAULT_EMPLOYERS = [
     {"name": "Allegis Group", "system": "icims", "host": "careers-allegisgroup.icims.com", "domain": "allegisgroup.com"},
     {"name": "The Agora Companies", "system": "ultipro", "host": "recruiting.ultipro.com", "tenant": "WAD1002WADM",
      "board": "be1bb296-2bff-4732-8fa5-4c8775112887", "domain": "theagora.com"},
+    {"name": "Baltimore County Government", "system": "neogov", "agency": "baltimorecounty", "domain": "baltimorecountymd.gov"},
+    {"name": "Howard County Government", "system": "neogov", "agency": "howardcountymd", "domain": "howardcountymd.gov"},
+    {"name": "Anne Arundel County", "system": "neogov", "agency": "annearundel", "domain": "aacounty.org"},
+    {"name": "Carroll County Government", "system": "neogov", "agency": "carrollcounty", "domain": "carrollcountymd.gov"},
+    {"name": "State of Delaware", "system": "neogov", "agency": "delaware", "domain": "delaware.gov"},
+    {"name": "Harford Community College", "system": "neogov", "agency": "harfordcc", "domain": "harford.edu"},
+    {"name": "Community College of Baltimore County", "system": "neogov", "agency": "ccbcmd", "domain": "ccbc.edu"},
+    {"name": "Howard Community College", "system": "neogov", "agency": "howardcc", "domain": "howardcc.edu"},
+    {"name": "Baltimore City Community College", "system": "neogov", "agency": "bccc", "domain": "bccc.edu"},
+    {"name": "Carroll Community College", "system": "neogov", "agency": "carrollcc", "domain": "carrollcc.edu"},
+    {"name": "City of Baltimore", "system": "workday", "host": "baltimorecity.wd1.myworkdayjobs.com", "tenant": "baltimorecity", "site": "External", "domain": "baltimorecity.gov"},
+    {"name": "Franklin Templeton", "system": "workday", "host": "franklintempleton.wd5.myworkdayjobs.com", "tenant": "franklintempleton", "site": "Primary-External-1", "domain": "franklintempleton.com"},
+    {"name": "M&T Bank", "system": "workday", "host": "mtb.wd5.myworkdayjobs.com", "tenant": "mtb", "site": "MTB", "domain": "mtb.com"},
+    {"name": "Loyola University Maryland", "system": "workday", "host": "loyola.wd5.myworkdayjobs.com", "tenant": "loyola", "site": "External", "domain": "loyola.edu"},
+    {"name": "University of Baltimore", "system": "workday", "host": "marylandconnect.wd1.myworkdayjobs.com", "tenant": "marylandconnect", "site": "UBaltCareers", "domain": "ubalt.edu"},
+    {"name": "University of Maryland, College Park", "system": "workday", "host": "umd.wd1.myworkdayjobs.com", "tenant": "umd", "site": "UMCP", "domain": "umd.edu"},
+    {"name": "University of Maryland Global Campus", "system": "workday", "host": "umgc.wd1.myworkdayjobs.com", "tenant": "umgc", "site": "UMGC_Careers", "domain": "umgc.edu"},
+    {"name": "University of Maryland, Baltimore", "system": "workday", "host": "umb.wd1.myworkdayjobs.com", "tenant": "umb", "site": "UMBExternal", "domain": "umaryland.edu"},
+    {"name": "Stanley Black & Decker", "system": "workday", "host": "sbdinc.wd1.myworkdayjobs.com", "tenant": "sbdinc", "site": "Stanley_Black_Decker_Career_Site", "domain": "stanleyblackanddecker.com"},
+    {"name": "Medifast", "system": "workday", "host": "medifastinc.wd108.myworkdayjobs.com", "tenant": "medifastinc", "site": "Medifast", "domain": "medifastinc.com"},
 ]
 
 
@@ -79,9 +99,9 @@ class Http:
             time.sleep(pause)
         self._last = time.monotonic()
 
-    def get(self, url, params=None, accept="application/json"):
+    def get(self, url, params=None, accept="application/json", headers=None):
         self._wait()
-        return requests.get(url, params=params, headers={"User-Agent": USER_AGENT, "Accept": accept},
+        return requests.get(url, params=params, headers=dict({"User-Agent": USER_AGENT, "Accept": accept}, **(headers or {})),
                             timeout=self.timeout)
 
     def post_json(self, url, payload):
@@ -777,9 +797,91 @@ class Workable:
         return "Open" if response.status_code == 200 else "Closed" if response.status_code in (404, 410) else "Unknown"
 
 
+class NeoGov:
+    """NEOGOV career pages (governmentjobs.com/careers/<agency>): a searchable list, and job pages with JobPosting data."""
+
+    def __init__(self, config):
+        self.config = config
+        self.agency = config["agency"]
+        self.base = "https://www.governmentjobs.com"
+
+    def owns(self, url):
+        parsed = urlparse(url)
+        return ((parsed.hostname or "").casefold().endswith("governmentjobs.com")
+                and f"/careers/{self.agency}/".casefold() in parsed.path.casefold() + "/")
+
+    def search(self, keyword, http):
+        listings, seen = [], set()
+        for page in range(1, MAX_PAGES + 1):
+            response = http.get(f"{self.base}/careers/home/index", params={"agency": self.agency, "keyword": keyword, "page": page},
+                                accept=HTML, headers={"X-Requested-With": "XMLHttpRequest"})
+            if response.status_code != 200:
+                raise ValueError(f"NEOGOV answered HTTP {response.status_code}")
+            soup = BeautifulSoup(response.text, "html.parser")
+            items = soup.select("li.list-item[data-job-id]")
+            fresh = 0
+            for item in items:
+                link = item.select_one("a.item-details-link") or item.select_one("a[href]")
+                job_id = item.get("data-job-id")
+                if not link or not job_id or job_id in seen:
+                    continue
+                seen.add(job_id)
+                fresh += 1
+                meta = [li.get_text(" ", strip=True) for li in item.select("ul.list-meta > li")]
+                listings.append({"title": link.get_text(" ", strip=True), "id": job_id, "path": link.get("href", ""),
+                                 "location": meta[0] if meta else ""})
+            if not fresh:
+                break
+        return listings
+
+    def detail(self, listing, http, employer):
+        response = http.get(self.base + listing["path"], accept=HTML)
+        if response.status_code != 200:
+            return None
+        soup = BeautifulSoup(response.text, "html.parser")
+        posting = None
+        for script in soup.find_all("script", type="application/ld+json"):
+            try:
+                data = json.loads(script.string or "")
+            except ValueError:
+                continue
+            for node in data if isinstance(data, list) else [data]:
+                if isinstance(node, dict) and node.get("@type") == "JobPosting":
+                    posting = node
+                    break
+        if not posting:
+            return None
+        places = []
+        for location in posting.get("jobLocation") if isinstance(posting.get("jobLocation"), list) else [posting.get("jobLocation")]:
+            address = (location or {}).get("address") or {}
+            place = str(address.get("addressLocality") or "").strip()
+            region = str(address.get("addressRegion") or "").strip()
+            if place and region and not re.search(r"\b" + re.escape(region) + r"\b", place):
+                place += f", {region}"
+            if place and str(address.get("addressCountry") or "").upper() in ("US", "USA", "UNITED STATES"):
+                place += ", US"
+            if place:
+                places.append(place)
+        kind = str(posting.get("employmentType") or "")
+        return _opening(employer, title=posting.get("title") or listing["title"],
+                        url=self.base + listing["path"], locations=places or [listing["location"] + ", US"],
+                        html=posting.get("description") or "", posted=str(posting.get("datePosted") or "")[:10],
+                        schedule=_schedule(kind))
+
+    def status(self, url, http):
+        response = http.get(url, accept=HTML)
+        if response.status_code in (404, 410):
+            return "Closed"
+        if response.status_code != 200:
+            return "Unknown"
+        if re.search(r"no longer (?:available|accepting)|posting (?:has )?(?:closed|expired)|job (?:is )?closed", response.text, re.I):
+            return "Closed"
+        return "Open" if '"JobPosting"' in response.text else "Closed"
+
+
 ADAPTERS = {"workday": Workday, "oracle": Oracle, "icims": ICIMS, "successfactors": SuccessFactors, "ultipro": UltiPro,
             "greenhouse": Greenhouse, "lever": Lever, "ashby": Ashby, "bamboohr": BambooHR, "smartrecruiters": SmartRecruiters,
-            "adp": ADP, "paylocity": Paylocity, "workable": Workable}
+            "adp": ADP, "paylocity": Paylocity, "workable": Workable, "neogov": NeoGov}
 
 
 class Employer:
@@ -833,7 +935,7 @@ class Employer:
         return check(url, http) if check else set()
 
 
-_ID_FIELDS = ("system", "host", "tenant", "site", "board", "slug", "company", "eu", "cid", "ccId", "guid")
+_ID_FIELDS = ("system", "host", "tenant", "site", "board", "slug", "company", "eu", "cid", "ccId", "guid", "agency")
 
 
 def config_key(config):

@@ -24,7 +24,7 @@ from ats_discovery import identify as identify_board, identify_unreadable, prett
 from job_feeds import FEEDS, FEED_NAMES
 from job_listings import arrangement_types, canonical_url, extract_jobs, is_article_page, is_pdf_url, job_links, pagination_links, excludes_us, matching_title as matching_job_title
 from ats_feeds import public_board_links
-from onet_data import related_title_suggestions
+from onet_data import related_title_suggestions, spelling_fix
 from search_skips import cached_skip, latest_decisions, record_decision
 from closed_jobs import listing_closed
 from db_schema import ensure_unique_source_index
@@ -32,6 +32,7 @@ from employer_site import clear_cache as clear_employer_cache, is_third_party, r
 from search_debug import DebugRun
 from remote_states import restriction_states
 from board_health import BoardHealth, HEALTH_FILE as BOARD_HEALTH_FILE
+from ats_lookup import clear_cache as clear_ats_cache, find_ats_posting
 
 # =========================================================
 # FILES
@@ -158,12 +159,50 @@ USA_ONLY = settings.get(
     True,
 )
 
+# Internships and co-ops are skipped unless "exclude_internships" is switched off on the Tuning page.
+EXCLUDE_INTERNSHIPS = settings.get("exclude_internships", True)
+# Closely related job titles that are matched (not searched for by name), so "Multimedia Designer" is not missed
+# just because it was not typed. Switch off with "related_titles": false.
+RELATED_TITLES = settings.get("related_titles", True)
+_TITLE_FAMILIES = (
+    (re.compile(r"\bdesign(?:er)?\b", re.I), ("Multimedia Designer", "Brand Designer", "Creative Designer", "Marketing Designer",
+                                                "Email Designer", "Communications Designer")),
+    (re.compile(r"\bproduction\b", re.I), ("Production Artist", "Web Production Specialist", "Digital Production Specialist")),
+    (re.compile(r"\bproducer\b", re.I), ("Website Producer", "Digital Producer")),
+    (re.compile(r"\bcontent designer\b", re.I), ("UX Writer",)),
+)
+
+
+def related_family_titles(typed):
+    """Extra titles to match, from the families the typed titles belong to; never a title already covered."""
+    if not RELATED_TITLES:
+        return []
+    have = {title.casefold() for title in typed}
+    extras = []
+    for pattern, titles in _TITLE_FAMILIES:
+        if any(pattern.search(title) for title in typed):
+            for title in titles:
+                if title.casefold() not in have and title not in extras:
+                    extras.append(title)
+    return extras
+# Job-board sites searched directly (one query per title). Each company board found there is then read in full
+# through its public API. Add more, such as "boards.greenhouse.io", in settings.json under "job_board_sites".
+JOB_BOARD_SITES = settings.get("job_board_sites", ["jobs.ashbyhq.com"])
+_INTERNSHIP = re.compile(r"\b(?:intern|interns|internship|internships|co-?op)\b", re.I)
+
+
+def is_internship(title, schedule=""):
+    """True for an internship or co-op: the title says so, or the listing's work type is 'intern'."""
+    return bool(EXCLUDE_INTERNSHIPS and (_INTERNSHIP.search(str(title or ""))
+                                         or re.search(r"\bintern", str(schedule or ""), re.I)))
+
 USER_AGENT = "PersonalJobFinder/1.0"
 MAX_HTML_SIZE = 2_000_000
 _page_cache = {}
 _prefetched = {}  # Update/Refresh: pages downloaded ahead of the row that needs them (used once)
 _timings = {}
 _board_health = BoardHealth()
+_ats_http = None
 
 
 class timed:
@@ -1053,6 +1092,17 @@ def tidy_company_name(name):
 
 def on_official_board(url):
     return bool(identify_board(url))
+
+
+def company_board_posting(name, title):
+    """The job on the company's own hiring board (Ashby, Greenhouse, Lever, ...), or None."""
+    global _ats_http
+    if _ats_http is None:
+        _ats_http = EmployerHttp(delay=0.2, timeout=15)
+    try:
+        return find_ats_posting(name, title, _ats_http)
+    except Exception:
+        return None
 
 
 def clean_company_name(
@@ -2117,6 +2167,11 @@ def stale_remote_limit(company, details, selected_states, http):
     return limits if limits and not (limits & selected_states) else None
 
 
+def is_internship_row(company, details):
+    """An unsaved row that is an internship or co-op (saved rows are never touched)."""
+    return bool(not company.get("is_kept") and is_internship(company.get("career_job_title"), details.get("schedule")))
+
+
 def is_irrelevant_lead(company, details, wanted):
     """An unsaved lead from before titles were checked whose title matches none of the user's."""
     title = (company.get("career_job_title") or "").strip()
@@ -2283,7 +2338,8 @@ def update_existing_results(company_ids=None):
         remote_limit = None
         if not (is_irrelevant_lead(company, details, wanted_titles) or is_wrong_location_lead(company, details)):
             remote_limit = stale_remote_limit(company, details, selected_now, employer_http)
-        reject_reason = ("wrong_role" if is_irrelevant_lead(company, details, wanted_titles)
+        internship = is_internship_row(company, details)
+        reject_reason = ("wrong_role" if internship or is_irrelevant_lead(company, details, wanted_titles)
                          else "wrong_location" if is_wrong_location_lead(company, details) or remote_limit else None)
         if reject_reason:
             try:
@@ -2296,7 +2352,8 @@ def update_existing_results(company_ids=None):
             if rejected:
                 updated += 1
                 rejected_count += 1
-                why = ("matches none of your job titles" if reject_reason == "wrong_role"
+                why = ("is an internship" if internship
+                       else "matches none of your job titles" if reject_reason == "wrong_role"
                        else f"is remote but only open to residents of {', '.join(sorted(remote_limit))}" if remote_limit
                        else f"is located outside the United States ({details.get('location')})")
                 print(f"Rejected: '{search_title}' {why}. It is in Rejected Listings for review.")
@@ -2395,6 +2452,7 @@ def update_existing_results(company_ids=None):
         employer = None
         employer_notes = []
         apply_closed = None
+        ats_found = False
 
         if source_url and is_valid_url(source_url):
             direct_posting = (company.get("source_type") == EMPLOYER_SOURCE or bool(
@@ -2419,7 +2477,7 @@ def update_existing_results(company_ids=None):
                     wanted_titles or [search_title], location_hint=str(details.get("location") or ""),
                     allow_search=False, notes=employer_notes)
                 if employer:
-                    career_url = employer["posting_url"] or employer["careers_url"] or source_url
+                    career_url = employer["posting_url"] or source_url
                     details["employer_site"] = {"domain": employer["domain"], "careers_url": employer["careers_url"],
                                                 "method": employer["method"]}
                     details["original_source"] = source_url
@@ -2427,14 +2485,32 @@ def update_existing_results(company_ids=None):
                     print(f"Employer site found: {employer['domain']} ({employer['method']}) -> {career_url}")
                 else:
                     print("Employer site not found: " + "; ".join(employer_notes or ["no candidates"]))
+        if (not details.get("ats_posting") and source_url and is_third_party(source_url, company.get("name") or "")
+                and not company.get("is_kept")):
+            board_posting = company_board_posting(company.get("name") or "", search_title)
+            if board_posting:
+                career_url = board_posting["url"]
+                details["ats_posting"] = {"system": board_posting["system"], "url": board_posting["url"]}
+                details.setdefault("original_source", source_url)
+                details["evidence"] = list(details.get("evidence") or []) + [
+                    f"posting found on the company's own {board_posting['system'].title()} board"]
+                ats_found = True
+                print(f"Company's own posting found: {career_url}")
         employer_row = bool(details.get("employer_site"))
+        # Rows saved earlier linked View to the employer's careers page; point it back at the job itself.
+        saved_careers = (details.get("employer_site") or {}).get("careers_url")
+        repaired_view = ats_found
+        if saved_careers and source_url and career_url == saved_careers and source_url != saved_careers:
+            career_url = source_url
+            repaired_view = True
+            print(f"View link now goes to the job posting itself: {source_url}")
 
         if career_url and is_valid_url(career_url):
             _last_failure_status = None
             response = safe_request(career_url)
             if response is not None:
                 # The employer's careers page is not the job description, so keep the skills already saved.
-                if not employer_row:
+                if not employer_row or canonical_url(career_url) == canonical_url(source_url or ""):
                     skills = listing_skills(response.text)
                 current_postings = extract_jobs(career_url, response.text, [search_title])
                 matching_posting = next((opening for opening in current_postings
@@ -2452,6 +2528,8 @@ def update_existing_results(company_ids=None):
                     career_credibility = max(CAREER_CREDIBILITY_THRESHOLD, career_credibility)
                     if on_official_board(career_url):
                         career_credibility = max(OFFICIAL_BOARD_CREDIBILITY, career_credibility)
+                if details.get("ats_posting"):
+                    career_credibility = max(OFFICIAL_BOARD_CREDIBILITY, career_credibility)
                 # An employer page that does not list the job says nothing about the original listing.
                 if details and not active_posting and not employer_row:
                     job_open_status = "Unknown"
@@ -2501,6 +2579,7 @@ def update_existing_results(company_ids=None):
                 company.get("state") != location_data.get("state"),
                 (company.get("usa_credibility") or 0) != location_data.get("score", 0),
                 employer is not None,
+                repaired_view,
                 bool(apply_closed),
             ))
             checked_at = datetime.now(timezone.utc)
@@ -2533,7 +2612,7 @@ def update_existing_results(company_ids=None):
                     work_arrangement,
                     json.dumps(skills) if skills is not None else None,
                     employer["domain"] if employer else None,
-                    career_url if employer else None,
+                    career_url if (employer or repaired_view) else None,
                     json.dumps(details) if employer else None,
                     checked_at,
                     changed,
@@ -2863,6 +2942,9 @@ def assess_opening(database, opening, page_html, job_url, search_state, selected
     arrangement = opening["type"] or detect_work_arrangement(opening["title"], page_html)
     outcome = {"skip": None, "arrangement": arrangement, "location": None, "detail_score": 0, "country": None,
                "state_name": None, "remote_limited_to": set(), "city": None, "lat": None, "lon": None, "miles": None}
+    if is_internship(opening.get("title"), opening.get("schedule")):
+        outcome["skip"] = "Internship"
+        return outcome
     if excludes_us(opening["location"], text):
         outcome["skip"] = "Posting restricts applicants outside the US"
         return outcome
@@ -2951,10 +3033,23 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
         database.close()
         return
 
-    selected_titles = list(job_titles)
+    corrected_titles = []
+    for index, typed_title in enumerate(job_titles):
+        fixed = spelling_fix(typed_title)
+        if fixed.casefold() != typed_title.casefold():
+            print(f'Spelling corrected: "{typed_title}" -> "{fixed}"')
+            corrected_titles.append((typed_title, fixed))
+            job_titles[index] = fixed
+    selected_titles = list(dict.fromkeys(job_titles))
     job_titles = expand_job_titles(selected_titles)
     if len(job_titles) > len(selected_titles):
         print("Related O*NET search titles: " + ", ".join(job_titles[len(selected_titles):]))
+    # Web queries use the typed and O*NET titles; the related families below are only used to recognise openings.
+    query_titles = list(job_titles)
+    related_extras = [title for title in related_family_titles(selected_titles) if title.casefold() not in {t.casefold() for t in job_titles}]
+    job_titles = job_titles + related_extras
+    if related_extras:
+        print("Also matching closely related titles: " + ", ".join(related_extras))
 
     try:
         cities = json.loads(cities_json or "[]")
@@ -2981,7 +3076,8 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
     if _debug_run is not None:
         _debug_run.set_inputs(
             job_title_typed=job_title, typed_titles=selected_titles,
-            related_onet_titles=job_titles[len(selected_titles):], state=state, cities_requested=cities,
+            related_onet_titles=query_titles[len(selected_titles):], related_family_titles=related_extras,
+            spelling_corrections=[{"typed": a, "corrected": b} for a, b in corrected_titles], state=state, cities_requested=cities,
             cities_geocoded=[{"city": target.get("city"), "radius": target.get("radius"),
                               "lat": target.get("lat"), "lon": target.get("lon")} for target in city_targets],
             statewide_states=sorted(statewide_states), max_new_results=MAX_SEARCH_RESULTS,
@@ -3047,6 +3143,9 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
             if canonical_url(job["url"]) in rejected_urls:
                 record_skip("Previously rejected", job["url"], job["title"])
                 continue
+            if is_internship(job["title"]):
+                record_skip("Internship", job["url"], job["title"])
+                continue
             limited_to = remote_state_restrictions(job["text"])
             if limited_to and selected_states and not (limited_to & selected_states):
                 record_skip("Remote job limited to residents of " + ", ".join(sorted(limited_to)), job["url"], job["title"])
@@ -3077,7 +3176,8 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
     # Big employers' own career sites (watched_employers.json): Workday and Oracle searches. They go through
     # the same U.S., location and remote checks as web results.
     employer_saved_total = 0
-    employer_cap = max(1, MAX_SEARCH_RESULTS // 3)
+    # Employer boards share up to half of a search's jobs, two per board, so several get a turn.
+    employer_cap = max(1, MAX_SEARCH_RESULTS // 2)
     employer_http = EmployerHttp()
     def search_employer(employer, per_employer_cap, total_cap):
         """Search one employer's board and save passing openings; returns how many were saved."""
@@ -3160,10 +3260,14 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
         return employer_saved
 
     known_employers = load_employers()
+    if known_employers:
+        # Start at a different board each hour so a full quota does not always come from the first few in the list.
+        turn = int(time.time() // 3600) % len(known_employers)
+        known_employers = known_employers[turn:] + known_employers[:turn]
     known_boards = {config_key(employer.config) for employer in known_employers}
     unreadable_boards = set()
     boards_discovered = 0
-    MAX_BOARDS_PER_RUN = 6
+    MAX_BOARDS_PER_RUN = 12
 
     def discover_board(page_url, company_hint=""):
         """A web result on a hiring platform (UltiPro, Greenhouse, ...): search that employer's whole board."""
@@ -3198,7 +3302,7 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
         try:
             with timed("Employer career boards"):
                 for employer in known_employers:
-                    search_employer(employer, max(1, MAX_SEARCH_RESULTS // 3), employer_cap)
+                    search_employer(employer, 2, employer_cap)
                     if employer_saved_total >= employer_cap:
                         break
         except Exception as error:
@@ -3231,11 +3335,11 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
         return
     web_search_started = True
 
-    search_queries = []
+    search_queries = [f'site:{site} "{title}"' for title in query_titles for site in JOB_BOARD_SITES]
     city_names = [item.get("city", "").strip() for item in cities if isinstance(item, dict)
                   and item.get("city") and item.get("city", "").strip().casefold() not in US_STATES
                   and not _ZIP_CODE.fullmatch(item.get("city", "").strip())]
-    for title in job_titles:
+    for title in query_titles:
         title_queries = []
         for city_name in city_names:
             title_queries.extend([
@@ -3441,7 +3545,8 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
                         row_domain, row_career_url = get_domain(job_url), job_url
                         if employer:
                             row_domain = employer["domain"]
-                            row_career_url = employer["posting_url"] or employer["careers_url"] or job_url
+                            # View goes to the job itself; the employer's careers page is shown separately.
+                            row_career_url = employer["posting_url"] or job_url
                             details["employer_site"] = {"domain": employer["domain"],
                                                         "careers_url": employer["careers_url"],
                                                         "method": employer["method"]}
@@ -3450,6 +3555,16 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
                             print(f"Employer site: {employer['domain']} ({employer['method']}) -> {row_career_url}", flush=True)
                         elif employer_notes:
                             print("Employer site not found: " + "; ".join(employer_notes), flush=True)
+                        # The job board is only a copy: use the company's own hiring-board posting when it has one.
+                        board_posting = company_board_posting(name, opening["title"]) if is_third_party(job_url, name) else None
+                        if board_posting:
+                            row_career_url = board_posting["url"]
+                            detail_score = max(detail_score, OFFICIAL_BOARD_CREDIBILITY)
+                            details["ats_posting"] = {"system": board_posting["system"], "url": board_posting["url"]}
+                            details.setdefault("original_source", job_url)
+                            details["evidence"] = list(details.get("evidence") or []) + [
+                                f"posting found on the company's own {board_posting['system'].title()} board"]
+                            print(f"Company's own posting: {board_posting['url']}", flush=True)
                         inserted = save_company(database, name, opening["title"], detail_score,
                                                 row_domain, row_career_url, job_url, country,
                                                 str(state_name or "")[:100] or None, location["score"], city=city,
@@ -3535,6 +3650,7 @@ def main(job_title=None, state=None, cities_json=None, max_new=None):
     global web_search_started, _debug_run
     web_search_started = False
     clear_employer_cache()
+    clear_ats_cache()
     _board_health.clear()
     _debug_run = DebugRun(SEARCH_DEBUG_FILE, "replacement" if max_new == 1 else "search", JOB_FINDER_VERSION)
     try:
