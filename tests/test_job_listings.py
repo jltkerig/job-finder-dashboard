@@ -1,10 +1,11 @@
+import json
 import sys
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from job_listings import canonical_url, excludes_us, extract_jobs, job_links
+from job_listings import canonical_url, excludes_us, extract_jobs, is_pdf_url, job_links
 from ats_feeds import public_board_links
 
 
@@ -51,6 +52,29 @@ class ListingChecks(unittest.TestCase):
         with patch('ats_feeds.requests.get', return_value=Response()):
             self.assertEqual(public_board_links('https://jobs.lever.co/example', ['Web Designer']),
                              ['https://jobs.lever.co/example/1'])
+
+    def test_a_job_page_marked_as_an_article_is_kept_when_it_has_a_job_posting(self):
+        posting = '<script type="application/ld+json">' + json.dumps({
+            '@type': 'JobPosting', 'title': 'Web Designer', 'url': 'https://careers.example.com/job/1/web-designer',
+            'hiringOrganization': {'name': 'Example'}}) + '</script>'
+        marked = '<meta property="og:type" content="article">'
+        jobs = extract_jobs('https://careers.example.com/job/1/web-designer', marked + posting, ['Web Designer'])
+        self.assertEqual([job['title'] for job in jobs], ['Web Designer'])
+        # ...but a real article without a posting is still not a job.
+        self.assertEqual(extract_jobs('https://example.com/news/x', marked + '<h1>Web Designer</h1><a href="/apply">Apply</a>',
+                                      ['Web Designer']), [])
+
+    def test_us_abbreviation_with_periods_counts_as_us(self):
+        description = 'Candidates must be based in Canada or the U.S.'
+        self.assertFalse(excludes_us('Remote, U.S.', description))
+        self.assertFalse(excludes_us('U.S.', description))
+        self.assertTrue(excludes_us('Toronto, Canada', description))
+
+    def test_pdf_links_are_ignored(self):
+        self.assertTrue(is_pdf_url('https://example.com/careers/Job-Description.PDF?v=2'))
+        self.assertFalse(is_pdf_url('https://example.com/jobs/pdf-designer'))
+        html = '<a href="/jobs/web-designer.pdf">Web Designer</a><a href="/jobs/web-designer">Web Designer</a>'
+        self.assertEqual(job_links('https://example.com/careers', html), ['https://example.com/jobs/web-designer'])
 
 
 if __name__ == '__main__':

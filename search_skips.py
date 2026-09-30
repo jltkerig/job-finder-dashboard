@@ -9,6 +9,7 @@ TTL_HOURS = {
     "Directory or marketplace page": 24,
     "Article or student employment guide": 24,
     "No matching individual opening": 4,
+    "Job is closed (expired)": 72,
 }
 
 

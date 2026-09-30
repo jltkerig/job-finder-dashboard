@@ -5,6 +5,8 @@ from urllib.parse import urlparse
 import requests
 from bs4 import BeautifulSoup
 
+from job_listings import matching_title
+
 FEED_URL = "https://remoteok.com/api"
 
 
@@ -23,11 +25,9 @@ def matching_jobs(jobs, titles, usa_only=True):
         value = re.sub(r"\bfull[\s-]*stack\b", "fullstack", value)
         return set(re.findall(r"[a-z0-9]+", value))
 
-    words = [title_words(title) for title in titles]
     for job in jobs:
         position = str(job.get("position") or "")
-        position_words = title_words(position)
-        if not any(w and w <= position_words for w in words):
+        if not matching_title(position, titles):
             continue
         location = str(job.get("location") or "")
         explicit_us = bool(re.search(r"\b(?:USA?|United States)\b", location, re.I))

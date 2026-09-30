@@ -19,7 +19,9 @@ from flask import Flask, abort, jsonify, redirect, render_template, request, ses
 from mysql.connector import Error
 from profile_tools import SKILL_ALIASES, fit_score, normalize_skills, resume_suggestions
 from onet_data import occupation_skill_suggestions, related_title_suggestions
-from job_listings import NON_JOB_PATH
+from job_listings import NON_JOB_PATH, is_pdf_url
+from db_schema import ensure_unique_source_index
+from job_feeds import FEED_NAMES
 from search_skips import TTL_HOURS, latest_decisions
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -27,7 +29,7 @@ load_dotenv(BASE_DIR / ".env")
 
 app = Flask(__name__)
 
-APP_VERSION = "1.1.67"
+APP_VERSION = "1.1.78"
 
 app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY") or secrets.token_hex(32)
 app.config["SESSION_COOKIE_HTTPONLY"] = True
@@ -58,6 +60,12 @@ scraper_mode = None
 scraper_last_error = None
 scraper_lock = threading.Lock()
 scraper_started_at = None
+scraper_stopping = False
+# job_finder.py watches for this file and shuts down cleanly when it appears.
+STOP_REQUEST_FILE = BASE_DIR / ".stop-requested"
+GRACEFUL_STOP_SECONDS = 90
+# Schema checks that already succeeded in this process; they only need to run once.
+_schema_ready = set()
 
 
 ERROR_CODES = {
@@ -234,7 +242,9 @@ def initialize_database():
                 notes TEXT NULL,
                 is_rejected TINYINT(1) NOT NULL DEFAULT 0,
                 rejection_reason VARCHAR(40) NULL,
-                rejected_at TIMESTAMP NULL DEFAULT NULL
+                rejected_at TIMESTAMP NULL DEFAULT NULL,
+                pre_reject_kept TINYINT(1) NULL,
+                pre_reject_status VARCHAR(30) NULL
             )
         """)
         connection.commit()
@@ -255,7 +265,7 @@ def get_csrf_token():
 
 @app.context_processor
 def inject_csrf_token():
-    return {"csrf_token": get_csrf_token(), "app_version": APP_VERSION}
+    return {"csrf_token": get_csrf_token(), "app_version": APP_VERSION, "feed_names": sorted(FEED_NAMES)}
 
 
 @app.before_request
@@ -272,6 +282,8 @@ def protect_local_post_requests():
 
 
 def ensure_keep_column():
+    if "keep" in _schema_ready:
+        return
     connection = None
     cursor = None
 
@@ -289,6 +301,7 @@ def ensure_keep_column():
             ADD COLUMN IF NOT EXISTS is_kept TINYINT(1) NOT NULL DEFAULT 0
         """)
         connection.commit()
+        _schema_ready.add("keep")
     except Error as error:
         print()
         print("Could not ensure the keep column exists.")
@@ -303,6 +316,8 @@ def ensure_keep_column():
 
 
 def ensure_job_tracking_columns():
+    if "tracking" in _schema_ready:
+        return
     connection = None
     cursor = None
 
@@ -363,6 +378,9 @@ def ensure_job_tracking_columns():
             ALTER TABLE companies
             ADD COLUMN IF NOT EXISTS rejected_at TIMESTAMP NULL DEFAULT NULL
         """)
+        # What the listing looked like before rejection, so Restore can put it back.
+        cursor.execute("ALTER TABLE companies ADD COLUMN IF NOT EXISTS pre_reject_kept TINYINT(1) NULL")
+        cursor.execute("ALTER TABLE companies ADD COLUMN IF NOT EXISTS pre_reject_status VARCHAR(30) NULL")
         cursor.execute("""ALTER TABLE companies ADD COLUMN IF NOT EXISTS city VARCHAR(150) NULL""")
         cursor.execute("""ALTER TABLE companies ADD COLUMN IF NOT EXISTS latitude DECIMAL(10,7) NULL""")
         cursor.execute("""ALTER TABLE companies ADD COLUMN IF NOT EXISTS longitude DECIMAL(10,7) NULL""")
@@ -383,7 +401,12 @@ def ensure_job_tracking_columns():
             MODIFY COLUMN job_title TEXT NOT NULL
         """)
         cursor.execute("""ALTER TABLE search_history ADD COLUMN IF NOT EXISTS cities_json TEXT NULL""")
+        # One row per posting rather than per website, so an employer can have many openings.
+        index_status = ensure_unique_source_index(cursor)
+        if index_status:
+            print(f"Database index update: {index_status}")
         connection.commit()
+        _schema_ready.add("tracking")
     except Error as error:
         print()
         print("Could not ensure job tracking fields exist.")
@@ -484,6 +507,8 @@ def get_dashboard_counts():
 
 
 def ensure_profile_tables():
+    if "profile" in _schema_ready:
+        return
     connection = None
     cursor = None
 
@@ -541,6 +566,7 @@ def ensure_profile_tables():
             VALUES (1, '', '', '')
         """)
         connection.commit()
+        _schema_ready.add("profile")
     except Error as error:
         print()
         print("Could not ensure profile tables exist.")
@@ -1010,6 +1036,9 @@ def get_companies():
                 row["details"] = json.loads(row.get("listing_details") or "{}")
             except (TypeError, ValueError):
                 row["details"] = {}
+            if not isinstance(row["details"], dict):
+                row["details"] = {}
+            row["source_host"] = (urlparse(row.get("source_url") or "").hostname or "").removeprefix("www.")
         return visible_rows
 
     except Error as error:
@@ -1027,7 +1056,7 @@ def get_companies():
 
 
 def scraper_status():
-    global scraper_process, scraper_mode, scraper_last_error
+    global scraper_process, scraper_mode, scraper_last_error, scraper_stopping
 
     with scraper_lock:
         if scraper_process is None:
@@ -1037,7 +1066,9 @@ def scraper_status():
         if exit_code is None:
             return True, scraper_mode
 
-        if exit_code != 0:
+        was_stopping = scraper_stopping
+        scraper_stopping = False
+        if exit_code != 0 and not was_stopping:
             scraper_last_error = (
                 f"Job Finder stopped with exit code {exit_code}. "
                 f"Details were saved to {SCRAPER_LOG_FILE.name}."
@@ -1174,7 +1205,8 @@ def home():
     if SEARCH_SKIPS_FILE.exists():
         try:
             for item in reversed(list(latest_decisions(SEARCH_SKIPS_FILE).values())):
-                if item.get("reason") != "Passed":
+                # Older searches recorded PDFs as skips; they are now ignored entirely.
+                if item.get("reason") != "Passed" and not is_pdf_url(item.get("url")):
                     skipped.append(item)
                 if len(skipped) >= 20:
                     break
@@ -1229,7 +1261,7 @@ def rejected_listings():
     decisions = latest_decisions(SEARCH_SKIPS_FILE)
     search_skips = []
     for event in reversed(list(decisions.values())):
-        if event.get("reason") == "Passed":
+        if event.get("reason") == "Passed" or is_pdf_url(event.get("url")):
             continue
         checked_at = event.get("checked_at") or ""
         next_check = "Next search"
@@ -1279,7 +1311,9 @@ def reject_listing(company_id):
         cursor.execute(
             """
             UPDATE companies
-            SET is_rejected = 1, is_kept = 0, application_status = 'Rejected',
+            SET pre_reject_kept = CASE WHEN is_rejected = 0 THEN is_kept ELSE pre_reject_kept END,
+                pre_reject_status = CASE WHEN is_rejected = 0 THEN application_status ELSE pre_reject_status END,
+                is_rejected = 1, is_kept = 0, application_status = 'Rejected',
                 rejected_at = CURRENT_TIMESTAMP, rejection_reason = %s
             WHERE id = %s
             """,
@@ -1314,7 +1348,7 @@ def restore_rejected(company_id):
             host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD, database=DB_NAME
         )
         cursor = connection.cursor(dictionary=True)
-        cursor.execute("SELECT domain FROM companies WHERE id = %s AND is_rejected = 1", (company_id,))
+        cursor.execute("SELECT domain, pre_reject_kept FROM companies WHERE id = %s AND is_rejected = 1", (company_id,))
         row = cursor.fetchone()
         if not row:
             if wants_json:
@@ -1322,18 +1356,22 @@ def restore_rejected(company_id):
             return redirect("/rejected-listings")
 
         domain = row.get("domain")
+        # Older rejections have no saved state; they return as unsaved search results.
         cursor.execute(
             """
             UPDATE companies
-            SET is_rejected = 0, is_kept = 1, application_status = 'Saved',
-                rejected_at = NULL
+            SET is_rejected = 0, is_kept = COALESCE(pre_reject_kept, 0),
+                application_status = COALESCE(pre_reject_status, 'None'),
+                rejected_at = NULL, rejection_reason = NULL,
+                pre_reject_kept = NULL, pre_reject_status = NULL
             WHERE id = %s
             """,
             (company_id,),
         )
         connection.commit()
         if wants_json:
-            return jsonify({"status": "restored", "company_id": company_id, "domain": domain})
+            return jsonify({"status": "restored", "company_id": company_id, "domain": domain,
+                            "kept": bool(row.get("pre_reject_kept"))})
     except Error as error:
         print("Could not restore rejected listing.")
         print(error)
@@ -1358,7 +1396,7 @@ def block_domain(company_id):
         cursor = connection.cursor(dictionary=True)
         cursor.execute("SELECT domain, source_type FROM companies WHERE id = %s", (company_id,))
         row = cursor.fetchone()
-        if row and row.get("source_type") == "Remote OK":
+        if row and row.get("source_type") in FEED_NAMES:
             return api_error("E3212", "This is the feed domain, not the employer domain. Block the company instead.", 400)
         if not row or not row.get("domain"):
             return api_error("E3210", "No domain was available to block.", 404)
@@ -1529,14 +1567,44 @@ def unsave_kept(company_id):
             connection.close()
 
 
+def _finish_graceful_stop(process):
+    """Wait for a search to clean up after a stop request; force it only as a fallback."""
+    try:
+        process.wait(timeout=GRACEFUL_STOP_SECONDS)
+    except subprocess.TimeoutExpired:
+        log_error_code("E2106", "Job Finder did not stop in time; forcing it and stopping SearXNG.")
+        process.kill()
+        process.wait(timeout=10)
+        # The killed process could not run its own cleanup.
+        try:
+            subprocess.run(["docker", "stop", "searxng"], capture_output=True, timeout=60,
+                           creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
+        except (OSError, subprocess.TimeoutExpired) as error:
+            log_error_code("E2106", f"Could not stop SearXNG: {error}")
+    finally:
+        STOP_REQUEST_FILE.unlink(missing_ok=True)
+
+
 @app.route("/stop-search", methods=["POST"])
 def stop_search():
-    global scraper_process, scraper_mode, scraper_last_error
+    global scraper_process, scraper_mode, scraper_last_error, scraper_stopping
     with scraper_lock:
         if scraper_process is None or scraper_process.poll() is not None:
             scraper_process = None
             scraper_mode = None
             return jsonify({"status": "stopped", "message": "No Job Finder process was running."})
+        if scraper_mode in ("search", "replacement"):
+            # Searches own SearXNG and Docker, so let them shut those down themselves.
+            if not scraper_stopping:
+                scraper_stopping = True
+                try:
+                    STOP_REQUEST_FILE.touch()
+                except OSError as error:
+                    scraper_stopping = False
+                    log_error_code("E2105", f"Could not request a stop: {error}")
+                    return api_error("E2105", "Could not stop the current Job Finder action.", 500)
+                threading.Thread(target=_finish_graceful_stop, args=(scraper_process,), daemon=True).start()
+            return jsonify({"status": "stopping"})
         try:
             scraper_process.terminate()
             try:
@@ -1653,31 +1721,32 @@ def launch_search_process(job_title, state, cities=None, mode="search"):
     if validation_error:
         return jsonify({"status": "error", "message": validation_error}), 400
 
-    # Keep Search and User Profile on the same saved job-title/location data.
-    if mode != "replacement":
-        try:
-            profile = get_user_profile()
-            titles = []
-            for part in job_title.split(","):
-                title = part.strip()[:255]
-                if title and title.lower() not in {item.lower() for item in titles}:
-                    titles.append(title)
-            save_user_profile(
-                profile.get("first_name", ""),
-                profile.get("last_name", ""),
-                state,
-                titles,
-                cities,
-            )
-        except Exception as error:
-            log_error_code("E3301", f"Could not sync search criteria to profile: {error}")
-
     with scraper_lock:
         if scraper_process is not None and scraper_process.poll() is None:
             return jsonify({"status": "already_running", "mode": scraper_mode}), 200
 
         if not JOB_FINDER_PATH.exists():
             return jsonify({"status": "error", "message": "job_finder.py was not found."}), 500
+
+        # Keep Search and User Profile on the same saved job-title/location data,
+        # but only once this search is actually going to start.
+        if mode != "replacement":
+            try:
+                profile = get_user_profile()
+                titles = []
+                for part in job_title.split(","):
+                    title = part.strip()[:255]
+                    if title and title.lower() not in {item.lower() for item in titles}:
+                        titles.append(title)
+                save_user_profile(
+                    profile.get("first_name", ""),
+                    profile.get("last_name", ""),
+                    state,
+                    titles,
+                    cities,
+                )
+            except Exception as error:
+                log_error_code("E3301", f"Could not sync search criteria to profile: {error}")
 
         try:
             creationflags = 0
@@ -1686,6 +1755,8 @@ def launch_search_process(job_title, state, cities=None, mode="search"):
 
             global scraper_last_error
             scraper_last_error = None
+            # A leftover request from an earlier stop would end this search immediately.
+            STOP_REQUEST_FILE.unlink(missing_ok=True)
             with SCRAPER_LOG_FILE.open("a", encoding="utf-8") as log_file:
                 log_file.write(
                     f"\n=== {datetime.now().isoformat(timespec='seconds')} | {mode} | "
@@ -1896,6 +1967,7 @@ def search_status():
     return jsonify({
         "running": running,
         "mode": mode,
+        "stopping": running and scraper_stopping,
         "error": scraper_last_error,
         "progress": (update_progress_from_log() if mode in ("update", "refresh") else activity["progress"] if activity else None) if running else None,
         "passed": activity["passed"] if activity else None,
