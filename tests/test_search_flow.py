@@ -35,7 +35,7 @@ def run_search(pages, search_url, job_title, *, cities_json='[]', max_new=2, loc
         'rejected_posting_urls': lambda db: set(), 'prepare_city_targets': lambda db, state, cities: list(city_targets),
         'start_docker_desktop': lambda: True, 'start_searxng': lambda: True,
         'stop_searxng': lambda: None, 'stop_docker_desktop': lambda: None,
-        'check_searxng_timer': lambda: True, 'FEEDS': (), 'load_employers': lambda: [], 'company_board_posting': lambda name, title: None, 'fetch_text': lambda *a, **k: None,
+        'check_searxng_timer': lambda: True, 'FEEDS': (), 'JOB_SITES': (), 'load_employers': lambda: [], 'company_board_posting': lambda name, title: None, 'fetch_text': lambda *a, **k: None,
         'search_searxng': lambda *args: [{'title': 'Result', 'url': search_url}],
         'safe_request': lambda url: SimpleNamespace(url=url, text=pages[url]) if url in pages else None,
         'analyze_usa_location': location,

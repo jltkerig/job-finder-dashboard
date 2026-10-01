@@ -84,6 +84,20 @@ DEFAULT_EMPLOYERS = [
     {"name": "University of Maryland, Baltimore", "system": "workday", "host": "umb.wd1.myworkdayjobs.com", "tenant": "umb", "site": "UMBExternal", "domain": "umaryland.edu"},
     {"name": "Stanley Black & Decker", "system": "workday", "host": "sbdinc.wd1.myworkdayjobs.com", "tenant": "sbdinc", "site": "Stanley_Black_Decker_Career_Site", "domain": "stanleyblackanddecker.com"},
     {"name": "Medifast", "system": "workday", "host": "medifastinc.wd108.myworkdayjobs.com", "tenant": "medifastinc", "site": "Medifast", "domain": "medifastinc.com"},
+    # Employers with sites in Abingdon, Belcamp, Bel Air and Forest Hill (Harford County), checked October 2026.
+    {"name": "Wegmans", "system": "workday", "host": "wegmans.wd1.myworkdayjobs.com", "tenant": "wegmans", "site": "Wegmans", "domain": "wegmans.com"},
+    {"name": "Target", "system": "workday", "host": "target.wd5.myworkdayjobs.com", "tenant": "target", "site": "targetcareers", "domain": "target.com"},
+    {"name": "Walmart", "system": "workday", "host": "walmart.wd504.myworkdayjobs.com", "tenant": "walmart", "site": "WalmartExternal", "domain": "walmart.com"},
+    {"name": "Gap Inc. (Old Navy, Gap, Banana Republic, Athleta)", "system": "workday", "host": "gapinc.wd1.myworkdayjobs.com", "tenant": "gapinc", "site": "GAPINC", "domain": "gapinc.com"},
+    {"name": "TJX (HomeGoods, TJ Maxx, Marshalls)", "system": "workday", "host": "tjx.wd1.myworkdayjobs.com", "tenant": "tjx", "site": "TJX_EXTERNAL", "domain": "tjx.com"},
+    {"name": "Dollar Tree", "system": "workday", "host": "dollartree.wd5.myworkdayjobs.com", "tenant": "dollartree", "site": "dollartreeus", "domain": "dollartree.com"},
+    {"name": "Kohl's", "system": "workday", "host": "kohls.wd504.myworkdayjobs.com", "tenant": "kohls", "site": "kohlscareers", "domain": "kohls.com"},
+    {"name": "PNC", "system": "workday", "host": "pnc.wd5.myworkdayjobs.com", "tenant": "pnc", "site": "External", "domain": "pnc.com"},
+    {"name": "At Home", "system": "oracle", "host": "hdiy.fa.us2.oraclecloud.com", "site": "CX", "domain": "athome.com"},
+    {"name": "Booz Allen Hamilton", "system": "workday", "host": "bah.wd1.myworkdayjobs.com", "tenant": "bah", "site": "BAH_Jobs", "domain": "boozallen.com"},
+    {"name": "Ingredion", "system": "workday", "host": "ingredion.wd1.myworkdayjobs.com", "tenant": "ingredion", "site": "IngredionCareers", "domain": "ingredion.com"},
+    {"name": "Harford County Government", "system": "workday", "host": "harfordcountymd.wd503.myworkdayjobs.com", "tenant": "harfordcountymd", "site": "Harford_County_External_Career_Site", "domain": "harfordcountymd.gov"},
+    {"name": "Long & Foster Real Estate", "system": "smartrecruiters", "company": "LongFosterRealEstate", "domain": "longandfoster.com"},
 ]
 
 

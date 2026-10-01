@@ -305,7 +305,18 @@ if (-not (Test-LocalPort 5000)) {
 }
 
 try {
-    Start-Process $DashboardUrl -ErrorAction Stop
+    # Open in Firefox Developer Edition when it is installed: the Web Job Scraper extension runs there, so job links
+    # opened from the dashboard get captured too. Otherwise use the default browser.
+    $DevEdition = @(
+        (Get-ItemProperty "HKLM:\SOFTWARE\Mozilla\Firefox Developer Edition\*\Main" -ErrorAction SilentlyContinue |
+            Select-Object -First 1 -ExpandProperty PathToExe -ErrorAction SilentlyContinue),
+        "$env:ProgramFiles\Firefox Developer Edition\firefox.exe"
+    ) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+    if ($DevEdition) {
+        Start-Process $DevEdition -ArgumentList $DashboardUrl -ErrorAction Stop
+    } else {
+        Start-Process $DashboardUrl -ErrorAction Stop
+    }
 } catch {
     Fail-Startup "E5015" "Dashboard is running, but Windows could not open the browser automatically: $($_.Exception.Message)"
 }
