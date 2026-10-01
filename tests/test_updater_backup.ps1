@@ -26,7 +26,7 @@ function Copy-Item {
 function Get-FileHash {
     param($LiteralPath, $Algorithm)
     $result = Microsoft.PowerShell.Utility\Get-FileHash -LiteralPath $LiteralPath -Algorithm $Algorithm
-    if ($LiteralPath -like '*job-finder-backups*' -and
+    if ($LiteralPath -like '*job-finder-dashboard-backups*' -and
         ($Scenario -eq 'hash-mismatch' -or ($Scenario -eq 'corrupt-recovery' -and $installationStarted))) {
         $result.Hash = 'INJECTED-MISMATCH'
     }
@@ -52,7 +52,7 @@ Set-Content -LiteralPath $wrapperPath -Value $wrapper
 
 foreach ($scenario in @('copy-failure', 'hash-mismatch', 'invalid-zip', 'corrupt-recovery', 'valid-recovery')) {
     $scenarioRoot = Join-Path $testRoot $scenario
-    $project = Join-Path $scenarioRoot 'job-finder'
+    $project = Join-Path $scenarioRoot 'job-finder-dashboard'
     New-Item -ItemType Directory -Path $project -Force | Out-Null
     Copy-Item -LiteralPath $updater -Destination (Join-Path $project 'update.ps1')
     Set-Content -LiteralPath (Join-Path $project 'dashboard.py') -Value 'APP_VERSION = "1.1.67"'

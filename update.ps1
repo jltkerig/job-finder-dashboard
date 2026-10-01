@@ -6,7 +6,7 @@ param(
 $ErrorActionPreference = "Stop"
 $ProjectDir = $PSScriptRoot
 $PythonDir = Split-Path $ProjectDir -Parent
-$BackupRoot = Join-Path $PythonDir "job-finder-backups"
+$BackupRoot = Join-Path $PythonDir "job-finder-dashboard-backups"
 $TempRoot = Join-Path $env:TEMP ("job-finder-update-" + [guid]::NewGuid().ToString("N"))
 $UpdateLog = Join-Path $ProjectDir "update.log"
 # Logs the running dashboard or a search keeps appending to. They are backed up
