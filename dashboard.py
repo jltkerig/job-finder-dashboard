@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+import hashlib
 import os
 from pathlib import Path
 import subprocess
@@ -15,22 +16,25 @@ from zoneinfo import ZoneInfo
 
 import mysql.connector
 from dotenv import load_dotenv
-from flask import Flask, abort, jsonify, redirect, render_template, request, session
+from flask import Flask, abort, jsonify, redirect, render_template, request, send_from_directory, session
 from mysql.connector import Error
 from profile_tools import SKILL_ALIASES, fit_score, normalize_skills, resume_suggestions
 from onet_data import occupation_skill_suggestions, related_title_suggestions
 from job_listings import NON_JOB_PATH, is_pdf_url
 from db_schema import ensure_unique_source_index
 from job_feeds import FEED_NAMES
+from job_sites import JOB_SITE_NAMES
 from board_health import STATUSES as HEALTH_STATUSES, read_health
 from search_skips import TTL_HOURS, latest_decisions
+from capture_import import CAPTURE_SOURCES, capture_dirs, move_pending, pending_files
+from job_retention import tidy_closed_jobs
 
 BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR / ".env")
 
 app = Flask(__name__)
 
-APP_VERSION = "1.1.98"
+APP_VERSION = "1.1.104"
 
 app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY") or secrets.token_hex(32)
 app.config["SESSION_COOKIE_HTTPONLY"] = True
@@ -51,7 +55,8 @@ SCRAPER_LOG_FILE = BASE_DIR / "job_finder.log"
 SEARCH_SKIPS_FILE = BASE_DIR / "search_skips.jsonl"
 UPDATE_SCRIPT = BASE_DIR / "update.ps1"
 UPDATE_MARKER = BASE_DIR / ".update-in-progress"
-UPDATE_ZIP_PATTERN = re.compile(r"^job-finder-v(\d+)\.(\d+)\.(\d+)\.zip$", re.IGNORECASE)
+# Update ZIPs are named job-finder-dashboard-vX.Y.Z.zip; older ones (job-finder-vX.Y.Z.zip) still count.
+UPDATE_ZIP_PATTERN = re.compile(r"^job-finder(?:-dashboard)?-v(\d+)\.(\d+)\.(\d+)\.zip$", re.IGNORECASE)
 UPDATE_SEARCH_DIRS = [
     Path.home() / "Downloads",
     BASE_DIR.parent,
@@ -91,7 +96,7 @@ def api_error(code, message, status=400):
 
 @app.errorhandler(403)
 def handle_forbidden(error):
-    if request.path.startswith(("/start-search", "/replace-result", "/refresh-search", "/update-existing", "/save-kept", "/search-status", "/reject-listing", "/restore-rejected", "/block-domain", "/unsave-kept", "/stop-search", "/install-update")):
+    if request.path.startswith(("/start-search", "/replace-result", "/refresh-search", "/update-existing", "/save-kept", "/search-status", "/reject-listing", "/restore-rejected", "/block-domain", "/unsave-kept", "/stop-search", "/install-update", "/captures/")):
         return api_error("E2201", "Your dashboard session expired. The page will refresh automatically.", 403)
     return error
 
@@ -114,6 +119,8 @@ API_PATH_CODES = {
     "/job-title-suggestions": "E1101",
     "/unsave-kept": "E3102",
     "/stop-search": "E2105",
+    "/captures/pending": "E2120",
+    "/captures/import": "E2121",
 }
 
 
@@ -267,7 +274,10 @@ def get_csrf_token():
 
 @app.context_processor
 def inject_csrf_token():
-    return {"csrf_token": get_csrf_token(), "app_version": APP_VERSION, "feed_names": sorted(FEED_NAMES)}
+    # Job sites (National Labor Exchange) list many employers' jobs like the remote feeds: shown as job-board
+    # postings, and their domain is never offered for blocking.
+    return {"csrf_token": get_csrf_token(), "app_version": APP_VERSION, "feed_names": sorted(FEED_NAMES | JOB_SITE_NAMES),
+            "capture_sources": sorted(CAPTURE_SOURCES)}
 
 
 @app.before_request
@@ -416,6 +426,29 @@ def ensure_job_tracking_columns():
     finally:
         if cursor is not None:
             cursor.close()
+        if connection is not None and connection.is_connected():
+            connection.close()
+
+
+def tidy_expired_closed_jobs():
+    """At startup: delete jobs closed for more than 30 days, keeping saved ones (see job_retention.py)."""
+    connection = None
+    try:
+        connection = mysql.connector.connect(
+            host=DB_HOST,
+            port=DB_PORT,
+            user=DB_USER,
+            password=DB_PASSWORD,
+            database=DB_NAME,
+        )
+        deleted = tidy_closed_jobs(connection)
+        if deleted:
+            print(f"Deleted {deleted} job(s) closed for more than 30 days (saved jobs are kept).")
+    except Error as error:
+        print()
+        print("Could not tidy closed jobs.")
+        print(error)
+    finally:
         if connection is not None and connection.is_connected():
             connection.close()
 
@@ -1030,9 +1063,11 @@ def get_companies():
                                    (row.get("career_url") or "").lower())
                          and (row.get("career_job_title") or "").strip().casefold() in
                          {"directory search", "campus employment & internships", "student employment"})
-                and not any((row.get("domain") or "").lower().removeprefix("www.") == domain
-                            or (row.get("domain") or "").lower().endswith("." + domain)
-                            for domain in blocked_domains)]
+                # The blocked-domain list is for web-search results; jobs you captured on those sites still show.
+                and (row.get("source_type") in CAPTURE_SOURCES
+                     or not any((row.get("domain") or "").lower().removeprefix("www.") == domain
+                                or (row.get("domain") or "").lower().endswith("." + domain)
+                                for domain in blocked_domains))]
         for row in visible_rows:
             try:
                 row["details"] = json.loads(row.get("listing_details") or "{}")
@@ -1183,6 +1218,48 @@ def install_update():
 @app.route("/app-version")
 def app_version():
     return jsonify({"version": APP_VERSION})
+
+
+EXTENSION_ID = "web-job-scraper@jamie.local"
+EXTENSION_FILE = re.compile(r"^web-job-scraper-v(\d+)\.(\d+)\.(\d+)\.xpi$")
+
+
+def extension_dist_dir():
+    return Path(read_tuning_settings().get("extension_dist_dir") or BASE_DIR.parent / "web-job-scraper" / "dist")
+
+
+def latest_extension_build():
+    """(version text, path) of the newest web-job-scraper-vX.Y.Z.xpi in web-job-scraper\\dist, or (None, None)."""
+    folder = extension_dist_dir()
+    builds = []
+    if folder.is_dir():
+        for path in folder.iterdir():
+            match = EXTENSION_FILE.match(path.name)
+            if match and path.is_file():
+                builds.append((tuple(int(part) for part in match.groups()), path))
+    if not builds:
+        return None, None
+    version, path = max(builds)
+    return ".".join(map(str, version)), path
+
+
+@app.route("/extension/updates.json")
+def extension_updates():
+    """Firefox's "Check for Updates" for the Web Job Scraper extension reads this (its manifest's update_url)."""
+    version, path = latest_extension_build()
+    updates = []
+    if version:
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        updates.append({"version": version, "update_link": f"{request.host_url}extension/{path.name}",
+                        "update_hash": f"sha256:{digest}"})
+    return jsonify({"addons": {EXTENSION_ID: {"updates": updates}}})
+
+
+@app.route("/extension/<name>")
+def extension_file(name):
+    if not EXTENSION_FILE.match(name):
+        abort(404)
+    return send_from_directory(extension_dist_dir(), name, mimetype="application/x-xpinstall")
 
 
 @app.route("/")
@@ -1973,6 +2050,74 @@ def update_existing():
     return jsonify({"status": "started"}), 202
 
 
+@app.route("/captures/pending")
+def captures_pending():
+    """Capture files the Web Job Scraper extension left in Downloads, for the import prompt."""
+    downloads_dir, searches_dir = capture_dirs(read_tuning_settings(), BASE_DIR)
+    try:
+        files = pending_files(downloads_dir)
+    except OSError as error:
+        return api_error("E2120", f"Could not read {downloads_dir}: {error}", 500)
+    return jsonify({
+        "count": len(files),
+        "jobs": sum(item["jobs"] for item in files),
+        "from": str(downloads_dir),
+        "to": str(searches_dir),
+        # Changes whenever a file is added or rewritten, so "Not now" only hides the prompt until something new arrives.
+        "signature": ";".join(f"{item['relative']}@{int(item['modified'])}" for item in files),
+    })
+
+
+@app.route("/captures/import", methods=["POST"])
+def captures_import():
+    """Move the waiting capture files into web-job-scraper\\searches, then run job_finder.py --import-captures."""
+    global scraper_process, scraper_mode, scraper_started_at, scraper_last_error
+    downloads_dir, searches_dir = capture_dirs(read_tuning_settings(), BASE_DIR)
+    with scraper_lock:
+        if scraper_process is not None and scraper_process.poll() is None:
+            return jsonify({"status": "already_running", "mode": scraper_mode}), 200
+        try:
+            moved = move_pending(downloads_dir, searches_dir)
+        except OSError as error:
+            return api_error("E2121", f"Could not move the capture files to {searches_dir}: {error}", 500)
+        try:
+            flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+            scraper_last_error = None
+            with SCRAPER_LOG_FILE.open("a", encoding="utf-8") as log_file:
+                log_file.write(f"\n=== {datetime.now().isoformat(timespec='seconds')} | import | "
+                               f"{len(moved)} capture file(s) ===\n")
+                log_file.flush()
+                scraper_process = subprocess.Popen(
+                    [sys.executable, "-u", str(JOB_FINDER_PATH), "--import-captures"],
+                    cwd=str(BASE_DIR), creationflags=flags, stdout=log_file, stderr=subprocess.STDOUT,
+                )
+            scraper_mode = "import"
+            scraper_started_at = time.monotonic()
+        except OSError as error:
+            scraper_process = None
+            scraper_mode = None
+            return api_error("E2121", f"Could not start the import: {error}", 500)
+    return jsonify({"status": "started", "moved": len(moved)}), 202
+
+
+def import_progress_from_log():
+    if not SCRAPER_LOG_FILE.exists():
+        return "Preparing the import"
+    try:
+        with SCRAPER_LOG_FILE.open("rb") as log_file:
+            size = log_file.seek(0, 2)
+            log_file.seek(max(0, size - 65536))
+            tail = log_file.read().decode("utf-8", errors="replace")
+    except OSError:
+        return "Preparing the import"
+    current = tail.rsplit("| import |", 1)[-1]
+    matches = list(re.finditer(r"Importing (\d+)/(\d+): ([^\r\n]+)", current))
+    if matches:
+        latest = matches[-1]
+        return f"Checking {latest.group(1)} of {latest.group(2)}: {latest.group(3)[:70]}"
+    return "Preparing the import"
+
+
 def update_progress_from_log():
     if not SCRAPER_LOG_FILE.exists():
         return "Preparing existing results"
@@ -2048,7 +2193,8 @@ def search_status():
         "mode": mode,
         "stopping": running and scraper_stopping,
         "error": scraper_last_error,
-        "progress": (update_progress_from_log() if mode in ("update", "refresh") else activity["progress"] if activity else None) if running else None,
+        "progress": (update_progress_from_log() if mode in ("update", "refresh") else import_progress_from_log() if mode == "import"
+                     else activity["progress"] if activity else None) if running else None,
         "passed": activity["passed"] if activity else None,
         "saved": activity["saved"] if activity else None,
         "limit": activity["limit"] if activity else None,
@@ -2063,4 +2209,5 @@ if __name__ == "__main__":
     ensure_keep_column()
     ensure_job_tracking_columns()
     ensure_profile_tables()
+    tidy_expired_closed_jobs()
     app.run(host="127.0.0.1", port=5000, debug=False, use_reloader=False)

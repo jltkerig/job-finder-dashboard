@@ -34,6 +34,11 @@ from search_debug import DebugRun
 from remote_states import restriction_states
 from board_health import BoardHealth, HEALTH_FILE as BOARD_HEALTH_FILE
 from ats_lookup import clear_cache as clear_ats_cache, find_ats_posting
+from capture_import import (CAPTURE_MARK, CAPTURE_SOURCES, IMPORT_ERRORS, SITES as CAPTURE_SITES, add_also_on,
+                            capture_dirs, files_to_import, mark_imported, match_key, merge_details,
+                            page_html as capture_page_html, read_jobs, remove_old_folders, unreadable_files)
+from job_retention import tidy_closed_jobs
+from job_sites import JOB_SITES, JOB_SITE_NAMES, SiteBlocked, job_site_for, search_places
 
 # =========================================================
 # FILES
@@ -2391,8 +2396,17 @@ def update_existing_results(company_ids=None):
         if (index - 1) % 20 == 0:
             prefetch_for_update([url for row in companies[index - 1:index + 19]
                                  if row.get("source_type") not in FEED_NAMES and row.get("source_type") != EMPLOYER_SOURCE
+                                 and row.get("source_type") not in CAPTURE_SOURCES
+                                 and row.get("source_type") not in JOB_SITE_NAMES
                                  for url in (row.get("source_url"), row.get("career_url"))])
         company_id = company["id"]
+        if company.get("source_type") in CAPTURE_SOURCES:
+            # LinkedIn and the other job sites answer with a sign-in page, which would read as a closed job, and
+            # direct visits could get noticed. The Web Job Scraper extension reports these jobs' status instead.
+            print()
+            print(f"Updating {index}/{len(companies)}: {company.get('name') or company.get('domain')}")
+            print(f"Not rechecked: {company.get('source_type')} jobs are kept current by the Web Job Scraper extension.")
+            continue
         career_url = company.get("career_url")
         source_url = company.get("source_url")
         search_title = company.get("career_job_title") or company.get("name") or ""
@@ -2443,6 +2457,27 @@ def update_existing_results(company_ids=None):
             except Error as error:
                 database.rollback()
                 print(f"Could not tidy the company name: {error}")
+        site_class = job_site_for(company.get("source_type"))
+        if site_class:
+            # A job-site opening is open while the site still lists it (its page is an app that shows nothing to
+            # a plain download, so the page itself can't be checked).
+            status = site_class().status(source_url)
+            try:
+                with database.cursor() as status_cursor:
+                    status_cursor.execute(
+                        """UPDATE companies SET job_open_status = %s, last_checked = %s,
+                           result_updated_at = CASE WHEN job_open_status <> %s THEN %s ELSE result_updated_at END
+                           WHERE id = %s""",
+                        (status, datetime.now(timezone.utc), status, datetime.now(timezone.utc), company_id))
+                database.commit()
+                updated += 1
+                print(f"{site_class.name} says: {status}.")
+                print("Existing row updated in place.")
+            except Error as error:
+                database.rollback()
+                failed += 1
+                print(f"Could not update {company.get('name')}: {error}")
+            continue
         if company.get("source_type") == EMPLOYER_SOURCE:
             employer = employer_for_url(source_url or "", employers)
             try:
@@ -2743,6 +2778,12 @@ def update_existing_results(company_ids=None):
             if update_cursor is not None:
                 update_cursor.close()
 
+    try:
+        expired = tidy_closed_jobs(database)
+        if expired:
+            print(f"Deleted {expired} job(s) closed for more than 30 days (saved jobs are kept).")
+    except Error as error:
+        print(f"Could not tidy closed jobs: {error}")
     database.close()
 
     print()
@@ -2755,6 +2796,328 @@ def update_existing_results(company_ids=None):
     _debug_run = None
 
 
+# =========================================================
+# WEB JOB SCRAPER IMPORT
+# =========================================================
+
+
+def load_profile_filters(database):
+    """(job titles, cities, state, error) from the saved profile only, so imports don't change with each search."""
+    titles, cities, state, problem = [], [], "", None
+    cursor = None
+    try:
+        cursor = database.cursor()
+        cursor.execute("SELECT job_title FROM user_profile_job_titles WHERE profile_id = 1 ORDER BY id")
+        titles = [row[0].strip() for row in cursor.fetchall() if row[0] and row[0].strip()]
+        cursor.execute("SELECT city, radius_miles FROM user_profile_cities WHERE profile_id = 1 ORDER BY id")
+        cities = [{"city": row[0], "radius": row[1]} for row in cursor.fetchall() if row[0]]
+        cursor.execute("SELECT state FROM user_profile WHERE id = 1")
+        row = cursor.fetchone()
+        state = (row[0] if row else "") or ""
+    except Error as error:
+        problem = str(error)
+    finally:
+        if cursor is not None:
+            cursor.close()
+    return titles, cities, state, problem
+
+
+def site_location_in_us(location):
+    """The job site's own location field names a U.S. state or the United States ("Austin, TX", "United States (Remote)")."""
+    text = str(location or "")
+    return bool(find_state_from_text(text) or re.search(r"united states|(?<![A-Za-z])USA?(?![A-Za-z])", text, re.I))
+
+
+def _row_details(row):
+    try:
+        details = json.loads(row.get("listing_details") or "{}")
+    except (TypeError, ValueError):
+        details = {}
+    return details if isinstance(details, dict) else {}
+
+
+class CaptureImport:
+    """One --import-captures run: the profile filters and the rows already saved, shared by every job."""
+
+    def __init__(self, database):
+        self.database = database
+        titles, cities, self.state, self.profile_error = load_profile_filters(database)
+        self.wanted = expand_job_titles(titles) if titles else []
+        self.wanted += [title for title in related_family_titles(titles)
+                        if title.casefold() not in {wanted.casefold() for wanted in self.wanted}]
+        self.statewide = {US_STATES[str(item["city"]).strip().casefold()] for item in cities
+                          if str(item["city"]).strip().casefold() in US_STATES}
+        self.selected_states = selected_state_codes(self.state, cities, self.statewide)
+        self.city_targets = prepare_city_targets(database, self.state, cities)
+        self.rejected = rejected_posting_urls(database)
+        self.by_url = {}
+        self.by_key = {}
+        with database.cursor(dictionary=True) as cursor:
+            cursor.execute("""SELECT id, name, career_job_title, work_arrangement, city, state, source_url, source_type,
+                                     listing_details, is_kept
+                              FROM companies WHERE is_rejected = 0""")
+            for row in cursor.fetchall():
+                self._remember(row)
+
+    def _remember(self, row):
+        details = _row_details(row)
+        if row.get("source_url"):
+            self.by_url[canonical_url(row["source_url"])] = row
+        place = details.get("location") or ", ".join(part for part in (row.get("city"), row.get("state")) if part)
+        key = match_key(row.get("name"), row.get("career_job_title"), place, row.get("work_arrangement"))
+        if key:
+            self.by_key.setdefault(key, row)
+
+    def _saved_row(self, url):
+        with self.database.cursor(dictionary=True) as cursor:
+            cursor.execute("""SELECT id, name, career_job_title, work_arrangement, city, state, source_url, source_type,
+                                     listing_details, is_kept FROM companies WHERE source_url = %s LIMIT 1""", (url,))
+            return cursor.fetchone()
+
+    def _set_details(self, row_id, details):
+        with self.database.cursor() as cursor:
+            cursor.execute("UPDATE companies SET listing_details = %s WHERE id = %s", (json.dumps(details), row_id))
+        self.database.commit()
+
+    def _mark_closed(self, row_id):
+        now = datetime.now(timezone.utc)
+        with self.database.cursor() as cursor:
+            cursor.execute("""UPDATE companies SET job_open_status = 'Closed', last_checked = %s,
+                              result_updated_at = CASE WHEN job_open_status <> 'Closed' THEN %s ELSE result_updated_at END
+                              WHERE id = %s""", (now, now, row_id))
+        self.database.commit()
+
+    def _mark_applied(self, row_id):
+        """Saved, with status Applied. A status further along (Interview) is kept; a rejected row comes back."""
+        with self.database.cursor() as cursor:
+            cursor.execute("""UPDATE companies
+                              SET is_kept = 1, is_rejected = 0, rejection_reason = NULL, rejected_at = NULL,
+                                  application_status = CASE WHEN application_status IN ('None', 'Saved', 'Rejected')
+                                                            THEN 'Applied' ELSE application_status END
+                              WHERE id = %s""", (row_id,))
+        self.database.commit()
+
+    def company_site(self, company, title, url, location, details, site_domain):
+        """The company's own website for a captured job: (domain, View link). Looked up once per job, the way
+        web-search leads from other job boards are: a domain guessed from the company name and checked to be that
+        company, its careers page, this job on it, or the job on the company's hiring board (Greenhouse, Lever, ...).
+        Only the company's sites are visited, never LinkedIn. Updates details in place."""
+        if company and not details.get("employer_checked"):
+            details["employer_checked"] = True
+            print(f"Looking for {company}'s own website...", flush=True)
+            notes = []
+            employer = find_employer_site(company, title, url, "", self.wanted or [title], location_hint=location,
+                                          allow_search=False, notes=notes)
+            if employer:
+                details["employer_site"] = {
+                    "domain": employer["domain"], "careers_url": employer["careers_url"], "method": employer["method"],
+                    "posting_found": bool(employer["posting_url"]), "posting_url": employer["posting_url"],
+                    "evidence": list(employer["evidence"]),
+                }
+                print(f"Company website: {employer['domain']} ({employer['method']})"
+                      + (f" — this job is there: {employer['posting_url']}" if employer["posting_url"] else ""))
+            else:
+                print("Company website not found: " + "; ".join(notes or ["no candidates"]))
+            if not (employer and employer["posting_url"]):
+                board = company_board_posting(company, title)
+                if board:
+                    details["ats_posting"] = {"system": board["system"], "url": board["url"]}
+                    print(f"This job is on the company's own {board['system'].title()} board: {board['url']}")
+        site = details.get("employer_site") or {}
+        board = details.get("ats_posting") or {}
+        # Re-imports rebuild the evidence list, so the company-site findings are added back from what was stored.
+        extra = list(site.get("evidence") or [])
+        if board:
+            extra.append(f"posting found on the company's own {str(board.get('system', '')).title()} board")
+        details["evidence"] = list(dict.fromkeys(list(details.get("evidence") or []) + extra))
+        if site.get("domain"):
+            details["original_source"] = url
+        return site.get("domain") or site_domain, site.get("posting_url") or board.get("url") or url
+
+    def assess(self, job, arrangement):
+        """assess_opening's result for a captured job, or a plain pass for one without a location."""
+        location = str(job.get("location") or "").strip()
+        if not location:
+            return {"skip": None, "arrangement": arrangement, "location": {"score": 0}, "detail_score": CAREER_CREDIBILITY_THRESHOLD,
+                    "country": None, "state_name": None, "remote_limited_to": set(), "city": None, "lat": None, "lon": None,
+                    "miles": None}
+        opening = {"title": job["title"], "company": job.get("company") or "", "description": job.get("description") or "",
+                   "type": arrangement, "location": location, "locations": [location], "remote_states": [],
+                   "schedule": "", "evidence": []}
+        outcome = assess_opening(self.database, opening, capture_page_html(job), job["url"], self.state,
+                                 self.selected_states, self.statewide, self.city_targets)
+        # A card has no page text to prove the job is in the U.S.; the site's own location field is trusted instead.
+        if outcome["skip"] == "US eligibility unverified" and site_location_in_us(location):
+            outcome["skip"] = None
+            outcome["country"] = "United States"
+            outcome["location"]["score"] = max(outcome["location"]["score"], USA_CREDIBILITY_THRESHOLD)
+        return outcome
+
+    def import_job(self, site, job):
+        """Filter and save one captured job. Returns (result, reason) where result is added, updated, linked,
+        rejected or skipped.
+
+        A job you already applied to skips the filters: it is always saved, with status Applied."""
+        source_type, domain = CAPTURE_SITES[site]
+        url, title = job["url"], job["title"]
+        company = tidy_company_name(job.get("company")) or None
+        applied = bool(job.get("applied"))
+        row = self.by_url.get(url)
+        if not applied:
+            if not row and url in self.rejected:
+                return "skipped", "Previously rejected"
+            if company and company.casefold() in BLOCKED_COMPANIES:
+                return "skipped", "Blocked company"
+            if not self.wanted or not matching_job_title(title, self.wanted):
+                return "skipped", "Title matches none of your profile's job titles"
+            if is_internship(title):
+                return "skipped", "Internship"
+        closed = bool(job.get("closed"))
+        location = str(job.get("location") or "").strip()
+        arrangement = job.get("work_arrangement") or detect_work_arrangement(title, location) or None
+        outcome = self.assess(job, arrangement)
+        if outcome["skip"] and not applied:
+            details = _row_details(row) if row else {}
+            # A job imported earlier as "Location unknown" is filtered again now that its location is known.
+            if row and details.get("location_unknown") and not row.get("is_kept"):
+                if reject_irrelevant_row(self.database, row["id"], "wrong_location"):
+                    self.by_url.pop(url, None)
+                    return "rejected", outcome["skip"]
+            return "skipped", outcome["skip"]
+        arrangement = outcome["arrangement"] or arrangement
+
+        if not row:
+            key = match_key(company, title, location, arrangement)
+            same_job = self.by_key.get(key) if key else None
+            if same_job:
+                details = _row_details(same_job)
+                if add_also_on(details, site, url):
+                    self._set_details(same_job["id"], details)
+                    same_job["listing_details"] = json.dumps(details)
+                if applied:
+                    self._mark_applied(same_job["id"])
+                return "linked", (f"same job as #{same_job['id']} ({same_job.get('source_type') or 'saved'})"
+                                  + ("; marked Applied" if applied else ""))
+            if closed and not applied:
+                return "skipped", "No longer accepting applications"
+
+        matched_title = next((wanted for wanted in self.wanted if matching_job_title(title, [wanted])), None)
+        new_details = {
+            "captured_by": CAPTURE_MARK, "site": source_type, "external_id": str(job.get("job_id") or ""),
+            "capture_level": job.get("level") or "seen", "page_kind": job.get("page_kind") or "other",
+            "location": location, "salary": job.get("salary") or "", "posted": job.get("posted") or "",
+            "description": str(job.get("description") or "")[:20000], "matched_title": matched_title,
+            "location_unknown": not location, "remote_limited_to": sorted(outcome["remote_limited_to"]),
+            "evidence": [f"Seen on {source_type}", "you applied" if applied else "matching title"],
+        }
+        details = merge_details(_row_details(row) if row else {}, new_details)
+        domain, career_url = self.company_site(company, title, url, location, details, domain)
+        details["verification"] = verification_label(details, source_type, company, url)
+        inserted = save_company(
+            self.database, company, title, outcome["detail_score"], domain, career_url, url, outcome["country"],
+            str(outcome["state_name"] or "")[:100] or None, outcome["location"]["score"],
+            city=outcome["city"], latitude=outcome["lat"], longitude=outcome["lon"], distance_miles=outcome["miles"],
+            work_arrangement=arrangement, skills=listing_skills(details.get("description") or ""),
+            source_type=source_type, listing_details=details)
+        saved = self._saved_row(url)
+        if saved:
+            self._remember(saved)
+            if closed:
+                self._mark_closed(saved["id"])
+            if applied:
+                self._mark_applied(saved["id"])
+        notes = [note for note, on in (("you applied: saved as Applied", applied), ("closed on the site", closed)) if on]
+        return ("added" if inserted else "updated"), "; ".join(notes)
+
+
+def import_captures():
+    """--import-captures: filter and save the jobs in web-job-scraper\\searches that changed since the last import."""
+    global update_existing_mode
+    # Like Refresh, the import runs without the search engine: page downloads (the company-website check) must not
+    # wait for SearXNG, which is not running.
+    update_existing_mode = True
+    print()
+    print("================================")
+    print("     IMPORT CAPTURED JOBS")
+    print("================================")
+    print()
+    _, searches_dir = capture_dirs(settings, BASE_DIR)
+    for path in unreadable_files(searches_dir):
+        print(f"[{IMPORT_ERRORS['bad_file']}] Skipped a capture file that could not be read: {path}")
+    paths = files_to_import(searches_dir)
+    work = []
+    for path in paths:
+        site, jobs = read_jobs(path)
+        work.extend((path, site, job) for job in jobs)
+    print(f"Capture files to import: {len(paths)} ({len(work)} jobs) from {searches_dir}")
+    if not paths:
+        print("Stop reason: Nothing new to import.")
+        return
+
+    def stop(key, message):
+        print(f"Stop reason: [{IMPORT_ERRORS[key]}] Import stopped: {message}")
+
+    database = connect_database()
+    if database is None:
+        stop("database", "the database could not be reached. Is MySQL (XAMPP) running?")
+        return
+    if not ensure_database_schema(database):
+        database.close()
+        stop("schema", "the database could not be updated.")
+        return
+    counts = {"added": 0, "updated": 0, "linked": 0, "rejected": 0, "skipped": 0}
+    failed = 0
+    stopped = False
+    try:
+        run = CaptureImport(database)
+        if run.profile_error:
+            stop("profile", f"your profile could not be read ({run.profile_error}).")
+            return
+        if not run.wanted:
+            stop("no_titles", "add job titles to your profile first.")
+            return
+        print("Matching job titles: " + ", ".join(run.wanted))
+        for number, (path, site, job) in enumerate(work, start=1):
+            if stop_requested():
+                stopped = True
+                break
+            print(f"Importing {number}/{len(work)}: {job['title'][:70]} ({CAPTURE_SITES[site][0]})", flush=True)
+            try:
+                result, reason = run.import_job(site, job)
+            except Error as error:
+                database.rollback()
+                failed += 1
+                result, reason = "skipped", f"[{IMPORT_ERRORS['save']}] could not be saved: {error}"
+            counts[result] += 1
+            if result == "skipped":
+                print(f"Skipped ({reason}): {job['title'][:70]} {job['url']}")
+            else:
+                print(f"{result.title()}: {job['title'][:70]}" + (f" — {reason}" if reason else ""))
+        if not stopped and not failed:
+            try:
+                mark_imported(searches_dir, paths)
+                removed = remove_old_folders(searches_dir)
+                if removed:
+                    print(f"Removed {len(removed)} capture folder(s) older than 30 days: {', '.join(removed)}")
+            except OSError as error:
+                print(f"[{IMPORT_ERRORS['files']}] Could not record the imported files or remove old folders: {error}")
+        try:
+            expired = tidy_closed_jobs(database)
+            if expired:
+                print(f"Deleted {expired} job(s) closed for more than 30 days (saved jobs are kept).")
+        except Error as error:
+            print(f"[{IMPORT_ERRORS['tidy']}] Could not tidy closed jobs: {error}")
+    finally:
+        database.close()
+    print()
+    print(f"Import summary: checked {sum(counts.values())}, added {counts['added']}, updated {counts['updated']}, "
+          f"linked {counts['linked']}, rejected {counts['rejected']}, skipped {counts['skipped']}")
+    linked = f", {counts['linked']} matched jobs already in your list" if counts["linked"] else ""
+    # Files with a failed job stay unmarked, so the next import tries them again.
+    errors = (f" [{IMPORT_ERRORS['save']}] {failed} job(s) could not be saved and will be tried again next time."
+              if failed else "")
+    print(f"Stop reason: {'Import stopped early' if stopped else 'Import finished'}: {counts['added']} added, "
+          f"{counts['updated']} updated{linked}, {counts['skipped'] + counts['rejected'] - failed} filtered out.{errors}")
 
 
 # =========================================================
@@ -2846,7 +3209,7 @@ def geocode_location(database, query, require_place_match=False):
         response = requests.get(
             NOMINATIM_URL,
             params={"q": query, "format": "jsonv2", "limit": 5, "countrycodes": "us"},
-            headers={"User-Agent": f"JobFinder/{JOB_FINDER_VERSION} (https://github.com/jltkerig/web-scraper)"},
+            headers={"User-Agent": f"JobFinder/{JOB_FINDER_VERSION} (https://github.com/jltkerig/job-finder-dashboard)"},
             timeout=15,
         )
         _last_nominatim_request = time.monotonic()
@@ -3425,6 +3788,103 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
         save_discovered({k: v for k, v in config.items() if k != "discovered"})
         search_employer(employer, 3, MAX_SEARCH_RESULTS)
 
+    # Job sites that list many employers (the National Labor Exchange, usnlx.com): searched for the titles you
+    # typed around each of your places. Their openings go through the same title, location and U.S. checks.
+    site_saved_total = 0
+    site_cap = max(1, MAX_SEARCH_RESULTS // 3)
+
+    def check_site_listing(site, listing):
+        """Filter and save one job-site opening; returns True when it was newly saved."""
+        nonlocal candidate_number, results_checked, companies_saved, existing_companies, passed_count, site_saved_total
+        job_url, title = listing["url"], listing["title"]
+        candidate_number += 1
+        results_checked += 1
+        print(f"Checking result {candidate_number}: {title[:75]} ({site.name})")
+        if not title or job_url in seen_openings:
+            return False
+        if job_url in rejected_urls:
+            record_skip("Previously rejected", job_url, title)
+            return False
+        seen_openings.add(job_url)
+        company = listing["company"] or "Unknown employer"
+        if company.casefold() in BLOCKED_COMPANIES:
+            debug_skip("Blocked company", job_url, title)
+            return False
+        if not matching_job_title(title, job_titles):
+            record_skip("Title matches none of your job titles", job_url, title)
+            return False
+        if USA_ONLY and listing["country"] and "united states" not in listing["country"].casefold():
+            record_skip("Posting restricts applicants outside the US", job_url, title)
+            return False
+        opening = {"title": title, "company": company, "description": listing["description"], "type": None,
+                   "location": listing["location"], "locations": [listing["location"]], "remote_states": [],
+                   "schedule": "", "evidence": [f"{site.name} listing"]}
+        outcome = assess_opening(database, opening, capture_page_html(listing), job_url, state, selected_states,
+                                 statewide_states, city_targets)
+        # The site's own location field ("Aberdeen, MD") is trusted as U.S. proof, as for captured LinkedIn jobs.
+        if outcome["skip"] == "US eligibility unverified" and site_location_in_us(listing["location"]):
+            outcome["skip"] = None
+            outcome["country"] = "United States"
+            outcome["location"]["score"] = max(outcome["location"]["score"], USA_CREDIBILITY_THRESHOLD)
+        if outcome["skip"]:
+            record_skip(outcome["skip"], job_url, title)
+            return False
+        matched_title = next((wanted for wanted in job_titles if matching_job_title(title, [wanted])), job_titles[0])
+        details = {"posted": listing["posted"], "location": listing["location"], "matched_title": matched_title,
+                   "evidence": [f"{site.name} listing", "title matches search"], "external_id": listing["guid"],
+                   "remote_limited_to": sorted(outcome["remote_limited_to"]),
+                   "verification": f"Listed on the {site.name}; the company site was not checked"}
+        inserted = save_company(database, company, title, outcome["detail_score"], site.domain, job_url, job_url,
+                                outcome["country"], str(outcome["state_name"] or "")[:100] or None,
+                                outcome["location"]["score"], city=outcome["city"], latitude=outcome["lat"],
+                                longitude=outcome["lon"], distance_miles=outcome["miles"],
+                                work_arrangement=outcome["arrangement"], skills=listing_skills(listing["description"]),
+                                source_type=site.name, listing_details=details)
+        record_decision(SEARCH_SKIPS_FILE, _skip_decisions, "Passed", job_url, title)
+        passed_count += 1
+        print(f"Passed validation: {passed_count} · {title} — {company} ({site.name})", flush=True)
+        debug_lead(action="saved" if inserted else "already saved (updated)", source=site.name, title=title,
+                   company=company, url=job_url, location=listing["location"], matched_title=matched_title)
+        if inserted:
+            companies_saved += 1
+            site_saved_total += 1
+            print(f"Saved job {companies_saved}/{MAX_SEARCH_RESULTS}: {job_url}")
+        else:
+            existing_companies += 1
+        return inserted
+
+    def search_job_sites():
+        places = search_places(state, cities, US_STATES)
+        for site_class in JOB_SITES:
+            if not settings.get("job_sites", {}).get(site_class.name, True):
+                print(f"{site_class.name} is turned off in settings.json.")
+                _board_health.note(site_class.name, "Job site", "off")
+                continue
+            site = site_class()
+            found = saved = 0
+            print(f"Searching {site.name} for your titles near {', '.join(place for place, _ in places) or 'anywhere'}...")
+            try:
+                for title in selected_titles:
+                    for place, radius in places:
+                        if stop_requested() or site_saved_total >= site_cap or companies_saved >= MAX_SEARCH_RESULTS:
+                            break
+                        for listing in site.search(title, place, radius):
+                            found += 1
+                            if check_site_listing(site, listing):
+                                saved += 1
+                            if site_saved_total >= site_cap or companies_saved >= MAX_SEARCH_RESULTS:
+                                break
+            except SiteBlocked as error:
+                print(f"{site.name} asked Job Finder to slow down; leaving it alone for the rest of this search ({error}).")
+                _board_health.failed(site.name, "Job site", error)
+                continue
+            except (requests.RequestException, ValueError, KeyError, TypeError) as error:
+                print(f"{site.name} unavailable; continuing: {error}")
+                _board_health.failed(site.name, "Job site", error)
+                continue
+            print(f"{site.name}: {found} openings read in {site.requests} requests, {saved} new saved.")
+            _board_health.note(site.name, "Job site", "ok" if found else "no matches", found, saved)
+
     def search_known_employers():
         try:
             with timed("Employer career boards"):
@@ -3434,6 +3894,11 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
                         break
         except Exception as error:
             print(f"Employer career search stopped early: {error}", flush=True)
+        try:
+            with timed("Job sites"):
+                search_job_sites()
+        except Exception as error:
+            print(f"Job site search stopped early: {error}", flush=True)
 
     # Employer boards are searched while Docker and SearXNG start (starting them takes a while), so neither waits
     # for the other. The web search begins only after both have finished.
@@ -3803,6 +4268,8 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description="Personal Job Finder")
     parser.add_argument("--update-existing", action="store_true")
     parser.add_argument("--update-ids", default=None)
+    parser.add_argument("--import-captures", action="store_true",
+                        help="Import jobs saved by the Web Job Scraper extension from web-job-scraper\\searches")
     parser.add_argument("--max-new", type=int, choices=range(1, 11), default=None)
     parser.add_argument("--job-title", default=None)
     parser.add_argument("--state", default=None)
@@ -3816,7 +4283,9 @@ if __name__ == "__main__":
             output.reconfigure(encoding="utf-8", errors="backslashreplace")
     args = parse_arguments()
 
-    if args.update_existing:
+    if args.import_captures:
+        import_captures()
+    elif args.update_existing:
         update_existing_results([int(value) for value in args.update_ids.split(",") if value.isdecimal()] if args.update_ids is not None else None)
     else:
         main(job_title=args.job_title, state=args.state, cities_json=args.cities_json, max_new=args.max_new)
