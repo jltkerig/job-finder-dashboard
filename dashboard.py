@@ -19,7 +19,7 @@ from dotenv import load_dotenv
 from flask import Flask, abort, jsonify, redirect, render_template, request, send_from_directory, session
 from mysql.connector import Error
 from profile_tools import AMBIGUOUS_SKILLS, SKILL_ALIASES, fit_score, normalize_skills, resume_suggestions
-from onet_data import occupation_skill_suggestions, related_title_suggestions, title_matches
+from onet_data import occupation_skill_suggestions, related_title_suggestions, spelling_fix, title_matches
 from places import city_matches
 from travel import describe as describe_trip
 from job_listings import NON_JOB_PATH, is_pdf_url
@@ -36,7 +36,7 @@ load_dotenv(BASE_DIR / ".env")
 
 app = Flask(__name__)
 
-APP_VERSION = "1.1.117"
+APP_VERSION = "1.1.118"
 
 app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY") or secrets.token_hex(32)
 app.config["SESSION_COOKIE_HTTPONLY"] = True
@@ -1285,12 +1285,14 @@ def extension_fit_profile():
     ordinary web page asking for it gets nothing back.
     """
     profile = get_user_profile()
-    titles = [profile.get("primary_job_title") or ""] + list(profile.get("job_titles") or [])
+    titles = [spelling_fix(title) for title in
+              [profile.get("primary_job_title") or ""] + list(profile.get("job_titles") or [])]  # typos fixed, as in searches
     return jsonify({
         "titles": [title for i, title in enumerate(titles) if title and title.casefold() not in
                    {t.casefold() for t in titles[:i]}],
         "skills": profile.get("skills") or [],
         "work_preferences": profile.get("work_preferences") or [],
+        "blocked_companies": get_blocked_companies(),  # companies you blocked in Job Finder: hidden on LinkedIn too
         "skill_aliases": SKILL_ALIASES,
         "ambiguous_skills": sorted(AMBIGUOUS_SKILLS),
     })
