@@ -5,12 +5,15 @@ import tempfile
 import unittest
 from datetime import date
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
 from jobfinder.records import capture_import as capture
 import job_finder as finder
+from owners import holders
+
+from jobfinder.search import storage
 from jobfinder.search import shared
 from jobfinder.records import job_retention
 
@@ -160,10 +163,13 @@ class ImportFilter(unittest.TestCase):
         for name, value in (("save_company", lambda *args, **kwargs: self.saved.append((args, kwargs)) or True),
                             ("find_employer_site", lambda *args, **kwargs: self.employer),
                             ("company_board_posting", lambda *args, **kwargs: self.board)):
-            patcher = patch.object(finder, name, side_effect=value)
+            fake = MagicMock(side_effect=value)  # one fake, put in every module that holds the name
             self.lookups = getattr(self, "lookups", {})
-            self.lookups[name] = patcher.start()
-            self.addCleanup(patcher.stop)
+            self.lookups[name] = fake
+            for module in holders(name):
+                patcher = patch.object(module, name, fake)
+                patcher.start()
+                self.addCleanup(patcher.stop)
 
     def import_one(self, run, captured, outcome=None, saved_row=None):
         """(result, assess mock, _set_details mock) for one captured job; nothing touches a database.
@@ -292,7 +298,7 @@ class ImportErrorCodes(unittest.TestCase):
                 path.write_text(text, encoding="utf-8")
             output = io.StringIO()
             with patch.object(finder, "capture_dirs", return_value=(Path(searches), Path(searches))), \
-                    patch.object(finder, "connect_database", return_value=database), \
+                    patch.object(storage, "connect_database", return_value=database), \
                     contextlib.redirect_stdout(output):
                 finder.import_captures()
             return output.getvalue()

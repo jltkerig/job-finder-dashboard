@@ -29,3 +29,11 @@ def holders(name):
     """Every module that has this name (the definition and the modules that imported it), so a patch reaches all callers."""
     found = [module for module in MODULES if name in module.__dict__]
     return found or [job_finder]
+
+
+def search_source():
+    """The text of job_finder.py and every module in jobfinder/search/, for tests that check how the search is wired."""
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    files = [root / "job_finder.py", *sorted((root / "jobfinder" / "search").glob("*.py"))]
+    return "\n".join(f.read_text(encoding="utf-8") for f in files)
