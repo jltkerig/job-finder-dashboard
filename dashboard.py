@@ -36,7 +36,7 @@ load_dotenv(BASE_DIR / ".env")
 
 app = Flask(__name__)
 
-APP_VERSION = "1.1.119"
+APP_VERSION = "1.1.120"
 
 app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY") or secrets.token_hex(32)
 app.config["SESSION_COOKIE_HTTPONLY"] = True
@@ -282,6 +282,19 @@ def inject_csrf_token():
     # postings, and their domain is never offered for blocking.
     return {"csrf_token": get_csrf_token(), "app_version": APP_VERSION, "feed_names": sorted(FEED_NAMES | JOB_SITE_NAMES),
             "capture_sources": sorted(CAPTURE_SOURCES), "application_statuses": APPLICATION_STATUSES}
+
+
+LOCAL_HOSTS = {"127.0.0.1", "localhost", "[::1]"}
+
+
+@app.before_request
+def refuse_foreign_hosts():
+    """Answer only requests addressed to this computer. A web page can point its own name at 127.0.0.1 ("DNS
+    rebinding") and then read the profile and jobs from here; such a request carries that page's name as the Host."""
+    host = (request.host or "").rsplit(":", 1)[0] if not request.host.startswith("[") else request.host.split("]")[0] + "]"
+    if host.lower() not in LOCAL_HOSTS:
+        abort(400)
+    return None
 
 
 @app.before_request
