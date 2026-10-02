@@ -38,6 +38,11 @@ header p {
 	margin: 0;
 }
 
+header p.app-version {
+	font-size: 0.9rem;
+	margin-top: -4px;
+}
+
 main {
 	flex: 1;
 
