@@ -8,6 +8,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import job_finder as finder
+from jobfinder.search import relevance
+from jobfinder.search import geo
 from jobfinder.search import usa_location
 from jobfinder.sources.employer_jobs import Employer
 from jobfinder.sources.remote_states import is_remote_place, list_states, place_states
@@ -80,22 +82,22 @@ class SearchAndUpdate(unittest.TestCase):
         http = SimpleNamespace(get=lambda url, params=None, accept=None: Response(info))
         row = {'is_kept': 0, 'work_arrangement': 'Remote', 'name': 'CVS', 'source_type': 'Web',
                'source_url': 'https://cvshealth.wd1.myworkdayjobs.com/en-US/cvs_health_careers/job/Work-At-Home/Senior-Content-Designer_R1'}
-        self.assertEqual(finder.stale_remote_limit(row, {}, {'MD', 'DE'}, http), {'MA', 'NC', 'FL', 'RI'})
-        self.assertIsNone(finder.stale_remote_limit(row, {}, {'MD', 'FL'}, http))
-        self.assertIsNone(finder.stale_remote_limit(dict(row, is_kept=1), {}, {'MD'}, http))
-        self.assertIsNone(finder.stale_remote_limit(row, {'remote_limited_to': []}, {'MD'}, http))
+        self.assertEqual(relevance.stale_remote_limit(row, {}, {'MD', 'DE'}, http), {'MA', 'NC', 'FL', 'RI'})
+        self.assertIsNone(relevance.stale_remote_limit(row, {}, {'MD', 'FL'}, http))
+        self.assertIsNone(relevance.stale_remote_limit(dict(row, is_kept=1), {}, {'MD'}, http))
+        self.assertIsNone(relevance.stale_remote_limit(row, {'remote_limited_to': []}, {'MD'}, http))
 
 
 class Places(unittest.TestCase):
     def test_zip_codes_and_counties_are_geocoded_sensibly(self):
-        self.assertEqual(finder.geocode_queries('21014', 'MD, DE'), ['21014, United States'])
-        self.assertEqual(finder.geocode_queries('Harford County', 'MD, DE'), ['Harford County, MD', 'Harford County, DE'])
-        self.assertEqual(finder.geocode_queries('Bel Air, MD', 'MD'), ['Bel Air, MD'])
+        self.assertEqual(geo.geocode_queries('21014', 'MD, DE'), ['21014, United States'])
+        self.assertEqual(geo.geocode_queries('Harford County', 'MD, DE'), ['Harford County, MD', 'Harford County, DE'])
+        self.assertEqual(geo.geocode_queries('Bel Air, MD', 'MD'), ['Bel Air, MD'])
 
     def test_region_names_become_a_city(self):
-        self.assertEqual(finder.clean_region_name('Greater Baltimore Area'), 'Baltimore')
-        self.assertEqual(finder.clean_region_name('DMV'), 'Washington, DC')
-        self.assertEqual(finder.clean_region_name('Bel Air'), 'Bel Air')
+        self.assertEqual(geo.clean_region_name('Greater Baltimore Area'), 'Baltimore')
+        self.assertEqual(geo.clean_region_name('DMV'), 'Washington, DC')
+        self.assertEqual(geo.clean_region_name('Bel Air'), 'Bel Air')
 
 
 if __name__ == '__main__':

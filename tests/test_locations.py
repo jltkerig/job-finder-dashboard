@@ -1,3 +1,5 @@
+from jobfinder.search import relevance
+from jobfinder.search import geo
 from jobfinder.search import usa_location
 import json
 import sys
@@ -25,13 +27,13 @@ class NonUsLocations(unittest.TestCase):
 
 class PlaceMatching(unittest.TestCase):
     def test_a_road_or_lookalike_is_not_the_place(self):
-        self.assertFalse(finder.place_matches('london, md, de', 'New London Road, Thabar, Cecil County, Maryland, United States'))
-        self.assertFalse(finder.place_matches('paris, md', 'Paris Road, Baltimore County, Maryland'))
+        self.assertFalse(geo.place_matches('london, md, de', 'New London Road, Thabar, Cecil County, Maryland, United States'))
+        self.assertFalse(geo.place_matches('paris, md', 'Paris Road, Baltimore County, Maryland'))
 
     def test_the_real_place_matches(self):
-        self.assertTrue(finder.place_matches('bel air, md', 'Bel Air, Harford County, Maryland, United States'))
-        self.assertTrue(finder.place_matches('st. paul, mn', 'Saint Paul, Ramsey County, Minnesota'))
-        self.assertTrue(finder.place_matches('new york, ny', 'City of New York, New York, United States'))
+        self.assertTrue(geo.place_matches('bel air, md', 'Bel Air, Harford County, Maryland, United States'))
+        self.assertTrue(geo.place_matches('st. paul, mn', 'Saint Paul, Ramsey County, Minnesota'))
+        self.assertTrue(geo.place_matches('new york, ny', 'City of New York, New York, United States'))
 
     def test_job_cities_use_the_strict_check_but_selected_cities_do_not(self):
         class Cursor:
@@ -43,8 +45,8 @@ class PlaceMatching(unittest.TestCase):
         class Database:
             def cursor(self, *args, **kw): return Cursor()
 
-        self.assertIsNone(finder.geocode_location(Database(), 'london, md', require_place_match=True))
-        self.assertIsNotNone(finder.geocode_location(Database(), 'london, md'))
+        self.assertIsNone(geo.geocode_location(Database(), 'london, md', require_place_match=True))
+        self.assertIsNotNone(geo.geocode_location(Database(), 'london, md'))
 
 
 class StateFromThePage(unittest.TestCase):
@@ -70,11 +72,11 @@ class StateFromThePage(unittest.TestCase):
 class OutsideTheUsLeads(unittest.TestCase):
     def test_unsaved_non_us_leads_are_rejected_but_saved_and_remote_ok_are_not(self):
         lead = {'is_kept': 0, 'source_type': 'SearXNG'}
-        self.assertTrue(finder.is_wrong_location_lead(lead, {'location': 'London, GB'}))
-        self.assertFalse(finder.is_wrong_location_lead(dict(lead, is_kept=1), {'location': 'London, GB'}))
-        self.assertFalse(finder.is_wrong_location_lead(dict(lead, source_type='Remote OK'), {'location': 'London, GB'}))
-        self.assertFalse(finder.is_wrong_location_lead(lead, {'location': 'Towson, Maryland, US'}))
-        self.assertFalse(finder.is_wrong_location_lead(lead, {}))
+        self.assertTrue(relevance.is_wrong_location_lead(lead, {'location': 'London, GB'}))
+        self.assertFalse(relevance.is_wrong_location_lead(dict(lead, is_kept=1), {'location': 'London, GB'}))
+        self.assertFalse(relevance.is_wrong_location_lead(dict(lead, source_type='Remote OK'), {'location': 'London, GB'}))
+        self.assertFalse(relevance.is_wrong_location_lead(lead, {'location': 'Towson, Maryland, US'}))
+        self.assertFalse(relevance.is_wrong_location_lead(lead, {}))
 
 
 class RemoteRestrictions(unittest.TestCase):
@@ -135,13 +137,13 @@ class FooterAddresses(unittest.TestCase):
             '</body></html>')
 
     def test_the_footer_address_is_used_only_on_the_employers_own_site(self):
-        self.assertEqual(finder.extract_job_city(self.PAGE, 'Web Designer', allow_footer=True), ('Washington', 'DC'))
+        self.assertEqual(geo.extract_job_city(self.PAGE, 'Web Designer', allow_footer=True), ('Washington', 'DC'))
         # On a job board the footer is the board's address, not the job's.
-        self.assertEqual(finder.extract_job_city(self.PAGE, 'Web Designer'), (None, None))
+        self.assertEqual(geo.extract_job_city(self.PAGE, 'Web Designer'), (None, None))
 
     def test_the_listings_own_location_still_wins_over_the_footer(self):
         page = self.PAGE.replace('<p>Design our websites.</p>', '<p>Location: Baltimore, MD 21201</p>')
-        self.assertEqual(finder.extract_job_city(page, '', allow_footer=True), ('Baltimore', 'MD'))
+        self.assertEqual(geo.extract_job_city(page, '', allow_footer=True), ('Baltimore', 'MD'))
 
     def test_a_subdomain_of_the_verified_company_site_counts_as_its_own_site(self):
         details = {'employer_site': {'domain': 'gwu.edu'}}
@@ -157,14 +159,14 @@ class PlaceChoice(unittest.TestCase):
             {'display_name': 'Bel Air, Allegany County, 21556', 'lat': '39.5731', 'lon': '-78.8497', 'importance': 0.376, 'type': 'village'},
             {'display_name': 'Bel Air, Harford County, 21014', 'lat': '39.5355', 'lon': '-76.3490', 'importance': 0.187, 'type': 'administrative'},
         ]
-        self.assertIn('Harford County', finder.pick_place(results)['display_name'])
+        self.assertIn('Harford County', geo.pick_place(results)['display_name'])
 
     def test_importance_breaks_ties_between_places_of_the_same_kind(self):
         results = [{'display_name': 'A', 'importance': 0.2, 'type': 'city'}, {'display_name': 'B', 'importance': 0.7, 'type': 'city'}]
-        self.assertEqual(finder.pick_place(results)['display_name'], 'B')
+        self.assertEqual(geo.pick_place(results)['display_name'], 'B')
 
     def test_cached_answers_from_before_the_ranking_fix_are_not_reused(self):
-        self.assertTrue(finder._normalize_geocode_query('Bel Air, MD').endswith('[v2]'))
+        self.assertTrue(geo._normalize_geocode_query('Bel Air, MD').endswith('[v2]'))
 
 
 if __name__ == '__main__':

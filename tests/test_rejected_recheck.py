@@ -10,6 +10,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
 from owners import search_source
 import job_finder
+from jobfinder.search import relevance
+from jobfinder.search import geo
 from jobfinder.records import job_retention
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -74,7 +76,7 @@ class Scope(unittest.TestCase):
     def recheck(self, database, titles, cities=(), state="Maryland", targets=()):
         profile = (list(titles), [dict(c) for c in cities], state, None)
         with patch.object(job_finder, "load_profile_filters", return_value=profile), \
-                patch.object(job_finder, "prepare_city_targets", return_value=list(targets)):
+                patch.object(geo, "prepare_city_targets", return_value=list(targets)):
             return job_finder.recheck_system_rejections(database, self.scope_file)
 
     def test_the_first_check_only_remembers_the_search_and_restores_nothing(self):
@@ -134,7 +136,7 @@ class Scope(unittest.TestCase):
 class WhoRejected(unittest.TestCase):
     def test_the_systems_own_rejections_are_marked_system(self):
         database = Db()
-        job_finder.reject_irrelevant_row(database, 9, "wrong_role")
+        relevance.reject_irrelevant_row(database, 9, "wrong_role")
         [(sql, params)] = database.updates()
         self.assertIn("rejected_by = 'system'", sql)
         self.assertEqual(params, ("wrong_role", 9))

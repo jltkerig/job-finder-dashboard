@@ -1,3 +1,4 @@
+from jobfinder.search import geo
 from jobfinder.search import company_site
 from jobfinder.search import usa_location
 """Regression tests for things a job page can say that look like evidence but are not."""
@@ -91,9 +92,9 @@ class LocationEvidence(unittest.TestCase):
 
     def test_6_the_city_guess_skips_names_and_prefers_location_wording(self):
         page = '<p>Contact Jane Doe, MD for details. Location: Towson, MD</p>'
-        self.assertEqual(finder.extract_job_city(page), ('Towson', 'MD'))
-        self.assertEqual(finder.extract_job_city('<p>Email Jane Doe, MD</p><p>Baltimore, MD 21201</p>'), ('Baltimore', 'MD'))
-        self.assertEqual(finder.extract_job_city('<p>Anything</p>', fallback_text='Towson, MD, USA'), ('Towson', 'MD'))
+        self.assertEqual(geo.extract_job_city(page), ('Towson', 'MD'))
+        self.assertEqual(geo.extract_job_city('<p>Email Jane Doe, MD</p><p>Baltimore, MD 21201</p>'), ('Baltimore', 'MD'))
+        self.assertEqual(geo.extract_job_city('<p>Anything</p>', fallback_text='Towson, MD, USA'), ('Towson', 'MD'))
 
 
 class UsOnlyRejection(unittest.TestCase):

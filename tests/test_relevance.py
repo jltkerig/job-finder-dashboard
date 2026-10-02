@@ -5,6 +5,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
 import job_finder as finder
+from jobfinder.search import relevance
 from jobfinder.db_schema import ensure_unique_source_index
 
 TITLES = ['web designer', 'Website Designer', 'graphic design']
@@ -17,24 +18,24 @@ def row(title, **kw):
 
 class Relevance(unittest.TestCase):
     def test_a_title_that_matches_none_of_the_users_titles_is_irrelevant(self):
-        self.assertTrue(finder.is_irrelevant_lead(row(PIO), {}, TITLES))
+        self.assertTrue(relevance.is_irrelevant_lead(row(PIO), {}, TITLES))
 
     def test_matching_titles_are_kept(self):
-        self.assertFalse(finder.is_irrelevant_lead(row('Website Designer II'), {}, TITLES))
-        self.assertFalse(finder.is_irrelevant_lead(row('Senior Web Designer - Acme'), {}, TITLES))
-        self.assertFalse(finder.is_irrelevant_lead(row('Graphic Design Intern'), {}, TITLES))
+        self.assertFalse(relevance.is_irrelevant_lead(row('Website Designer II'), {}, TITLES))
+        self.assertFalse(relevance.is_irrelevant_lead(row('Senior Web Designer - Acme'), {}, TITLES))
+        self.assertFalse(relevance.is_irrelevant_lead(row('Graphic Design Intern'), {}, TITLES))
 
     def test_saved_vetted_remote_ok_and_untitled_rows_are_never_touched(self):
-        self.assertFalse(finder.is_irrelevant_lead(row(PIO, is_kept=1), {}, TITLES))
-        self.assertFalse(finder.is_irrelevant_lead(row(PIO), {'matched_title': 'web designer'}, TITLES))
-        self.assertFalse(finder.is_irrelevant_lead(row(PIO, source_type='Remote OK'), {}, TITLES))
-        self.assertFalse(finder.is_irrelevant_lead(row(''), {}, TITLES))
+        self.assertFalse(relevance.is_irrelevant_lead(row(PIO, is_kept=1), {}, TITLES))
+        self.assertFalse(relevance.is_irrelevant_lead(row(PIO), {'matched_title': 'web designer'}, TITLES))
+        self.assertFalse(relevance.is_irrelevant_lead(row(PIO, source_type='Remote OK'), {}, TITLES))
+        self.assertFalse(relevance.is_irrelevant_lead(row(''), {}, TITLES))
 
     def test_no_known_titles_changes_nothing(self):
-        self.assertFalse(finder.is_irrelevant_lead(row(PIO), {}, []))
+        self.assertFalse(relevance.is_irrelevant_lead(row(PIO), {}, []))
 
     def test_related_onet_titles_are_added_after_the_typed_ones(self):
-        expanded = finder.expand_job_titles(['Web Designer'])
+        expanded = relevance.expand_job_titles(['Web Designer'])
         self.assertEqual(expanded[0], 'Web Designer')
         self.assertGreater(len(expanded), 1)
         self.assertTrue(all('designer' in title.casefold() for title in expanded[1:]))
@@ -73,7 +74,7 @@ class Database(unittest.TestCase):
     def test_rejecting_keeps_the_previous_state_for_restore(self):
         cursor = FakeCursor()
         database = FakeDatabase(cursor)
-        self.assertTrue(finder.reject_irrelevant_row(database, 13))
+        self.assertTrue(relevance.reject_irrelevant_row(database, 13))
         sql, params = cursor.statements[0]
         self.assertIn('rejection_reason = %s', sql)
         self.assertIn('pre_reject_kept = is_kept', sql)
@@ -82,13 +83,13 @@ class Database(unittest.TestCase):
 
     def test_a_location_rejection_uses_its_own_reason(self):
         cursor = FakeCursor()
-        finder.reject_irrelevant_row(FakeDatabase(cursor), 19, 'wrong_location')
+        relevance.reject_irrelevant_row(FakeDatabase(cursor), 19, 'wrong_location')
         self.assertEqual(cursor.statements[0][1], ('wrong_location', 19))
 
     def test_user_titles_come_from_the_profile_and_the_latest_search(self):
         cursor = FakeCursor(fetchall=[[('web designer',), ('Visual Designer',)]],
                             fetchone=[('Web Designer, Graphic Design',)])
-        self.assertEqual(finder.load_user_titles(FakeDatabase(cursor)),
+        self.assertEqual(relevance.load_user_titles(FakeDatabase(cursor)),
                          ['web designer', 'Visual Designer', 'Graphic Design'])
 
 
