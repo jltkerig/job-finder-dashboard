@@ -21,7 +21,7 @@ from mysql.connector import Error
 from profile_tools import (AMBIGUOUS_SKILLS, SKILL_ALIASES, fit_score, normalize_skills, resume_skill_suggestions,
                            parse_work_history, refresh_listing_skills, resume_suggestions, skill_demand,
                            uploaded_resume)
-from onet_data import occupation_skill_suggestions, related_title_suggestions, spelling_fix, title_matches
+from onet_data import occupation_skill_suggestions, proper_title, related_title_suggestions, spelling_fix, title_matches
 from places import city_matches
 from travel import describe as describe_trip
 from job_listings import NON_JOB_PATH, is_pdf_url
@@ -40,7 +40,7 @@ load_dotenv(BASE_DIR / ".env")
 
 app = Flask(__name__)
 
-APP_VERSION = "1.1.144"
+APP_VERSION = "1.1.145"
 
 app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY") or secrets.token_hex(32)
 app.config["SESSION_COOKIE_HTTPONLY"] = True
@@ -186,7 +186,7 @@ def related_job_title_suggestions(raw_titles):
         for candidate in candidates:
             candidate_key = candidate.lower()
             if candidate_key not in selected_lower and candidate_key not in {item.lower() for item in suggestions}:
-                suggestions.append(candidate)
+                suggestions.append(proper_title(candidate))
 
     return suggestions[:8]
 

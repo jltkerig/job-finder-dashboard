@@ -20,6 +20,42 @@ def _key(value):
     return re.sub(r"[^a-z0-9]+", " ", value.casefold()).strip()
 
 
+# Job titles are always suggested with proper capitalization ("UX/UI Designer", "Front-End Developer"); matching a
+# search ignores case, so how a title is capitalized never changes what is found.
+_SMALL_WORDS = {"a", "an", "and", "as", "at", "but", "by", "for", "in", "of", "on", "or", "the", "to", "with"}
+_KEEP_UPPER = {"ux", "ui", "qa", "it", "seo", "sem", "cms", "html", "css", "php", "sql", "api", "hr", "crm", "erp", "pr", "ai",
+               "ml", "vp", "ceo", "cfo", "cto", "coo", "aws", "ii", "iii", "iv", "3d", "2d", "ar", "vr", "b2b", "b2c", "ehr",
+               "emr", "cad", "gis", "rn", "lpn", "cdl", "hvac", "usa", "us", "uk", "ios", "net", "sap", "etl", "bi", "pc", "av", "tv"}
+_SPECIAL = {"wordpress": "WordPress", "javascript": "JavaScript", "typescript": "TypeScript", "linkedin": "LinkedIn",
+            "devops": "DevOps", "powerpoint": "PowerPoint", "photoshop": "Photoshop", "ios": "iOS", "macos": "macOS",
+            "youtube": "YouTube", "salesforce": "Salesforce", "github": "GitHub", "nodejs": "Node.js"}
+
+
+def _proper_word(word):
+    lower = word.casefold()
+    if lower in _SPECIAL:
+        return _SPECIAL[lower]
+    if lower in _KEEP_UPPER:
+        return lower.upper() if lower != "ios" else "iOS"
+    if any(c.isupper() for c in word[1:]) and any(c.islower() for c in word):
+        return word  # already written in its own style (WordPress, eBay)
+    return lower[:1].upper() + lower[1:]
+
+
+def proper_title(text):
+    """A job title in proper capitalization: every word capitalized except small joining words, acronyms kept in capitals."""
+    words = re.sub(r"\s+", " ", str(text or "")).strip().split(" ")
+    out = []
+    for n, word in enumerate(words):
+        if not word:
+            continue
+        parts = re.split(r"([/\-])", word)
+        done = "".join(part if part in "/-" else (part.casefold() if part.casefold() in _SMALL_WORDS and 0 < n < len(words) - 1 and len(parts) == 1
+                                                 else _proper_word(part)) for part in parts)
+        out.append(done)
+    return " ".join(out)
+
+
 @lru_cache(maxsize=1)
 def _catalog():
     occupations = {row["O*NET-SOC Code"]: row["Title"] for row in _rows("Occupation Data.txt")}
@@ -122,7 +158,7 @@ def title_matches(text, limit=10):
             (starts if name.startswith(key) else others).append(title)
             if len(starts) >= limit:
                 break
-    return (starts + others)[:limit]
+    return [proper_title(title) for title in (starts + others)[:limit]]
 
 
 def related_title_suggestions(title, limit=8):
@@ -135,4 +171,4 @@ def related_title_suggestions(title, limit=8):
     candidates.discard(key)
     tokens = set(key.split())
     ranked = sorted(candidates, key=lambda name: (-len(tokens & set(name.split())), len(name), name))
-    return [name.title() for name in ranked[:limit]]
+    return [proper_title(name) for name in ranked[:limit]]
