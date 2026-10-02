@@ -1,10 +1,14 @@
-# Job Finder v1.1.65
+# Job Finder
 
-Personal job discovery project using Python, MySQL, Flask, Docker, SearXNG, Remote OK, local O*NET occupation data, and OpenStreetMap Nominatim.
+Personal job discovery project using Python, MySQL, Flask, Docker, SearXNG, Remote OK, USAJOBS (optional API key), local O*NET occupation data, and OpenStreetMap Nominatim. The version number is shown in the dashboard footer and set in `dashboard.py` (`APP_VERSION`); the sections below are a history by version.
 
 ## What Job Finder does
 
 Job Finder searches the web locally for employer career pages and job listings, checks each result for career and United States location evidence, and saves the findings to MySQL. It uses a local SearXNG instance in Docker for new searches. Results are suggestions to review: a credibility score does not guarantee a company, opening, or application is legitimate.
+
+## Later versions (v1.1.66 – v1.1.120)
+
+Recent additions: collapsible dashboard sections, Talking With Recruiter status, search locations with 5-mile radius and MARC Penn Line towns, title and city type-ahead, the Web Job Scraper extension feeding LinkedIn and USAJOBS jobs in (with Job Fit %, distance and 6 a.m. drive time estimates from your Home ZIP, and hidden companies), an optional USAJOBS API source (needs `USAJOBS_API_KEY` and `USAJOBS_EMAIL` in `.env`), and release automation (`python release.py`). From v1.1.120 the dashboard answers only requests addressed to this computer (127.0.0.1 or localhost), so a web page cannot read your data by pointing its own name at your machine.
 
 ## v1.1.65 — individual openings
 
