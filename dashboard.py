@@ -19,7 +19,7 @@ from dotenv import load_dotenv
 from flask import Flask, abort, jsonify, redirect, render_template, request, send_from_directory, session
 from mysql.connector import Error
 from profile_tools import (AMBIGUOUS_SKILLS, SKILL_ALIASES, fit_score, normalize_skills, resume_skill_suggestions,
-                           resume_suggestions, skill_demand)
+                           parse_work_history, resume_suggestions, skill_demand, uploaded_resume)
 from onet_data import occupation_skill_suggestions, related_title_suggestions, spelling_fix, title_matches
 from places import city_matches
 from travel import describe as describe_trip
@@ -39,7 +39,7 @@ load_dotenv(BASE_DIR / ".env")
 
 app = Flask(__name__)
 
-APP_VERSION = "1.1.133"
+APP_VERSION = "1.1.134"
 
 app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY") or secrets.token_hex(32)
 app.config["SESSION_COOKIE_HTTPONLY"] = True
@@ -1441,6 +1441,8 @@ def user_dashboard():
     add_job_fit(companies, profile.get("skills", []))
     add_drive_times(companies, profile.get("home_zip"), profile.get("state") or "")
     resume_skills = resume_skill_suggestions(RESUME_FOLDER, profile.get("skills", []))
+    # With no work history saved yet, the form is filled in from the uploaded résumé (nothing is saved until Save Profile).
+    resume_history = [] if profile.get("work_history") else parse_work_history(uploaded_resume(RESUME_FOLDER)[1])
     demanded_skills = [{"skill": skill, "count": count} for skill, count in listing_skill_demand(profile.get("skills", []))]
     return render_template(
         "user-dashboard.html",
@@ -1451,6 +1453,7 @@ def user_dashboard():
         skill_suggestions=profile_skill_suggestions(profile),
         resume_source=resume_skills[0], resume_skills=resume_skills[1],
         demanded_skills=demanded_skills,
+        resume_history=resume_history,
         filters={"status": status_filter, "state": state_filter, "title": title_filter, "sort": sort_by},
     )
 

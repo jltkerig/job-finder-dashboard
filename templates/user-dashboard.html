@@ -77,6 +77,8 @@
             </h3>
             <p class="field-help">Add past jobs manually or review suggestions from a résumé.
             </p>
+            <p class="field-help" id="work-history-note" data-source="{{ resume_source or '' }}" data-history='{{ (resume_history or [])|tojson }}' hidden>
+            </p>
             <div id="work-history-list">
             </div><button class="bordered-button secondary-action" id="add-work-history" type="button">Add Job</button>
           </section>

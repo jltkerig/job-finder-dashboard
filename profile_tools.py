@@ -187,6 +187,101 @@ def fit_score(user_skills, job_skills):
     return {"score": round(100 * len(matched) / len(job)), "reason": "Skills found on the listing page; review the job requirements before applying.", "matched": matched, "missing": missing}
 
 
+_MONTHS = {name: number for number, names in enumerate(
+    [("jan", "january"), ("feb", "february"), ("mar", "march"), ("apr", "april"), ("may",), ("jun", "june"), ("jul", "july"),
+     ("aug", "august"), ("sep", "sept", "september"), ("oct", "october"), ("nov", "november"), ("dec", "december")], 1)
+    for name in names}
+_MONTH_NAMES = "|".join(sorted(_MONTHS, key=len, reverse=True))
+_DATE_RANGE = re.compile(
+    rf"^(?:(?P<m1>{_MONTH_NAMES})\.?\s+)?(?P<y1>(?:19|20)\d{{2}})\s*[-–—]\s*"
+    rf"(?:(?P<m2>{_MONTH_NAMES})\.?\s+(?P<y2>(?:19|20)\d{{2}})|(?P<y3>(?:19|20)\d{{2}})|(?P<now>present|current|now))$", re.I)
+_EXPERIENCE_HEADING = re.compile(r"^(?:(?:work|employment|professional|relevant|career)\s+)?(?:history|experience)$|"
+                                 r"^(?:work|employment|professional)\s+(?:history|experience)$", re.I)
+_OTHER_HEADING = re.compile(r"^(?:education(?:\s+history)?|skills|technical skills|core competencies|certifications?|"
+                            r"additional experience|volunteer(?:ing)?(?: experience)?|projects|awards|references|"
+                            r"professional summary|summary|objective|interests)$", re.I)
+_PLACE_LINE = re.compile(r"^(?:remote|hybrid|on[- ]?site|[A-Za-z .'-]+,\s*[A-Z]{2})$", re.I)
+_BULLET = re.compile(r"^[●•▪■◦‣\-*]$")
+
+
+def _clean_lines(text):
+    text = re.sub(r"[​‌‍﻿]", "", text).replace("\xa0", " ")
+    return [re.sub(r"\s+", " ", line).strip() for line in text.splitlines()]
+
+
+def _month_dates(line):
+    """"January 2025 - May 2025" -> "2025-01 – 2025-05" (the form's month format); years only stay as years."""
+    match = _DATE_RANGE.match(line.strip())
+    if not match:
+        return None
+    start_month = _MONTHS.get((match.group("m1") or "").lower())
+    start = f"{match.group('y1')}-{start_month:02d}" if start_month else match.group("y1")
+    if match.group("now"):
+        end = "Present"
+    elif match.group("y2"):
+        end = f"{match.group('y2')}-{_MONTHS[match.group('m2').lower()]:02d}"
+    else:
+        end = match.group("y3")
+    return f"{start} – {end}"
+
+
+def parse_work_history(text, limit=12):
+    """Jobs listed under the résumé's experience heading: [{"role", "company", "dates", "description"}].
+
+    Reads the common layout: a title line, a company line, an optional place line ("Remote", "Baltimore, MD"), a date
+    range, then bullet points. Anything it cannot place is left out rather than guessed; the entries are suggestions
+    for the person to check."""
+    lines = _clean_lines(text)
+    start = next((i for i, line in enumerate(lines) if _EXPERIENCE_HEADING.match(line)), None)
+    if start is None:
+        return []
+    end = next((i for i in range(start + 1, len(lines)) if _OTHER_HEADING.match(lines[i])), len(lines))
+    section = lines[start + 1:end]
+    dated = [(i, _month_dates(line)) for i, line in enumerate(section) if _month_dates(line)]
+
+    def header_start(at, floor):
+        """Index where the job's heading (title, company, place) begins: up to three short, unpunctuated lines
+        directly above its dates (single blank lines between them are fine), stopping at the previous job's text."""
+        top, found = at, 0
+        for index in range(at - 1, floor, -1):
+            line = section[index]
+            if not line:
+                continue
+            if _BULLET.match(line) or line.endswith(".") or len(line) > 70:
+                break
+            top, found = index, found + 1
+            if found == 3:
+                break
+        return top
+
+    starts = []
+    floor = -1
+    for at, _ in dated:
+        starts.append(header_start(at, floor))
+        floor = at
+    entries = []
+    for n, (at, dates) in enumerate(dated):
+        names = [line for line in section[starts[n]:at] if line and not _PLACE_LINE.match(line)]
+        if not names:
+            continue
+        stop = starts[n + 1] if n + 1 < len(dated) else len(section)
+        bullets, current = [], ""
+        for line in section[at + 1:stop]:
+            if _BULLET.match(line):
+                if current:
+                    bullets.append(current)
+                current = ""
+            elif line:
+                current = f"{current} {line}".strip()
+        if current:
+            bullets.append(current)
+        entries.append({"role": names[0][:150], "company": names[1][:150] if len(names) > 1 else "", "dates": dates,
+                        "description": "\n".join(f"• {item}" for item in bullets)[:3000]})
+        if len(entries) >= limit:
+            break
+    return entries
+
+
 def resume_suggestions(text):
     lines = [re.sub(r"\s+", " ", line).strip() for line in text.splitlines()]
     lines = [line for line in lines if line]
@@ -195,11 +290,11 @@ def resume_suggestions(text):
                  and 2 <= len(line.split()) <= 4 and not re.search(r"resume|curriculum|profile|experience", line, re.I)), "")
     location = next((match.group(0) for line in lines[:35]
                      if (match := re.search(r"\b[A-Za-z][A-Za-z .'-]{1,45},\s*(?:[A-Z]{2}|Maryland|Delaware|Virginia|Pennsylvania|New York|California)\b", line))), "")
+    history = parse_work_history(text)
     # Work experience extraction is deliberately a suggestion: arbitrary resume layouts need human review.
-    history = []
     month = r"(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)"
     date_pattern = re.compile(rf"\b(?:{month}\s+)?(?:19|20)\d{{2}}\s*[-–—]\s*(?:{month}\s+)?(?:present|current|(?:19|20)\d{{2}})\b", re.I)
-    for i, line in enumerate(lines):
+    for i, line in enumerate([] if history else lines):
         if date_pattern.search(line):
             preceding = lines[max(0, i-4):i]
             preceding = [s for s in preceding if len(s) < 110 and not re.match(r"^(?:remote|hybrid|on[- ]?site|[A-Za-z .'-]+,\s*[A-Z]{2})$", s, re.I)]
