@@ -3,10 +3,11 @@
 import json
 import math
 import re
-import requests
 import time
 
 from bs4 import BeautifulSoup
+import requests
+
 from jobfinder.search.shared import BASE_DIR
 from jobfinder.search.usa_location import US_STATES, US_STATE_ABBREVIATIONS, has_location_cue, page_body_text
 

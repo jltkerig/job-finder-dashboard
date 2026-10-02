@@ -4,10 +4,11 @@ from datetime import datetime, timezone
 import json
 import os
 
+from mysql.connector import Error
+
 from jobfinder import db
 from jobfinder.db_schema import ensure_unique_source_index
 from jobfinder.sources.job_listings import canonical_url
-from mysql.connector import Error
 
 
 DB_HOST = os.getenv("DB_HOST", "127.0.0.1")

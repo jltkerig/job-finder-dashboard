@@ -4,9 +4,24 @@ from datetime import datetime, timezone
 import json
 import re
 
-from jobfinder import paths
+from mysql.connector import Error
+
 from jobfinder.profiles.profile_tools import listing_skills
-from jobfinder.records.capture_import import CAPTURE_MARK, IMPORT_ERRORS, SITES as CAPTURE_SITES, add_also_on, capture_dirs, files_to_import, mark_imported, match_key, merge_details, page_html as capture_page_html, read_jobs, remove_old_folders, unreadable_files
+from jobfinder.records.capture_import import (
+    CAPTURE_MARK,
+    IMPORT_ERRORS,
+    SITES as CAPTURE_SITES,
+    add_also_on,
+    capture_dirs,
+    files_to_import,
+    mark_imported,
+    match_key,
+    merge_details,
+    page_html as capture_page_html,
+    read_jobs,
+    remove_old_folders,
+    unreadable_files,
+)
 from jobfinder.records.job_retention import CLOSED_KEEP_DAYS, tidy_closed_jobs
 from jobfinder.search import geo
 from jobfinder.search import judging
@@ -15,10 +30,16 @@ from jobfinder.search import shared
 from jobfinder.search import storage
 from jobfinder.search.company_names import company_board_posting, tidy_company_name, verification_label
 from jobfinder.search.relevance import expand_job_titles, reject_irrelevant_row
-from jobfinder.search.shared import BASE_DIR, BLOCKED_COMPANIES, CAREER_CREDIBILITY_THRESHOLD, is_internship, related_family_titles, settings
+from jobfinder.search.shared import (
+    BASE_DIR,
+    BLOCKED_COMPANIES,
+    CAREER_CREDIBILITY_THRESHOLD,
+    is_internship,
+    related_family_titles,
+    settings,
+)
 from jobfinder.search.usa_location import US_STATES, detect_work_arrangement, find_state_from_text, selected_state_codes
 from jobfinder.sources.job_listings import canonical_url, matching_title as matching_job_title
-from mysql.connector import Error
 
 
 def load_profile_filters(database):

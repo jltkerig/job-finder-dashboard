@@ -1,11 +1,12 @@
 """Visiting a company's own website to find its careers page and judge whether it is a real employer."""
 
-from urllib.parse import urljoin, urlparse
 import re
-import requests
 import time
+from urllib.parse import urljoin, urlparse
 
 from bs4 import BeautifulSoup
+import requests
+
 from jobfinder.search import docker
 from jobfinder.search import fetching
 from jobfinder.search import shared

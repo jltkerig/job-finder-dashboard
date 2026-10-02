@@ -1,7 +1,9 @@
 """Does a lead fit your titles and places, and which employer's own site does it belong to?"""
 
-from types import SimpleNamespace
 import json
+from types import SimpleNamespace
+
+from mysql.connector import Error
 import requests
 
 from jobfinder.profiles.onet_data import related_title_suggestions
@@ -18,7 +20,6 @@ from jobfinder.sources.employer_jobs import Employer
 from jobfinder.sources.employer_site import resolve_employer_site
 from jobfinder.sources.job_feeds import FEED_NAMES
 from jobfinder.sources.job_listings import excludes_us, matching_title as matching_job_title
-from mysql.connector import Error
 
 
 def expand_job_titles(titles):
