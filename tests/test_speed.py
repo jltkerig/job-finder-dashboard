@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
-import job_finder as finder
+from jobfinder.sources.job_listings import canonical_url
 from jobfinder.search import company_site
 from jobfinder.search import company_names
 from jobfinder.search import fetching
@@ -21,13 +21,13 @@ class HostPacing(unittest.TestCase):
         shared._host_next_request.clear()
 
     def test_different_sites_do_not_wait_for_each_other(self):
-        with patch.object(shared, 'REQUEST_DELAY', 5), patch.object(finder.time, 'sleep') as sleep:
+        with patch.object(shared, 'REQUEST_DELAY', 5), patch.object(time, 'sleep') as sleep:
             fetching.wait_for_host('https://a.example/1')
             fetching.wait_for_host('https://b.example/1')
         sleep.assert_not_called()
 
     def test_the_same_site_is_spaced_by_the_delay(self):
-        with patch.object(shared, 'REQUEST_DELAY', 5), patch.object(finder.time, 'sleep') as sleep:
+        with patch.object(shared, 'REQUEST_DELAY', 5), patch.object(time, 'sleep') as sleep:
             fetching.wait_for_host('https://a.example/1')
             fetching.wait_for_host('https://a.example/2')
         self.assertEqual(sleep.call_count, 1)
@@ -51,20 +51,20 @@ class Prefetch(unittest.TestCase):
             time.sleep(0.05)
             with lock:
                 active[0] -= 1
-            fetching.remember_page(finder.canonical_url(url), SimpleNamespace(url=url, text='x'))
+            fetching.remember_page(canonical_url(url), SimpleNamespace(url=url, text='x'))
             return SimpleNamespace(url=url, text='x')
         urls = [f'https://site{n}.example/jobs' for n in range(6)]
         with patch.object(fetching, 'safe_request', slow), patch.object(shared, 'update_existing_mode', False):
             fetching.prefetch_pages(urls)
         self.assertGreater(peak[0], 1)
-        self.assertTrue(all(finder.canonical_url(url) in shared._page_cache for url in urls))
+        self.assertTrue(all(canonical_url(url) in shared._page_cache for url in urls))
 
     def test_a_failed_download_is_remembered_so_it_is_not_retried(self):
         urls = ['https://down.example/a', 'https://down.example/b']
         with patch.object(fetching, 'safe_request', lambda url: None), patch.object(docker, 'check_searxng_timer', lambda: True), \
                 patch.object(shared, 'update_existing_mode', False):
             fetching.prefetch_pages(urls)
-        self.assertTrue(all(shared._page_cache[finder.canonical_url(url)] is None for url in urls))
+        self.assertTrue(all(shared._page_cache[canonical_url(url)] is None for url in urls))
 
     def test_the_cache_drops_its_oldest_page_when_full(self):
         with patch.object(shared, 'update_existing_mode', False):

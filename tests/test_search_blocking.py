@@ -8,7 +8,8 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import job_finder as finder
+import time
+import requests
 from jobfinder.search import searching
 from jobfinder.search import docker
 from jobfinder.search import shared
@@ -49,9 +50,9 @@ class Pacing(unittest.TestCase):
         payload = {'results': [], 'unresponsive_engines': [list(item) for item in unresponsive]}
         response = SimpleNamespace(raise_for_status=lambda: None, json=lambda: payload)
         with patch.object(docker, 'check_searxng_timer', lambda: True), \
-                patch.object(finder.requests, 'get', lambda *args, **kw: response), \
-                patch.object(finder.time, 'monotonic', lambda: clock[0]), \
-                patch.object(finder.time, 'sleep', lambda seconds: sleeps.append(round(seconds, 2))), \
+                patch.object(requests, 'get', lambda *args, **kw: response), \
+                patch.object(time, 'monotonic', lambda: clock[0]), \
+                patch.object(time, 'sleep', lambda seconds: sleeps.append(round(seconds, 2))), \
                 patch.object(shared, 'QUERY_DELAY', 3):
             return searching.search_searxng('web designer jobs')
 

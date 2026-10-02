@@ -933,7 +933,8 @@ def parse_arguments():
     return parser.parse_args()
 
 
-if __name__ == "__main__":
+def command_line():
+    """What job_finder.py does: a search, a refresh of saved results, or an import of captured jobs, by the arguments given."""
     for output in (sys.stdout, sys.stderr):
         if hasattr(output, "reconfigure"):
             output.reconfigure(encoding="utf-8", errors="backslashreplace")

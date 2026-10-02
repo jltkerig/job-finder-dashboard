@@ -8,9 +8,9 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
+import time
 from jobfinder.records import board_health
 import dashboard
-import job_finder as finder
 from jobfinder.search import docker
 from jobfinder.search import shared
 from jobfinder.records.board_health import BoardHealth, classify_error, read_health
@@ -93,7 +93,7 @@ class StopReasons(unittest.TestCase):
             self.assertIn('More job titles'.lower(), docker.search_stop_reason(3, None).lower())
             self.assertEqual(docker.search_stop_reason(10, None), '10 of 10 distinct jobs found')
             self.assertEqual(docker.search_stop_reason(3, 'rate-limited'), 'rate-limited')
-            with patch.object(docker, 'searxng_start_time', 0), patch.object(finder.time, 'time', lambda: 10 ** 9):
+            with patch.object(docker, 'searxng_start_time', 0), patch.object(time, 'time', lambda: 10 ** 9):
                 self.assertIn('Tuning page', docker.search_stop_reason(3, None))
         with patch.object(shared, 'stop_requested', lambda: False), patch.object(shared, 'MAX_SEARCH_RESULTS', 10), \
                 patch.object(docker, 'check_searxng_timer', lambda: False), patch.object(docker, 'searxng_start_time', None):

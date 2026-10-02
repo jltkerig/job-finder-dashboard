@@ -8,7 +8,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import job_finder as finder
+from jobfinder.sources.job_listings import matching_title as matching_job_title
 from jobfinder.search import relevance
 from jobfinder.search import company_names
 from jobfinder.search import shared
@@ -275,8 +275,8 @@ class TitleCoverage(unittest.TestCase):
         for wanted in ('Multimedia Designer', 'Production Artist', 'Website Producer', 'UX Writer'):
             self.assertIn(wanted, extras)
         self.assertEqual(shared.related_family_titles(['Accountant']), [])
-        self.assertTrue(finder.matching_job_title('Brand Designer', self.TYPED + extras))
-        self.assertFalse(finder.matching_job_title('Brand Accountant', self.TYPED + extras))
+        self.assertTrue(matching_job_title('Brand Designer', self.TYPED + extras))
+        self.assertFalse(matching_job_title('Brand Accountant', self.TYPED + extras))
 
     def test_related_titles_can_be_switched_off(self):
         with patch.object(shared, 'RELATED_TITLES', False):
