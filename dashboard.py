@@ -18,7 +18,8 @@ import mysql.connector
 from dotenv import load_dotenv
 from flask import Flask, abort, jsonify, redirect, render_template, request, send_from_directory, session
 from mysql.connector import Error
-from profile_tools import AMBIGUOUS_SKILLS, SKILL_ALIASES, fit_score, normalize_skills, resume_suggestions
+from profile_tools import (AMBIGUOUS_SKILLS, SKILL_ALIASES, fit_score, normalize_skills, resume_skill_suggestions,
+                           resume_suggestions)
 from onet_data import occupation_skill_suggestions, related_title_suggestions, spelling_fix, title_matches
 from places import city_matches
 from travel import describe as describe_trip
@@ -32,11 +33,13 @@ from capture_import import CAPTURE_SOURCES, capture_dirs, move_pending, pending_
 from job_retention import tidy_closed_jobs
 
 BASE_DIR = Path(__file__).resolve().parent
+# Where the Resume Builder keeps the résumé you uploaded there (its text is read to suggest skills).
+RESUME_FOLDER = Path(os.getenv("RESUME_BUILDER_DIR", BASE_DIR.parent / "resume-builder")) / "data" / "current-resume"
 load_dotenv(BASE_DIR / ".env")
 
 app = Flask(__name__)
 
-APP_VERSION = "1.1.129"
+APP_VERSION = "1.1.131"
 
 app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY") or secrets.token_hex(32)
 app.config["SESSION_COOKIE_HTTPONLY"] = True
@@ -1418,6 +1421,7 @@ def user_dashboard():
     profile = get_user_profile()
     add_job_fit(companies, profile.get("skills", []))
     add_drive_times(companies, profile.get("home_zip"), profile.get("state") or "")
+    resume_skills = resume_skill_suggestions(RESUME_FOLDER, profile.get("skills", []))
     return render_template(
         "user-dashboard.html",
         companies=companies,
@@ -1425,6 +1429,7 @@ def user_dashboard():
         counts=get_dashboard_counts(),
         search_history=get_search_history(),
         skill_suggestions=profile_skill_suggestions(profile),
+        resume_source=resume_skills[0], resume_skills=resume_skills[1],
         filters={"status": status_filter, "state": state_filter, "title": title_filter, "sort": sort_by},
     )
 

@@ -1493,3 +1493,5 @@ body[data-page="search"] .results-toolbar .column-chooser-inline .column-option 
 
 .found-cell small { display:block; color:#59636e; font-size:.78rem; }
 .found-cell .found-age { font-weight:600; }
+
+.skill-chip-list > small { flex-basis: 100%; }
