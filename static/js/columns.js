@@ -9,6 +9,19 @@
   const showAll = document.getElementById("column-show-all");
   const STORAGE_KEY = "jobFinderHiddenColumns";
   const ALWAYS = new Set(["Job"]);
+  // Compact rows (one line per listing) is on unless the person turned it off; the choice is remembered.
+  const compactBox = document.getElementById("compact-rows-toggle");
+  if (compactBox) {
+    let compact = true;
+    try { compact = localStorage.getItem("jobFinderCompactRows") !== "0"; } catch { /* stays on */ }
+    const applyCompact = () => { table.classList.toggle("compact-rows", compact); compactBox.checked = compact; };
+    compactBox.addEventListener("change", () => {
+      compact = compactBox.checked;
+      try { localStorage.setItem("jobFinderCompactRows", compact ? "1" : "0"); } catch { /* lasts until reload */ }
+      applyCompact();
+    });
+    applyCompact();
+  }
   const headers = [...table.tHead.rows[0].cells].map((cell, index) => ({ name: cell.textContent.trim(), index: index + 1 }));
 
   // One stylesheet rule per hidden column hides its header and its cells (the details rows span every column).

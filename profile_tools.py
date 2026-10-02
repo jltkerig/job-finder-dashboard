@@ -175,6 +175,36 @@ def listing_skills(html):
     return detect_skills(soup.get_text(" ", strip=True))
 
 
+def refresh_listing_skills(connection):
+    """Add skills the current skills list recognizes to listings saved earlier, read from each listing's stored
+    description. Skills already stored are kept (the saved description can be shorter than the page the first read
+    came from), so this only ever adds. Returns how many listings changed."""
+    cursor = connection.cursor()
+    changed = 0
+    try:
+        cursor.execute("SELECT id, listing_skills, listing_details FROM companies WHERE listing_details IS NOT NULL")
+        updates = []
+        for row_id, stored, raw_details in cursor.fetchall():
+            try:
+                details = json.loads(raw_details or "{}")
+                old = json.loads(stored or "[]")
+            except (TypeError, ValueError):
+                continue
+            description = details.get("description") if isinstance(details, dict) else None
+            if not isinstance(description, str) or not description.strip() or not isinstance(old, list):
+                continue
+            known = {str(skill).casefold() for skill in old}
+            added = [skill for skill in listing_skills(description) if skill.casefold() not in known]
+            if added:
+                updates.append((json.dumps(list(old) + added), row_id))
+        for value, row_id in updates:
+            cursor.execute("UPDATE companies SET listing_skills = %s WHERE id = %s", (value, row_id))
+            changed += 1
+        connection.commit()
+    finally:
+        cursor.close()
+    return changed
+
 def fit_score(user_skills, job_skills):
     user = {s.casefold() for s in user_skills}
     job = normalize_skills(job_skills)
