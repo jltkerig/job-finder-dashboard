@@ -46,6 +46,20 @@ class DashboardWording(unittest.TestCase):
         self.assertIn('<details class="settings-panel history-collapse" id="search-settings"', html)
         self.assertNotIn('<article class="settings-panel" id="search-settings">', html)
 
+    def test_every_section_on_the_settings_page_collapses(self):
+        import re
+        html = read("templates", "rejected-listings.html")
+        self.assertNotIn('<section class="settings-panel', html)
+        self.assertNotIn('<section class="company-section settings-panel', html)
+        panels = re.findall(r'<details class="[^"]*history-collapse" id="([a-z-]+)" data-remember="(jobFinder\.\w+)"', html)
+        self.assertEqual([p[0] for p in panels], ["rejected-listings", "search-skips", "blocked-domains", "blocked-companies"])
+        self.assertEqual(len({p[1] for p in panels}), 4)  # each remembers its own choice
+        self.assertEqual(html.count("<summary><h2>"), 4)
+        # the notice after blocking something is seen, and a link to a panel opens it
+        self.assertIn("{% if domain_notice %} data-open-now{% endif %}", html)
+        self.assertIn("{% if company_notice %} data-open-now{% endif %}", html)
+        self.assertIn('linked.matches("details[data-remember]")', read("static", "js", "charts.js"))
+
     def test_unsaved_profile_changes_are_warned_about(self):
         script = read("static", "js", "charts.js")
         for expected in ('addEventListener("beforeunload"', "event.preventDefault()", 'getElementById("unsaved-note")'):
