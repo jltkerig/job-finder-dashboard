@@ -9,6 +9,8 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
 import job_finder as finder
+from jobfinder.search import company_site
+from jobfinder.search import company_names
 from jobfinder.search import fetching
 from jobfinder.search import docker
 from jobfinder.search import shared
@@ -114,11 +116,11 @@ class DirectPostings(unittest.TestCase):
     def inspect(self, deep):
         calls = []
         with patch.object(fetching, 'safe_request', lambda url: calls.append(url) or self.PAGE), \
-                patch.object(finder, 'discover_support_links', lambda soup, url: ['https://jobs.example/about']), \
-                patch.object(finder, 'discover_sitemap_links', lambda url: ['https://jobs.example/sitemap.xml']), \
-                patch.object(finder, 'discover_robots_links', lambda url: []), \
-                patch.object(finder, 'find_external_company_site', lambda soup, url: None):
-            finder.inspect_company_site('https://jobs.example/opening/1', 'Web Designer', 'jobs.example', deep=deep)
+                patch.object(company_site, 'discover_support_links', lambda soup, url: ['https://jobs.example/about']), \
+                patch.object(company_site, 'discover_sitemap_links', lambda url: ['https://jobs.example/sitemap.xml']), \
+                patch.object(company_site, 'discover_robots_links', lambda url: []), \
+                patch.object(company_site, 'find_external_company_site', lambda soup, url: None):
+            company_site.inspect_company_site('https://jobs.example/opening/1', 'Web Designer', 'jobs.example', deep=deep)
         return calls
 
     def test_a_direct_posting_is_read_without_the_sites_other_pages(self):
@@ -130,14 +132,14 @@ class DirectPostings(unittest.TestCase):
 
 class NamesAndBoards(unittest.TestCase):
     def test_a_leading_entity_code_is_dropped_from_the_company_name(self):
-        self.assertEqual(finder.tidy_company_name('003 Humana Inc.'), 'Humana Inc.')
-        self.assertEqual(finder.tidy_company_name('3M Company'), '3M Company')
-        self.assertEqual(finder.tidy_company_name('84 Lumber'), '84 Lumber')  # only zero-padded codes are dropped
+        self.assertEqual(company_names.tidy_company_name('003 Humana Inc.'), 'Humana Inc.')
+        self.assertEqual(company_names.tidy_company_name('3M Company'), '3M Company')
+        self.assertEqual(company_names.tidy_company_name('84 Lumber'), '84 Lumber')  # only zero-padded codes are dropped
 
     def test_recognised_applicant_boards_count_as_official(self):
-        self.assertTrue(finder.on_official_board('https://humana.wd5.myworkdayjobs.com/en-US/Humana_External_Career_Site/job/Remote/x_R-1'))
-        self.assertTrue(finder.on_official_board('https://boards.greenhouse.io/acme/jobs/1'))
-        self.assertFalse(finder.on_official_board('https://example.com/careers/designer'))
+        self.assertTrue(company_names.on_official_board('https://humana.wd5.myworkdayjobs.com/en-US/Humana_External_Career_Site/job/Remote/x_R-1'))
+        self.assertTrue(company_names.on_official_board('https://boards.greenhouse.io/acme/jobs/1'))
+        self.assertFalse(company_names.on_official_board('https://example.com/careers/designer'))
 
 
 if __name__ == '__main__':

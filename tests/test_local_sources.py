@@ -9,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import job_finder as finder
+from jobfinder.search import company_names
 from jobfinder.search import shared
 from jobfinder.sources.ats_discovery import identify
 from jobfinder.sources.employer_jobs import DEFAULT_EMPLOYERS, Employer, config_key
@@ -240,14 +241,14 @@ class SubdomainSites(unittest.TestCase):
         self.assertTrue(any('own site' in line for line in site['evidence']))
 
     def test_the_label_for_a_listing_on_the_companys_own_subdomain(self):
-        label = finder.verification_label({'employer_site': {'domain': 'corcoran.gwu.edu', 'posting_found': True}}, None,
+        label = company_names.verification_label({'employer_site': {'domain': 'corcoran.gwu.edu', 'posting_found': True}}, None,
                                           'Corcoran School', 'https://corcoran.gwu.edu/web-designer')
         self.assertEqual(label, "Posted on the company's own site")
 
 
 class Verification(unittest.TestCase):
     def label(self, details=None, source_type=None, source='https://jobs.example/board/1', name='Acme Design'):
-        return finder.verification_label(details or {}, source_type, name, source)
+        return company_names.verification_label(details or {}, source_type, name, source)
 
     def test_each_case_is_said_plainly(self):
         self.assertEqual(self.label(source_type='Employer careers'), "Company's own careers site")

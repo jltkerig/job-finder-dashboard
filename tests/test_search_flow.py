@@ -9,7 +9,8 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
-import job_finder as finder
+import job_finder as finder
+from jobfinder.search import usa_location
 from owners import holders
 from jobfinder.search import docker
 from jobfinder.search import shared
@@ -309,11 +310,11 @@ class LocationFilter(unittest.TestCase):
 
 class StateDetection(unittest.TestCase):
     def test_west_virginia_is_not_virginia(self):
-        self.assertEqual(finder.find_state_from_text('Charleston, West Virginia'), 'WV')
-        self.assertEqual(finder.find_state_from_text('Richmond, Virginia'), 'VA')
+        self.assertEqual(usa_location.find_state_from_text('Charleston, West Virginia'), 'WV')
+        self.assertEqual(usa_location.find_state_from_text('Richmond, Virginia'), 'VA')
 
     def test_first_mentioned_state_wins(self):
-        self.assertEqual(finder.find_state_from_text('Offices in Maryland and Massachusetts'), 'MD')
+        self.assertEqual(usa_location.find_state_from_text('Offices in Maryland and Massachusetts'), 'MD')
 
 
 class StopRequest(unittest.TestCase):
