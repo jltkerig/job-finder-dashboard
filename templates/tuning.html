@@ -67,7 +67,7 @@
         </div>
     {% endfor %}
     {% for key, spec in switches.items() %}
-    <div class="form-field"><label><input type="checkbox" name="{{ key }}" {% if values.get(key, spec[2]) %}checked{% endif %} /> {{ spec[0] }}</label>
+    <div class="form-field"><label class="switch-row"><input type="checkbox" name="{{ key }}" {% if values.get(key, spec[2]) %}checked{% endif %} /> {{ spec[0] }}</label>
       <p class="field-help">{{ spec[1] }}
           </p>
         </div>

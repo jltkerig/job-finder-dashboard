@@ -46,6 +46,14 @@ class DashboardWording(unittest.TestCase):
         self.assertIn('<details class="settings-panel history-collapse" id="search-settings"', html)
         self.assertNotIn('<article class="settings-panel" id="search-settings">', html)
 
+    def test_tuning_checkboxes_lead_their_setting_and_the_save_button_clears_the_text(self):
+        html = read("templates", "tuning.html")
+        self.assertIn('<label class="switch-row"><input type="checkbox" name="{{ key }}"', html)  # the box comes first, then the words
+        css = read("static", "css", "style.css")
+        self.assertIn("#search-settings form .switch-row { display: flex;", css)
+        self.assertIn('#search-settings form .switch-row input[type="checkbox"] { width: 18px;', css)  # not the full-width input style
+        self.assertIn("#search-settings form .primary-action { display: block; margin: 28px 0 0; }", css)
+
     def test_every_section_on_the_settings_page_collapses(self):
         import re
         html = read("templates", "rejected-listings.html")
