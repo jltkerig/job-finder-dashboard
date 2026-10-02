@@ -14,5 +14,12 @@ class PageHeader(unittest.TestCase):
         self.assertRegex(html, re.compile(r"<h1>\s*Job Finder\s*</h1>\s*<p class=\"app-version\">Version \{\{ app_version \}\}</p>"))
 
 
+class ColumnChooser(unittest.TestCase):
+    def test_the_job_column_is_not_listed_because_it_cannot_be_hidden(self):
+        script = (Path(__file__).resolve().parents[1] / "static" / "js" / "columns.js").read_text(encoding="utf-8")
+        self.assertIn("if (!column.name || ALWAYS.has(column.name)) continue;", script)
+        self.assertNotIn("box.disabled", script)
+
+
 if __name__ == "__main__":
     unittest.main()
