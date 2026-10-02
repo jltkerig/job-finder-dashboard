@@ -1,6 +1,6 @@
 <!doctype html><html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="csrf-token" content="{{ csrf_token }}" /><title>Tuning | Job Finder</title><link rel="stylesheet" href="/static/css/style.css" /></head><body data-page="tuning">
 <nav class="top-nav" aria-label="Main navigation">
-  <div class="nav-inner"><a class="nav-link" href="/">Search</a><a class="nav-link" href="/dashboard">Dashboard</a><a class="nav-link" href="/rejected-listings">Settings</a><a class="nav-link active" href="/tuning">Tuning</a><a class="nav-link" href="http://127.0.0.1:5001/" target="_blank" rel="noopener">Resume Builder</a>
+  <div class="nav-inner"><a class="nav-link" href="/">Search</a><a class="nav-link" href="/dashboard">Dashboard</a><a class="nav-link" href="/rejected-listings">Settings</a><a class="nav-link active" href="/tuning">Tuning</a><a class="nav-link" href="http://127.0.0.1:5001/">Résumé Builder</a>
   </div>
 </nav>
 <header>
@@ -46,9 +46,11 @@
       </p>
   {% endif %}
     </details>
-    <article class="settings-panel" id="search-settings">
-  <h2>Search settings
-      </h2>
+    <details class="settings-panel history-collapse" id="search-settings" data-remember="jobFinder.searchSettingsOpen"{% if saved or error %} data-open-now{% endif %}>
+  <summary>
+        <h2>Search settings
+        </h2><span class="summary-chevron" aria-hidden="true"></span>
+      </summary>
   {% if saved %}
       <p class="field-help" role="status"><strong>Saved.</strong> The next search uses these settings.
       </p>{% endif %}
@@ -74,7 +76,7 @@
   </form>
   <p class="field-help">Changes apply to the next search; a search that is running keeps the settings it started with.
       </p>
-    </article>
+    </details>
   </div>
 </main>
 <div id="toast-region" class="toast-region" aria-live="polite">

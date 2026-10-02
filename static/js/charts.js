@@ -343,7 +343,7 @@ document.addEventListener("DOMContentLoaded", () => {
     function showResumeSkills() {
       const box = $("#resume-skill-suggestions"); if (!box) return;
       let found = []; try { found = JSON.parse(box.dataset.skills || "[]"); } catch {}
-      suggestionChips(box, "Suggestions from Resume:", `Skills found in your résumé (${box.dataset.source || "uploaded résumé"}). Add the ones you have, then Save Profile.`,
+      suggestionChips(box, "Suggestions from Résumé:", `Skills found in your résumé (${box.dataset.source || "uploaded résumé"}). Add the ones you have, then Save Profile.`,
         found.map(skill => ({ skill })));
       const demand = $("#demand-skill-suggestions"); if (!demand) return;
       let asked = []; try { asked = JSON.parse(demand.dataset.skills || "[]"); } catch {}
@@ -606,8 +606,30 @@ document.addEventListener("DOMContentLoaded", () => {
   $$("details[data-remember]").forEach((panel) => {
     const key = panel.dataset.remember;
     try { panel.open = localStorage.getItem(key) === "1"; } catch {}
+    if (panel.hasAttribute("data-open-now")) panel.open = true; // e.g. "Saved." must be seen
     panel.addEventListener("toggle", () => { try { localStorage.setItem(key, panel.open ? "1" : "0"); } catch {} });
   });
+
+  // Unsaved profile changes (job titles, work preferences, work history, skills, locations, name...): a note beside
+  // Save Profile, and the browser asks before the page is left. Compared against the form as it stood once the page
+  // finished setting itself up (including anything filled in from the résumé), so only the user's own edits count.
+  const unsavedForm = document.getElementById("profile-form");
+  if (unsavedForm) {
+    const snapshot = () => JSON.stringify([...new FormData(unsavedForm)].filter(([name, value]) => typeof value === "string" && name !== "csrf_token"));
+    let baseline = null, saving = false;
+    const note = document.getElementById("unsaved-note");
+    const unsaved = () => baseline !== null && snapshot() !== baseline;
+    const showNote = () => { if (note) note.hidden = !unsaved(); };
+    window.addEventListener("load", () => setTimeout(() => { baseline = snapshot(); }, 600));
+    ["input", "change", "click", "keyup"].forEach((type) => unsavedForm.addEventListener(type, () => setTimeout(showNote, 0)));
+    setInterval(showNote, 700); // skills, jobs and locations change hidden fields without any input event
+    unsavedForm.addEventListener("submit", () => { saving = true; });
+    window.addEventListener("beforeunload", (event) => {
+      if (saving || !unsaved()) return;
+      event.preventDefault();
+      event.returnValue = "";
+    });
+  }
 
   // Saved jobs start collapsed. #job-ID (added after saving a card's status or notes) reopens that card.
   if (page === "dashboard") {

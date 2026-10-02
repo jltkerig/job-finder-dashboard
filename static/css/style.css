@@ -1316,7 +1316,7 @@ body[data-page="rejected"] .rejected-card .card-actions > button { flex:1 1 180p
 
 /* Dashboard profile, résumé review, and job fit */
 .profile-subsection { margin:18px 0; padding:16px; background:#f2f5f9; border:1px solid #d7dfe9; border-radius:10px; }
-.profile-subsection h3 { margin:0 0 6px; font-size:1.05rem; }
+.profile-subsection h3 { margin:0 0 8px; font-size:1.4rem; line-height:1.25; }
 .profile-save-actions,.history-actions,.review-actions,.skill-add-row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
 .skill-add-row input { flex:1 1 180px; min-width:0; }
 .skill-chip-list { display:flex; flex-wrap:wrap; gap:7px; margin:12px 0; }
@@ -1531,3 +1531,6 @@ body[data-page="search"] .results-toolbar .column-chooser-inline .column-option 
 .work-fields input:not([type="checkbox"]), .work-fields textarea { padding:9px 11px; border:1px solid #b9bec5; border-radius:7px; background:#fff; font-family:inherit; font-size:.92rem; color:#252a31; box-sizing:border-box; }
 .work-fields input:focus, .work-fields textarea:focus { outline:2px solid #9fb8dc; outline-offset:1px; border-color:#6f8fbf; }
 .work-fields textarea { line-height:1.4; resize:vertical; }
+
+.unsaved-note { align-self:center; margin-left:12px; padding:4px 10px; border-radius:20px; background:#fff4d6; color:#7a4b00; font-size:.85rem; font-weight:600; }
+.unsaved-note[hidden] { display:none; }
