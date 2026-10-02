@@ -93,6 +93,38 @@ def occupation_skill_suggestions(title, limit=25):
     return [name for name, _ in sorted(ranked.items(), key=lambda item: (-item[1], item[0].casefold()))[:limit]]
 
 
+@lru_cache(maxsize=1)
+def _title_names():
+    """Every O*NET job title once, as written ("Web Designer"), with its search key."""
+    names = {}
+    for row in _rows("Occupation Data.txt"):
+        names.setdefault(_key(row["Title"]), row["Title"].strip())
+    for row in _rows("Job Titles.txt"):
+        names.setdefault(_key(row["Job Title"]), row["Job Title"].strip())
+    # Occupation names are plural ("Graphic Designers"); keep only the singular when both exist.
+    names = {k: v for k, v in names.items() if not (k.endswith("s") and k[:-1] in names)}
+    return sorted(names.items(), key=lambda item: (len(item[0]), item[0]))
+
+
+def title_matches(text, limit=10):
+    """Job titles for type-ahead: each typed word must start a word of the title.
+
+    Titles that begin with what was typed come first, then shorter titles.
+    """
+    key = _key(text)
+    if len(key) < 2:
+        return []
+    words = key.split()
+    starts, others = [], []
+    for name, title in _title_names():
+        title_words = name.split()
+        if all(any(w.startswith(typed) for w in title_words) for typed in words):
+            (starts if name.startswith(key) else others).append(title)
+            if len(starts) >= limit:
+                break
+    return (starts + others)[:limit]
+
+
 def related_title_suggestions(title, limit=8):
     _, _, by_occupation, _ = _catalog()
     key = _key(title)

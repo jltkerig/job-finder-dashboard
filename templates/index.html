@@ -8,30 +8,114 @@
   <link rel="stylesheet" href="/static/css/style.css" />
 </head>
 <body data-page="search" data-scraper-running="{{ 'true' if scraper_running else 'false' }}" data-scraper-mode="{{ scraper_mode }}" data-work-preferences="{{ profile_work_preferences|tojson|forceescape }}">
-  <div id="search-progress-bar" class="search-progress-bar" hidden></div>
-  <nav class="top-nav" aria-label="Main navigation"><div class="nav-inner"><a class="nav-link active" href="/">Search</a><a class="nav-link" href="/dashboard">Dashboard</a><a class="nav-link" href="/rejected-listings">Settings</a><a class="nav-link" href="/tuning">Tuning</a></div></nav>
-  <header><div class="header-content"><div><h1>Job Finder</h1></div></div></header>
+  <div id="search-progress-bar" class="search-progress-bar" hidden>
+</div>
+  <nav class="top-nav" aria-label="Main navigation">
+  <div class="nav-inner"><a class="nav-link active" href="/">Search</a><a class="nav-link" href="/dashboard">Dashboard</a><a class="nav-link" href="/rejected-listings">Settings</a><a class="nav-link" href="/tuning">Tuning</a><a class="nav-link" href="http://127.0.0.1:5001/" target="_blank" rel="noopener">Resume Builder</a>
+  </div>
+</nav>
+  <header>
+  <div class="header-content">
+    <div>
+      <h1>Job Finder
+      </h1>
+    </div>
+  </div>
+</header>
 
-  <main><section class="company-section">
+  <main>
+  <section class="company-section">
     <div class="search-panel">
-      <div class="search-panel-heading"><div><h2>Search for Jobs</h2><p>Search by job title and city radius or an entire state.</p></div></div>
+      <div class="search-panel-heading">
+        <div>
+          <h2>Search for Jobs
+          </h2>
+          <p>Search by job title and city radius or an entire state.
+          </p>
+        </div>
+      </div>
       <form id="job-search-form" class="job-search-form">
-        <div class="form-field"><label for="job-title">Job Titles</label><input id="job-title" name="job_title" type="text" placeholder="e.g. Web Designer, UI Designer" value="{{ profile_job_titles|join(', ') }}" required /><p class="field-help">Separate multiple titles with commas. Related titles appear automatically after you pause typing.</p><div id="job-title-suggestions" class="job-title-suggestions" hidden aria-live="polite"></div></div>
-        <div class="form-field city-search-field"><label for="search-city-input">City, ZIP code, county or state</label><div class="city-add-row"><input id="search-city-input" type="text" list="city-state-options" placeholder="e.g. Wilmington, DE" autocomplete="off" /><select id="search-city-radius" aria-label="Radius"><option value="10">10 miles</option><option value="15">15 miles</option><option value="20">20 miles</option><option value="30">30 miles</option><option value="50" selected>50 miles</option></select><button id="add-search-city" class="bordered-button secondary-action city-add-button" type="button">Add City</button></div><div id="search-city-list" class="city-list city-list-below"></div><p class="field-help">Add a city for a radius search, or enter a full state name for a statewide search. Statewide searches ignore the radius.</p></div>
+        <div class="form-field"><label for="job-title">Job Titles</label><input id="job-title" name="job_title" type="text" data-title-suggest="list" placeholder="e.g. Web Designer, UI Designer" value="{{ profile_job_titles|join(', ') }}" required />
+          <p class="field-help">Separate multiple titles with commas. Related titles appear automatically after you pause typing.
+          </p>
+          <div id="job-title-suggestions" class="job-title-suggestions" hidden aria-live="polite">
+          </div>
+        </div>
+        <div class="form-field city-search-field"><label for="search-city-input">City, ZIP code, county or state</label>
+          <div class="city-add-row"><input id="search-city-input" type="text" list="city-state-options" placeholder="e.g. Wilmington, DE" autocomplete="off" /><select id="search-city-radius" aria-label="Radius"><option value="5">5 miles</option><option value="10">10 miles</option><option value="15">15 miles</option><option value="20">20 miles</option><option value="30">30 miles</option><option value="50" selected>50 miles</option></select><button id="add-search-city" class="bordered-button secondary-action city-add-button" type="button">Add City</button>
+          </div>
+          <div id="search-city-list" class="city-list city-list-below">
+          </div>
+          <p class="field-help">Add a city for a radius search, or enter a full state name for a statewide search. Statewide searches ignore the radius.
+          </p>
+        </div>
         <input id="search-state" name="state" type="hidden" value="{{ profile_state }}" />
-        <datalist id="city-state-options"></datalist>
-        <div id="search-form-error" class="form-error" hidden role="alert"></div>
+        <datalist id="city-state-options">
+        </datalist>
+        <div id="search-form-error" class="form-error" hidden role="alert">
+        </div>
       </form>
-      <div class="search-controls"><button id="start-search" class="bordered-button primary-action" type="button">Start Job Finder</button><button id="refresh-search" class="bordered-button secondary-action" type="button">Refresh Results</button><div id="searching-status" class="searching-status" hidden aria-live="polite"><span class="searching-dot"></span><span id="activity-label">Searching</span><span class="searching-ellipsis" aria-hidden="true"></span></div></div>
-      <div id="capture-prompt" class="capture-prompt" hidden role="region" aria-label="Captured jobs" aria-live="polite"></div>
+      <div class="search-controls"><button id="start-search" class="bordered-button primary-action" type="button">Start Job Finder</button><button id="refresh-search" class="bordered-button secondary-action" type="button">Refresh Results</button>
+        <div id="searching-status" class="searching-status" hidden aria-live="polite"><span class="searching-dot"></span><span id="activity-label">Searching</span><span class="searching-ellipsis" aria-hidden="true"></span>
+        </div>
+      </div>
+      <div id="capture-prompt" class="capture-prompt" hidden role="region" aria-label="Captured jobs" aria-live="polite">
+      </div>
     </div>
 
-    <div class="section-heading-row"><h2>Results</h2></div>{% if skipped %}<details class="skipped-results"><summary>Why were some pages skipped? ({{ skipped|length }} recent checks)</summary><ul>{% for item in skipped %}<li><strong>{{ item.reason }}</strong>{% if item.title %} · {{ item.title }}{% endif %} <a href="{{ item.url }}" target="_blank" rel="noopener noreferrer">Source</a></li>{% endfor %}</ul></details>{% endif %}
+    <div class="section-heading-row">
+      <h2>Results
+      </h2>
+    </div>{% if skipped %}
+    <details class="skipped-results">
+      <summary>Why were some pages skipped? ({{ skipped|length }} recent checks)
+      </summary>
+      <ul>{% for item in skipped %}
+        <li><strong>{{ item.reason }}</strong>{% if item.title %} · {{ item.title }}{% endif %} <a href="{{ item.url }}" target="_blank" rel="noopener noreferrer">Source</a>
+        </li>{% endfor %}
+      </ul>
+    </details>{% endif %}
     {% if companies %}
-    <section class="results-toolbar" aria-label="Results filters"><div class="toolbar-title"><span class="filter-icon" aria-hidden="true">⌕</span><strong>Filters</strong></div><div class="form-field compact-field"><label for="result-filter">Search Results</label><input id="result-filter" type="search" placeholder="Company, job, or city..." /></div><div class="form-field compact-field"><label for="result-state-filter">State</label><select id="result-state-filter"><option value="all">All states</option></select></div><div class="form-field compact-field"><label for="result-arrangement-filter">Work Location</label><select id="result-arrangement-filter"><option value="all">All work locations</option><option value="Remote">Remote</option><option value="Hybrid">Hybrid</option><option value="Onsite">Onsite</option><option value="unknown">Unspecified</option></select></div><div class="form-field compact-field"><label for="result-status-filter">Listing Status</label><select id="result-status-filter"><option value="all">All statuses</option><option value="open">Open only</option><option value="closed">Closed only</option><option value="unknown">Unknown only</option></select></div><div class="form-field compact-field"><label for="result-min-credibility">Minimum Career Credibility</label><select id="result-min-credibility"><option value="0">30%+ (default)</option><option value="-1">Show all scores</option><option value="3">30%+</option><option value="5">50%+</option><option value="7">70%+</option><option value="9">90%+</option></select><p id="search-result-guide" class="field-help">Only individual openings at 30%+ count toward the goal. Lower scores are hidden after a search or refresh; choose Show all scores to review them.</p></div><div class="form-field compact-field"><label for="result-schedule-filter">Work Type</label><select id="result-schedule-filter"><option value="all">All work types</option><option value="part">Part-time</option><option value="full">Full-time</option><option value="contract">Contract</option><option value="freelance">Freelance / Gig</option><option value="unknown">Unspecified</option></select></div><div class="form-field compact-field"><label for="result-new-filter">Found</label><select id="result-new-filter"><option value="all">All results</option><option value="new">New since last search</option></select></div><div class="form-field compact-field"><label for="result-sort">Sort</label><select id="result-sort"><option value="default">Newest</option><option value="company">Company A–Z</option><option value="job">Job title A–Z</option><option value="distance">Distance</option><option value="career-credibility">Career credibility</option><option value="usa-credibility">USA credibility</option></select></div><div class="form-field compact-field column-chooser-field"><span class="field-label" id="column-chooser-label">Columns</span><details id="column-chooser" class="column-chooser"><summary aria-describedby="column-chooser-label">Choose columns</summary><div class="column-options" role="group" aria-labelledby="column-chooser-label"></div><button id="column-show-all" class="bordered-button secondary-action" type="button">Show all</button></details></div><div class="results-count" id="results-count">{{ companies|length }} results</div></section>
-    <div class="credibility-legend" aria-label="Credibility score guide"><strong>Scoring:</strong><span class="legend-item" tabindex="0" aria-describedby="credibility-low-help"><i class="legend-dot low"></i>Low<span id="credibility-low-help" class="credibility-tip" role="tooltip">0–40%: limited evidence.</span></span><span class="legend-item" tabindex="0" aria-describedby="credibility-medium-help"><i class="legend-dot medium"></i>Medium<span id="credibility-medium-help" class="credibility-tip" role="tooltip">50–70%: some evidence.</span></span><span class="legend-item" tabindex="0" aria-describedby="credibility-high-help"><i class="legend-dot high"></i>High<span id="credibility-high-help" class="credibility-tip" role="tooltip">80–100%: stronger evidence.</span></span><a href="/credibility-scores">How are scores calculated?</a></div>
+    <section class="results-toolbar" aria-label="Results filters">
+      <div class="toolbar-title"><span class="filter-icon" aria-hidden="true">⌕</span><strong>Filters</strong>
+      </div>
+      <div class="form-field compact-field"><label for="result-filter">Search Results</label><input id="result-filter" type="search" placeholder="Company, job, or city..." />
+      </div>
+      <div class="form-field compact-field"><label for="result-state-filter">State</label><select id="result-state-filter"><option value="all">All states</option></select>
+      </div>
+      <div class="form-field compact-field"><label for="result-arrangement-filter">Work Location</label><select id="result-arrangement-filter"><option value="all">All work locations</option><option value="Remote">Remote</option><option value="Hybrid">Hybrid</option><option value="Onsite">Onsite</option><option value="unknown">Unspecified</option></select>
+      </div>
+      <div class="form-field compact-field"><label for="result-status-filter">Listing Status</label><select id="result-status-filter"><option value="all">All statuses</option><option value="open">Open only</option><option value="closed">Closed only</option><option value="unknown">Unknown only</option></select>
+      </div>
+      <div class="form-field compact-field"><label for="result-min-credibility">Minimum Career Credibility</label><select id="result-min-credibility"><option value="0">30%+ (default)</option><option value="-1">Show all scores</option><option value="3">30%+</option><option value="5">50%+</option><option value="7">70%+</option><option value="9">90%+</option></select>
+        <p id="search-result-guide" class="field-help">Only individual openings at 30%+ count toward the goal. Lower scores are hidden after a search or refresh; choose Show all scores to review them.
+        </p>
+      </div>
+      <div class="form-field compact-field"><label for="result-schedule-filter">Work Type</label><select id="result-schedule-filter"><option value="all">All work types</option><option value="part">Part-time</option><option value="full">Full-time</option><option value="contract">Contract</option><option value="freelance">Freelance / Gig</option><option value="unknown">Unspecified</option></select>
+      </div>
+      <div class="form-field compact-field"><label for="result-new-filter">Found</label><select id="result-new-filter"><option value="all">All results</option><option value="new">New since last search</option></select>
+      </div>
+      <div class="form-field compact-field"><label for="result-sort">Sort</label><select id="result-sort"><option value="default">Newest</option><option value="company">Company A–Z</option><option value="job">Job title A–Z</option><option value="distance">Distance</option><option value="career-credibility">Career credibility</option><option value="usa-credibility">USA credibility</option></select>
+      </div>
+      <div class="form-field compact-field column-chooser-field"><span class="field-label" id="column-chooser-label">Columns</span>
+        <div id="column-chooser" class="column-chooser-inline">
+          <div class="column-options" role="group" aria-labelledby="column-chooser-label">
+          </div><button id="column-show-all" class="bordered-button secondary-action" type="button">Show all</button>
+        </div>
+      </div>
+      <div class="results-count" id="results-count">{{ companies|length }} results
+      </div>
+    </section>
+    <div class="credibility-legend" aria-label="Credibility score guide"><strong>Scoring:</strong><span class="legend-item" tabindex="0" aria-describedby="credibility-low-help"><i class="legend-dot low"></i>Low<span id="credibility-low-help" class="credibility-tip" role="tooltip">0–40%: limited evidence.</span></span><span class="legend-item" tabindex="0" aria-describedby="credibility-medium-help"><i class="legend-dot medium"></i>Medium<span id="credibility-medium-help" class="credibility-tip" role="tooltip">50–70%: some evidence.</span></span><span class="legend-item" tabindex="0" aria-describedby="credibility-high-help"><i class="legend-dot high"></i>High<span id="credibility-high-help" class="credibility-tip" role="tooltip">80–100%: stronger evidence.</span></span><a href="/credibility-scores">How are scores calculated?</a>
+    </div>
 
-    <div class="table-wrapper"><table id="results-table"><thead><tr><th>Save</th><th>Company</th><th>Job</th><th>Work Location</th><th>Domain</th><th>Career Credibility</th><th>Location</th><th>Distance</th><th>USA Credibility</th><th>Job Fit</th><th>Listing</th><th>Actions</th></tr></thead><tbody>
+    <div class="table-wrapper">
+      <table id="results-table">
+        <thead>
+          <tr><th>Save</th><th>Company</th><th>Job</th><th>Work Location</th><th>Domain</th><th>Career Credibility</th><th>Location</th><th>Distance</th><th>USA Credibility</th><th>Job Fit</th><th>Listing</th><th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
     {% for company in companies %}
       {% set listing_status = (company.job_open_status or 'Unknown')|lower %}
       {% set employer_site = company.details.employer_site if company.details else none %}
@@ -47,19 +131,49 @@
         <td data-label="Distance">{% if company.distance_miles is not none %}{{ '%.1f'|format(company.distance_miles) }} mi{% else %}—{% endif %}</td>
         <td data-label="USA Credibility"><a class="credibility-link" href="/credibility-scores" aria-label="How USA credibility is calculated"><span class="credibility-badge credibility-{{ 'high' if (company.usa_credibility or 0) >= 8 else 'medium' if (company.usa_credibility or 0) >= 5 else 'low' }}">{{ (company.usa_credibility or 0) * 10 }}%</span></a></td>
         <td data-label="Job Fit"><span class="job-fit" tabindex="0" title="{{ company.job_fit.reason }}{% if company.job_fit.matched %} Matched: {{ company.job_fit.matched|join(', ') }}.{% endif %}{% if company.job_fit.missing %} Other page skills: {{ company.job_fit.missing|join(', ') }}.{% endif %}">{{ company.job_fit.score|string ~ '%' if company.job_fit.score is not none else '?' }}</span></td><td data-label="Listing">{% if company.source_url or company.career_url %}<a class="inline-action-link" href="{{ company.career_url if employer_site and company.career_url else (company.source_url or company.career_url) }}" target="_blank" rel="noopener noreferrer">View</a>{% if employer_site and company.source_url %} <small><a href="{{ company.source_url }}" target="_blank" rel="noopener noreferrer" title="The listing this job was found on{% if company.source_host %} ({{ company.source_host }}){% endif %}">Source</a></small>{% endif %}{% if company.source_type in feed_names %} <small>{{ company.source_type }}</small>{% endif %}{% else %}—{% endif %}</td>
-        <td data-label="Actions" class="row-actions"><div class="row-action-grid"><button class="bordered-button details-action" type="button" data-details-target="details-{{ company.id }}">View Details</button><button class="bordered-button reject-action destructive-action" type="button" data-company-id="{{ company.id }}" data-company-name="{{ company.name or 'this listing' }}" title="Hide this job, but allow other jobs from this company.">Reject Listing</button>{% if company.source_type not in feed_names %}<button class="bordered-button block-action destructive-action" type="button" data-company-id="{{ company.id }}" data-domain="{{ company.domain or '' }}" title="Hide this website and all future jobs from it.">Block Domain</button>{% endif %}<button class="bordered-button block-company-action destructive-action" type="button" data-company-id="{{ company.id }}" data-company-name="{{ company.name or '' }}" title="Exclude this company name from future searches.">Block Company</button></div></td>
+        <td data-label="Actions" class="row-actions">
+            <div class="row-action-grid"><button class="bordered-button details-action" type="button" data-details-target="details-{{ company.id }}">View Details</button><button class="bordered-button reject-action destructive-action" type="button" data-company-id="{{ company.id }}" data-company-name="{{ company.name or 'this listing' }}" title="Hide this job, but allow other jobs from this company.">Reject Listing</button>{% if company.source_type not in feed_names %}<button class="bordered-button block-action destructive-action" type="button" data-company-id="{{ company.id }}" data-domain="{{ company.domain or '' }}" title="Hide this website and all future jobs from it.">Block Domain</button>{% endif %}<button class="bordered-button block-company-action destructive-action" type="button" data-company-id="{{ company.id }}" data-company-name="{{ company.name or '' }}" title="Exclude this company name from future searches.">Block Company</button>
+            </div></td>
       </tr>
-      <tr id="details-{{ company.id }}" class="details-row" hidden><td colspan="12"><div class="details-panel"><span><strong>Source:</strong> {{ company.source_type or 'SearXNG' }} · {{ 'Job board posting' if company.source_type in feed_names or company.source_type in capture_sources or company.source_type in ('USAJOBS',) else 'Direct job posting' if company.source_type == 'Employer careers' or (company.details.evidence and ('JobPosting data' in company.details.evidence or 'job detail page' in company.details.evidence)) else 'Possible lead' }}</span>{% if company.details.evidence %}<span><strong>Why this result:</strong> {{ company.details.evidence|join(" · ") }}{% if company.details.matched_title %} · matched {{ company.details.matched_title }}{% endif %}</span>{% endif %}{% if company.details.posted %}<span><strong>Posted:</strong> {{ company.details.posted }}</span>{% endif %}{% if employer_site %}<span><strong>Employer site:</strong> <a href="{{ employer_site.careers_url or ('https://' ~ employer_site.domain ~ '/') }}" target="_blank" rel="noopener noreferrer">{{ employer_site.domain }}</a> ({{ employer_site.method }}{% if not employer_site.careers_url %}; no careers page found there{% endif %})</span>{% endif %}{% if company.details.location %}<span><strong>Listing location:</strong> {{ company.details.location }}</span>{% endif %}{% if company.details.source and company.details.source != company.source_url %}<a href="{{ company.details.source }}" target="_blank" rel="noopener noreferrer">Discovery source</a>{% endif %}<span><strong>Found:</strong> {{ company.date_found.strftime('%b %d, %Y %I:%M %p') if company.date_found else 'Unknown' }}</span><span><strong>Last verified:</strong> {{ company.last_checked.strftime('%b %d, %Y %I:%M %p') if company.last_checked else 'Never' }}</span>{% if company.result_updated_at %}<span><strong>Updated:</strong> {{ company.result_updated_at.strftime('%b %d, %Y %I:%M %p') }}</span>{% endif %}<span><strong>Application status:</strong> {{ company.application_status if company.is_kept else 'None' }}</span><label class="reject-reason-label">If rejecting, why? <select class="reject-reason"><option value="other">Other reason</option><option value="wrong_role">Wrong role</option><option value="wrong_location">Wrong location</option><option value="not_a_job">Not a job</option><option value="duplicate">Duplicate</option></select></label>{% if company.source_url %}<a href="{{ company.source_url }}" target="_blank" rel="noopener noreferrer">Original source</a>{% endif %}{% if company.notes %}<span class="details-notes"><strong>Notes:</strong> {{ company.notes }}</span>{% endif %}</div></td></tr>
-    {% endfor %}</tbody></table></div>
-    {% else %}<div class="empty-dashboard"><h3>No search results yet</h3><p>Enter a job title and City, State above, then start Job Finder.</p></div>{% endif %}
-  </section></main>
+      <tr id="details-{{ company.id }}" class="details-row" hidden><td colspan="12">
+            <div class="details-panel"><span><strong>Source:</strong> {{ company.source_type or 'SearXNG' }} · {{ 'Job board posting' if company.source_type in feed_names or company.source_type in capture_sources or company.source_type in ('USAJOBS',) else 'Direct job posting' if company.source_type == 'Employer careers' or (company.details.evidence and ('JobPosting data' in company.details.evidence or 'job detail page' in company.details.evidence)) else 'Possible lead' }}</span>{% if company.details.evidence %}<span><strong>Why this result:</strong> {{ company.details.evidence|join(" · ") }}{% if company.details.matched_title %} · matched {{ company.details.matched_title }}{% endif %}</span>{% endif %}{% if company.details.posted %}<span><strong>Posted:</strong> {{ company.details.posted }}</span>{% endif %}{% if employer_site %}<span><strong>Employer site:</strong> <a href="{{ employer_site.careers_url or ('https://' ~ employer_site.domain ~ '/') }}" target="_blank" rel="noopener noreferrer">{{ employer_site.domain }}</a> ({{ employer_site.method }}{% if not employer_site.careers_url %}; no careers page found there{% endif %})</span>{% endif %}{% if company.details.location %}<span><strong>Listing location:</strong> {{ company.details.location }}</span>{% endif %}{% if company.details.source and company.details.source != company.source_url %}<a href="{{ company.details.source }}" target="_blank" rel="noopener noreferrer">Discovery source</a>{% endif %}<span><strong>Found:</strong> {{ company.date_found.strftime('%b %d, %Y %I:%M %p') if company.date_found else 'Unknown' }}</span><span><strong>Last verified:</strong> {{ company.last_checked.strftime('%b %d, %Y %I:%M %p') if company.last_checked else 'Never' }}</span>{% if company.result_updated_at %}<span><strong>Updated:</strong> {{ company.result_updated_at.strftime('%b %d, %Y %I:%M %p') }}</span>{% endif %}<span><strong>Application status:</strong> {{ company.application_status if company.is_kept else 'None' }}</span><label class="reject-reason-label">If rejecting, why? <select class="reject-reason"><option value="other">Other reason</option><option value="wrong_role">Wrong role</option><option value="wrong_location">Wrong location</option><option value="not_a_job">Not a job</option><option value="duplicate">Duplicate</option></select></label>{% if company.source_url %}<a href="{{ company.source_url }}" target="_blank" rel="noopener noreferrer">Original source</a>{% endif %}{% if company.notes %}<span class="details-notes"><strong>Notes:</strong> {{ company.notes }}</span>{% endif %}
+            </div></td>
+          </tr>
+    {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-dashboard">
+      <h3>No search results yet
+      </h3>
+      <p>Enter a job title and City, State above, then start Job Finder.
+      </p>
+    </div>{% endif %}
+  </section>
+</main>
 
   <script id="saved-profile-cities" type="application/json">{{ profile_cities|tojson }}</script>
   <script id="saved-profile-titles" type="application/json">{{ profile_job_titles|tojson }}</script>
-  <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true"></div>
-  <div id="loading-panel" class="loading-panel" hidden aria-live="polite"><div class="loading-card"><div class="color-spinner" aria-hidden="true"></div><strong id="loading-title">Working…</strong><span id="loading-detail"></span><button id="loading-stop" class="bordered-button secondary-action" type="button" hidden>Stop</button></div></div>
+  <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true">
+</div>
+  <div id="loading-panel" class="loading-panel" hidden aria-live="polite">
+  <div class="loading-card">
+    <div class="color-spinner" aria-hidden="true">
+    </div><strong id="loading-title">Working…</strong><span id="loading-detail"></span><button id="loading-stop" class="bordered-button secondary-action" type="button" hidden>Stop</button>
+  </div>
+</div>
 
-  <footer class="site-footer"><div class="footer-inner"><div class="footer-main"><span>© <span id="copyright-year"></span> Jamie Lee Thomas Kerig · Job Finder v{{ app_version }}</span><div class="footer-social"><a href="https://jamiekerig.com" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></svg>Portfolio</a><a href="https://github.com/jltkerig" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 19c-4 .8-4-2-6-2m12 4v-3.1a2.7 2.7 0 0 0-.8-2.1c2.7-.3 5.5-1.3 5.5-6A4.7 4.7 0 0 0 18.4 6a4.3 4.3 0 0 0-.1-3s-1 0-3.1 1.6a10.6 10.6 0 0 0-6.4 0C6.7 3 5.7 3 5.7 3a4.3 4.3 0 0 0-.1 3 4.7 4.7 0 0 0-1.3 3.8c0 4.7 2.8 5.7 5.5 6a2.7 2.7 0 0 0-.8 2.1V21"/></svg>GitHub</a><a href="https://www.linkedin.com/in/jamieleedesign/" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="M7 10v8m0-11v.1M11 18v-8m0 3c0-4 6-4 6 0v5"/></svg>LinkedIn</a></div></div><div class="footer-tech">Built with Python, Flask, MySQL/MariaDB, SearXNG, Docker, HTML, CSS &amp; JavaScript · Geocoding © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a> · Remote listings: <a href="https://remoteok.com/" target="_blank" rel="noopener noreferrer">Remote OK</a> · <a href="https://remotive.com/" target="_blank" rel="noopener noreferrer">Remotive</a> · <a href="https://weworkremotely.com/" target="_blank" rel="noopener noreferrer">We Work Remotely</a> · Skill and title suggestions include modified information from the <a href="https://www.onetcenter.org/database.html" target="_blank" rel="noopener noreferrer">O*NET 31.0 Database</a> by the U.S. Department of Labor, Employment and Training Administration, used under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>. USDOL/ETA has not approved or tested these modifications.</div></div></footer>
+  <footer class="site-footer">
+  <div class="footer-inner">
+    <div class="footer-main"><span>© <span id="copyright-year"></span> Jamie Lee Thomas Kerig · Job Finder v{{ app_version }}</span>
+      <div class="footer-social"><a href="https://jamiekerig.com" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></svg>Portfolio</a><a href="https://github.com/jltkerig" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 19c-4 .8-4-2-6-2m12 4v-3.1a2.7 2.7 0 0 0-.8-2.1c2.7-.3 5.5-1.3 5.5-6A4.7 4.7 0 0 0 18.4 6a4.3 4.3 0 0 0-.1-3s-1 0-3.1 1.6a10.6 10.6 0 0 0-6.4 0C6.7 3 5.7 3 5.7 3a4.3 4.3 0 0 0-.1 3 4.7 4.7 0 0 0-1.3 3.8c0 4.7 2.8 5.7 5.5 6a2.7 2.7 0 0 0-.8 2.1V21"/></svg>GitHub</a><a href="https://www.linkedin.com/in/jamieleedesign/" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="M7 10v8m0-11v.1M11 18v-8m0 3c0-4 6-4 6 0v5"/></svg>LinkedIn</a>
+      </div>
+    </div>
+    <div class="footer-tech">Built with Python, Flask, MySQL/MariaDB, SearXNG, Docker, HTML, CSS &amp; JavaScript · Geocoding © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a> · Remote listings: <a href="https://remoteok.com/" target="_blank" rel="noopener noreferrer">Remote OK</a> · <a href="https://remotive.com/" target="_blank" rel="noopener noreferrer">Remotive</a> · <a href="https://weworkremotely.com/" target="_blank" rel="noopener noreferrer">We Work Remotely</a> · Skill and title suggestions include modified information from the <a href="https://www.onetcenter.org/database.html" target="_blank" rel="noopener noreferrer">O*NET 31.0 Database</a> by the U.S. Department of Labor, Employment and Training Administration, used under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>. USDOL/ETA has not approved or tested these modifications.
+    </div>
+  </div>
+</footer>
   <script src="/static/js/charts.js?v={{ app_version }}"></script>
   <script src="/static/js/captures.js?v={{ app_version }}"></script>
   <script src="/static/js/columns.js?v={{ app_version }}"></script>

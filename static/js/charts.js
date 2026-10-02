@@ -47,6 +47,24 @@ document.addEventListener("DOMContentLoaded", () => {
   const yearElement = $("#copyright-year"); if (yearElement) yearElement.textContent = new Date().getFullYear();
 
   $$("datalist#city-state-options").forEach((list) => { list.innerHTML = CITY_STATE_OPTIONS.map((city) => `<option value="${city}"></option>`).join(""); });
+  // As you type in a city box, the list fills with every matching U.S. place (Census list), near home first.
+  $$('input[list="city-state-options"]').forEach((input) => {
+    const list = document.getElementById("city-state-options");
+    let timer = null, asked = "";
+    input.addEventListener("input", () => {
+      clearTimeout(timer);
+      timer = setTimeout(async () => {
+        const typed = input.value.trim();
+        if (typed.length < 2 || typed === asked) return;
+        asked = typed;
+        try {
+          const data = await (await fetch(`/city-matches?q=${encodeURIComponent(typed)}`, { cache: "no-store" })).json();
+          if (input.value.trim() !== typed || !data.matches?.length) return;
+          list.replaceChildren(...data.matches.map((place) => new Option(place)));
+        } catch { /* keep the built-in list */ }
+      }, 150);
+    });
+  });
 
 
   $$(".details-action").forEach((button) => button.addEventListener("click", () => {
@@ -259,16 +277,34 @@ document.addEventListener("DOMContentLoaded", () => {
   // Dashboard profile controls. Uploaded documents are parsed in memory and are not retained.
   const profileForm = $("#profile-form");
   if (profileForm) {
-    const titles = $("#job-titles"), primary = $("#primary-job-title");
-    function refreshPrimary() {
-      const current = primary.value || primary.dataset.current;
-      const values = normalizeJobTitles(titles.value).split(",").map(v => v.trim()).filter(Boolean);
-      primary.replaceChildren(new Option("Choose a title", ""));
-      values.forEach(v => primary.add(new Option(v, v)));
-      primary.value = values.some(v => v.toLowerCase() === (current || "").toLowerCase()) ? values.find(v => v.toLowerCase() === current.toLowerCase()) : "";
-      primary.dataset.current = primary.value;
+    // Suggested titles under "Other Job Titles" while the user isn't typing there; a click adds one.
+    const titles = $("#job-titles"), primaryTitle = $("#primary-job-title"), titleChips = $("#title-suggestion-chips");
+    let chipsTimer = null;
+    async function refreshTitleChips() {
+      if (!titleChips) return;
+      const current = [primaryTitle?.value || "", ...titles.value.split(",")].map((t) => t.trim()).filter(Boolean);
+      const typing = document.activeElement === titles && titles.value.split(",").pop().trim();
+      if (!current.length || typing) { titleChips.hidden = true; return; }
+      try {
+        const response = await fetch(`/job-title-suggestions?titles=${encodeURIComponent(current.join(", "))}`, { cache: "no-store" });
+        const data = await response.json();
+        const list = titleChips.querySelector(".chip-row");
+        list.replaceChildren(...(data.suggestions || []).map((title) => {
+          const b = document.createElement("button"); b.type = "button"; b.className = "job-suggestion-button"; b.textContent = `+ ${title}`;
+          b.addEventListener("click", () => {
+            const kept = titles.value.split(",").map((t) => t.trim()).filter(Boolean);
+            titles.value = [...kept, title].join(", ");
+            refreshTitleChips();
+          });
+          return b;
+        }));
+        titleChips.hidden = !list.children.length;
+      } catch { titleChips.hidden = true; }
     }
-    titles.addEventListener("input", refreshPrimary); refreshPrimary();
+    const queueChips = () => { clearTimeout(chipsTimer); chipsTimer = setTimeout(refreshTitleChips, 400); };
+    titles.addEventListener("input", queueChips); titles.addEventListener("blur", queueChips);
+    primaryTitle?.addEventListener("change", queueChips); primaryTitle?.addEventListener("blur", queueChips);
+    refreshTitleChips();
     const skillsField = $("#skills-json"), historyField = $("#work-history-json"), skillsList = $("#profile-skill-list"), historyList = $("#work-history-list");
     let skills = [], history = [];
     try { skills = JSON.parse(skillsField.value); } catch {}
@@ -435,5 +471,87 @@ document.addEventListener("DOMContentLoaded", () => {
       const companyIds=$$(".result-row").filter(row=>!row.hidden).map(row=>Number(row.dataset.companyId)).filter(Number.isSafeInteger);
       startAction("/refresh-search","refresh",{company_ids:companyIds});
     });setActivity(wasRunning,currentMode);setInterval(checkSearchStatus,2000);
+  }
+
+  // Job title type-ahead: any input with data-title-suggest="single" or "list" (comma-separated titles).
+  function attachTitleSuggest(input) {
+    const multi = input.dataset.titleSuggest === "list";
+    const box = document.createElement("ul");
+    box.className = "title-suggest"; box.id = `${input.id}-suggest`; box.hidden = true; box.setAttribute("role", "listbox");
+    input.setAttribute("autocomplete", "off"); input.setAttribute("aria-autocomplete", "list"); input.setAttribute("aria-controls", box.id);
+    input.insertAdjacentElement("afterend", box);
+    input.parentElement.classList.add("title-suggest-host");
+    let items = [], active = -1, timer = null, asked = "";
+    const term = () => (multi ? input.value.split(",").pop() : input.value).trim();
+    function render() {
+      box.replaceChildren(...items.map((title, i) => {
+        const li = document.createElement("li");
+        li.id = `${box.id}-${i}`; li.setAttribute("role", "option"); li.textContent = title;
+        if (i === active) { li.classList.add("active"); li.setAttribute("aria-selected", "true"); }
+        li.addEventListener("mousedown", (event) => { event.preventDefault(); choose(title); });
+        return li;
+      }));
+      box.hidden = !items.length;
+      input.setAttribute("aria-expanded", String(!box.hidden));
+      if (active >= 0) input.setAttribute("aria-activedescendant", `${box.id}-${active}`); else input.removeAttribute("aria-activedescendant");
+    }
+    function choose(title) {
+      if (multi) {
+        const parts = input.value.split(",").map((part) => part.trim()); parts[parts.length - 1] = title;
+        input.value = `${parts.filter(Boolean).join(", ")}, `;
+      } else input.value = title;
+      items = []; active = -1; render();
+      input.dispatchEvent(new Event("input", { bubbles: true })); input.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    async function load() {
+      const typed = term();
+      if (typed.length < 2) { items = []; render(); return; }
+      if (typed === asked) return;
+      asked = typed;
+      try {
+        const response = await fetch(`/job-title-matches?q=${encodeURIComponent(typed)}`, { cache: "no-store" });
+        const data = await response.json();
+        if (term() !== typed) return;
+        const have = multi ? input.value.split(",").map((t) => t.trim().toLowerCase()) : [];
+        items = (data.matches || []).filter((title) => title.toLowerCase() === typed.toLowerCase() ? false : !have.slice(0, -1).includes(title.toLowerCase()));
+        active = -1; render();
+      } catch { items = []; render(); }
+    }
+    input.addEventListener("input", () => { clearTimeout(timer); asked = ""; timer = setTimeout(load, 150); });
+    input.addEventListener("keydown", (event) => {
+      if (box.hidden) return;
+      if (event.key === "ArrowDown") { event.preventDefault(); active = (active + 1) % items.length; render(); }
+      else if (event.key === "ArrowUp") { event.preventDefault(); active = (active - 1 + items.length) % items.length; render(); }
+      else if (event.key === "Enter" && active >= 0) { event.preventDefault(); choose(items[active]); }
+      else if (event.key === "Escape") { items = []; render(); }
+    });
+    input.addEventListener("blur", () => setTimeout(() => { items = []; render(); }, 120));
+  }
+  $$("input[data-title-suggest]").forEach(attachTitleSuggest);
+
+  // Collapsible panels marked data-remember start closed and keep the user's choice.
+  $$("details[data-remember]").forEach((panel) => {
+    const key = panel.dataset.remember;
+    try { panel.open = localStorage.getItem(key) === "1"; } catch {}
+    panel.addEventListener("toggle", () => { try { localStorage.setItem(key, panel.open ? "1" : "0"); } catch {} });
+  });
+
+  // Saved jobs start collapsed. #job-ID (added after saving a card's status or notes) reopens that card.
+  if (page === "dashboard") {
+    const cards = $$(".saved-job-collapse");
+    const setAll = (open) => cards.forEach((card) => { card.open = open; });
+    document.getElementById("expand-all-jobs")?.addEventListener("click", () => setAll(true));
+    document.getElementById("collapse-all-jobs")?.addEventListener("click", () => setAll(false));
+    const target = /^#job-\d+$/.test(location.hash) ? document.querySelector(`${location.hash} .saved-job-collapse`) : null;
+    if (target) { target.open = true; target.closest(".saved-job-card").scrollIntoView({ block: "start" }); }
+
+    // Recent Searches starts collapsed; remember if the user leaves it open.
+    const history = document.getElementById("recent-searches");
+    if (history) {
+      try { history.open = localStorage.getItem("jobFinder.recentSearchesOpen") === "1"; } catch {}
+      history.addEventListener("toggle", () => {
+        try { localStorage.setItem("jobFinder.recentSearchesOpen", history.open ? "1" : "0"); } catch {}
+      });
+    }
   }
 });

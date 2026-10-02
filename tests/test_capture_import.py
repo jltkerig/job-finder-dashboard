@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import no_database  # noqa: F401  (cuts tests off from the real database)
 import capture_import as capture
 import job_finder as finder
 import job_retention
@@ -362,8 +363,8 @@ class ClosedJobRetention(unittest.TestCase):
         sql, params = calls[0]
         self.assertIn("job_open_status = 'Closed'", sql)
         self.assertIn("is_kept = 0", sql)
-        self.assertIn("application_status NOT IN (%s, %s, %s)", sql)
-        self.assertEqual(params, (30, "Saved", "Applied", "Interview"))
+        self.assertIn("application_status NOT IN (%s, %s, %s, %s)", sql)
+        self.assertEqual(params, (30, "Saved", "Applied", "Talking With Recruiter", "Interview"))
 
 
 if __name__ == "__main__":

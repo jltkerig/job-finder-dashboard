@@ -5,6 +5,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import no_database  # noqa: F401  (cuts tests off from the real database)
 from job_listings import canonical_url, excludes_us, extract_jobs, is_pdf_url, job_links
 from ats_feeds import public_board_links
 

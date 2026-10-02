@@ -5,6 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import no_database  # noqa: F401  (cuts tests off from the real database)
 import employer_site
 from employer_site import can_guess_domain, host_matches_company, is_third_party, resolve_employer_site
 

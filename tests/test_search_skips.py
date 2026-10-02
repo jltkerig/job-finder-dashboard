@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import no_database  # noqa: F401  (cuts tests off from the real database)
 from search_skips import cached_skip, latest_decisions, record_decision
 
 

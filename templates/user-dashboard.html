@@ -1,28 +1,243 @@
 <!doctype html>
 <html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="csrf-token" content="{{ csrf_token }}" /><title>Dashboard | Job Finder</title><link rel="stylesheet" href="/static/css/style.css" /></head>
-<body data-page="dashboard"><nav class="top-nav" aria-label="Main navigation"><div class="nav-inner"><a class="nav-link" href="/">Search</a><a class="nav-link active" href="/dashboard">Dashboard</a><a class="nav-link" href="/rejected-listings">Settings</a><a class="nav-link" href="/tuning">Tuning</a></div></nav><header><div class="header-content"><div><h1>Dashboard</h1><p>{{ counts.saved }} saved job{% if counts.saved != 1 %}s{% endif %}</p></div></div></header>
-<main><section class="company-section">
-<div class="dashboard-counts"><div class="count-card"><span>Saved</span><strong>{{ counts.saved }}</strong></div><div class="count-card"><span>Applied</span><strong>{{ counts.applied }}</strong></div><div class="count-card"><span>Interview</span><strong>{{ counts.interview }}</strong></div><div class="count-card"><span>Closed</span><strong>{{ counts.closed }}</strong></div></div>
+<body data-page="dashboard">
+<nav class="top-nav" aria-label="Main navigation">
+  <div class="nav-inner"><a class="nav-link" href="/">Search</a><a class="nav-link active" href="/dashboard">Dashboard</a><a class="nav-link" href="/rejected-listings">Settings</a><a class="nav-link" href="/tuning">Tuning</a><a class="nav-link" href="http://127.0.0.1:5001/" target="_blank" rel="noopener">Resume Builder</a>
+  </div>
+</nav>
+<header>
+  <div class="header-content">
+    <div>
+      <h1>Dashboard
+      </h1>
+    </div>
+  </div>
+</header>
+<main>
+  <section class="company-section">
+    <div class="profile-layout">
+      <section class="profile-panel">
+        <div class="profile-heading">
+          <div>
+            <h2>User Profile
+            </h2>
+            <p>These job titles and locations are shared with the Search page.
+            </p>
+          </div>
+        </div>
+        <form action="/save-profile" method="post" class="profile-form" id="profile-form"><input type="hidden" name="csrf_token" value="{{ csrf_token }}" /><input type="hidden" name="cities_json" id="profile-cities-json" value='{{ profile.cities|tojson }}' /><input type="hidden" name="skills_json" id="skills-json" value='{{ profile.skills|tojson }}' /><input type="hidden" name="work_history_json" id="work-history-json" value='{{ profile.work_history|tojson }}' /><input type="hidden" name="avatar_data" id="avatar-data" value="{{ profile.avatar_data or '' }}" />
+          <div class="profile-name-grid">
+            <div class="form-field"><label for="first-name">First Name</label><input id="first-name" name="first_name" type="text" value="{{ profile.first_name }}" />
+            </div>
+            <div class="form-field"><label for="last-name">Last Name</label><input id="last-name" name="last_name" type="text" value="{{ profile.last_name }}" />
+            </div>
+            <div class="form-field"><label for="home-location">Home City, State</label><input id="home-location" name="home_location" type="text" list="city-state-options" value="{{ profile.home_location or '' }}" placeholder="e.g. Baltimore, MD" autocomplete="off" /><input id="profile-state" name="state" type="hidden" value="{{ profile.state }}" />
+            </div>
+          </div>
+          <section class="profile-subsection">
+            <h3>Job titles
+            </h3>
+            <p class="field-help">Job Finder searches for every title here.
+            </p>
+            <div class="form-field"><label for="primary-job-title">Primary Job Title</label><input id="primary-job-title" name="primary_job_title" type="text" data-title-suggest="single" value="{{ profile.primary_job_title }}" placeholder="e.g. Web Designer" autocomplete="off" />
+              <p class="field-help">The main job you want. Shown below your photo.
+              </p>
+            </div>
+            <div class="form-field"><label for="job-titles">Other Job Titles to Search For</label><input id="job-titles" name="job_titles" type="text" data-title-suggest="list" value="{{ profile.job_titles | reject('equalto', profile.primary_job_title) | join(', ') }}" placeholder="Front End Developer, Visual Designer" />
+              <p class="field-help">Separate titles with commas.
+              </p>
+              <div id="title-suggestion-chips" class="title-chips" hidden><span class="field-help">Suggested:</span>
+                <div class="chip-row">
+                </div>
+              </div>
+            </div>
+          </section>
+          <section class="profile-subsection">
+            <h3>Work preferences
+            </h3>
+            <p class="field-help">Choose any types and locations you want. These help tailor your search without hiding jobs with missing details.
+            </p>
+            <fieldset class="preference-group">
+              <legend>Work type
+              </legend>
+              <div class="profile-preferences">{% for preference in ["Part-time", "Full-time", "Contract", "Freelance / Gig"] %}<label><input type="checkbox" name="work_preferences" value="{{ preference }}" {% if preference in profile.work_preferences %}checked{% endif %} />{{ preference }}</label>{% endfor %}
+              </div>
+            </fieldset>
+            <fieldset class="preference-group">
+              <legend>Work location
+              </legend>
+              <div class="profile-preferences">{% for preference in ["Remote", "Hybrid", "Onsite"] %}<label><input type="checkbox" name="work_preferences" value="{{ preference }}" {% if preference in profile.work_preferences %}checked{% endif %} />{{ preference }}</label>{% endfor %}
+              </div>
+            </fieldset>
+          </section>
+          <section class="profile-subsection">
+            <h3>Work History
+            </h3>
+            <p class="field-help">Add past jobs manually or review suggestions from a résumé.
+            </p>
+            <div id="work-history-list">
+            </div><button class="bordered-button secondary-action" id="add-work-history" type="button">Add Job</button>
+          </section>
+          <section class="profile-subsection">
+            <h3>Skills
+            </h3>
+            <p class="field-help">Your saved skills help estimate Job Fit. Review skills suggested by a résumé or O*NET occupation data before saving. Occupation examples are not requirements for an individual job.
+            </p>
+            <div id="profile-skill-list" class="skill-chip-list">
+            </div>
+            <div id="related-skill-suggestions" class="skill-chip-list" aria-live="polite">
+            </div>
+            <div class="skill-add-row"><input id="new-skill" type="text" list="skill-options" placeholder="Add a skill" aria-label="Add a skill" />
+              <datalist id="skill-options">{% for skill in skill_suggestions %}<option value="{{ skill }}"></option>{% endfor %}
+              </datalist><button class="bordered-button secondary-action" id="add-skill" type="button">Add Skill</button>
+            </div>
+          </section>
+          <section class="profile-subsection">
+            <h3><label for="profile-city-input">Search Locations + Radius</label>
+            </h3>
+            <p class="field-help">Job Finder looks for jobs around each city, out to the distance you pick.
+            </p>
+            <div class="city-add-row"><input id="profile-city-input" type="text" list="city-state-options" placeholder="e.g. Wilmington, DE" autocomplete="off" /><select id="profile-city-radius"><option value="5">5 miles</option><option value="10">10 miles</option><option value="15">15 miles</option><option value="20">20 miles</option><option value="30">30 miles</option><option value="50" selected>50 miles</option></select><button id="add-profile-city" class="bordered-button secondary-action city-add-button" type="button">Add City</button>
+            </div>
+            <div id="profile-city-list" class="city-list city-list-below">
+            </div>
+          </section>
+          <datalist id="city-state-options">
+          </datalist>
+          <div class="profile-save-actions"><button class="bordered-button primary-action" type="submit">Save Profile</button><button class="bordered-button secondary-action" id="upload-resume" type="button">Upload Résumé</button><input id="resume-file" type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden />
+          </div>
+        </form>
+      </section>
+      <aside class="profile-summary-card"><button class="profile-avatar" id="change-avatar" type="button" aria-label="Upload or change profile photo">{% if profile.avatar_data %}<img src="{{ profile.avatar_data }}" alt="" />{% elif profile.first_name %}{{ profile.first_name[0]|upper }}{% else %}U{% endif %}</button><input id="avatar-file" type="file" accept="image/png,image/jpeg,image/webp" hidden /><small>Click photo to change</small><strong>{{ (profile.first_name ~ ' ' ~ profile.last_name)|trim if profile.first_name or profile.last_name else 'Username' }}</strong><span>{{ profile.primary_job_title or 'Add a primary job title' }}</span><span>{{ profile.home_location or 'Add your location' }}</span>
+      </aside>
+    </div>
 
-<div class="profile-layout">
-<section class="profile-panel"><div class="profile-heading"><div><h2>User Profile</h2><p>These job titles and locations are shared with the Search page.</p></div></div><form action="/save-profile" method="post" class="profile-form" id="profile-form"><input type="hidden" name="csrf_token" value="{{ csrf_token }}" /><input type="hidden" name="cities_json" id="profile-cities-json" value='{{ profile.cities|tojson }}' /><input type="hidden" name="skills_json" id="skills-json" value='{{ profile.skills|tojson }}' /><input type="hidden" name="work_history_json" id="work-history-json" value='{{ profile.work_history|tojson }}' /><input type="hidden" name="avatar_data" id="avatar-data" value="{{ profile.avatar_data or '' }}" /><div class="profile-name-grid"><div class="form-field"><label for="first-name">First Name</label><input id="first-name" name="first_name" type="text" value="{{ profile.first_name }}" /></div><div class="form-field"><label for="last-name">Last Name</label><input id="last-name" name="last_name" type="text" value="{{ profile.last_name }}" /></div><div class="form-field"><label for="home-location">Home City, State</label><input id="home-location" name="home_location" type="text" list="city-state-options" value="{{ profile.home_location or '' }}" placeholder="e.g. Baltimore, MD" autocomplete="off" /><input id="profile-state" name="state" type="hidden" value="{{ profile.state }}" /></div></div><div class="form-field"><label for="job-titles">Job Titles</label><input id="job-titles" name="job_titles" type="text" value="{{ profile.job_titles | join(', ') }}" placeholder="Web Designer, Front End Developer" /><p class="field-help">Separate titles with commas.</p></div><div class="form-field"><label for="primary-job-title">Primary Job Title</label><select id="primary-job-title" name="primary_job_title" data-current="{{ profile.primary_job_title }}"><option value="">Choose a title</option></select><p class="field-help">Shown below your avatar.</p></div><section class="profile-subsection"><h3>Work preferences</h3><p class="field-help">Choose any types and locations you want. These help tailor your search without hiding jobs with missing details.</p><strong>Work type</strong><div class="profile-preferences">{% for preference in ["Part-time", "Full-time", "Contract", "Freelance / Gig"] %}<label><input type="checkbox" name="work_preferences" value="{{ preference }}" {% if preference in profile.work_preferences %}checked{% endif %} />{{ preference }}</label>{% endfor %}</div><strong>Work location</strong><div class="profile-preferences">{% for preference in ["Remote", "Hybrid", "Onsite"] %}<label><input type="checkbox" name="work_preferences" value="{{ preference }}" {% if preference in profile.work_preferences %}checked{% endif %} />{{ preference }}</label>{% endfor %}</div></section><section class="profile-subsection"><h3>Work History</h3><p class="field-help">Add past jobs manually or review suggestions from a résumé.</p><div id="work-history-list"></div><button class="bordered-button secondary-action" id="add-work-history" type="button">Add Job</button></section><section class="profile-subsection"><h3>Skills</h3><p class="field-help">Your saved skills help estimate Job Fit. Review skills suggested by a résumé or O*NET occupation data before saving. Occupation examples are not requirements for an individual job.</p><div id="profile-skill-list" class="skill-chip-list"></div><div id="related-skill-suggestions" class="skill-chip-list" aria-live="polite"></div><div class="skill-add-row"><input id="new-skill" type="text" list="skill-options" placeholder="Add a skill" aria-label="Add a skill" /><datalist id="skill-options">{% for skill in skill_suggestions %}<option value="{{ skill }}"></option>{% endfor %}</datalist><button class="bordered-button secondary-action" id="add-skill" type="button">Add Skill</button></div></section><div class="form-field"><label for="profile-city-input">Search Locations + Radius</label><div class="city-add-row"><input id="profile-city-input" type="text" list="city-state-options" placeholder="e.g. Wilmington, DE" autocomplete="off" /><select id="profile-city-radius"><option value="10">10 miles</option><option value="15">15 miles</option><option value="20">20 miles</option><option value="30">30 miles</option><option value="50" selected>50 miles</option></select><button id="add-profile-city" class="bordered-button secondary-action city-add-button" type="button">Add City</button></div><div id="profile-city-list" class="city-list city-list-below"></div></div><datalist id="city-state-options"></datalist><div class="profile-save-actions"><button class="bordered-button primary-action" type="submit">Save Profile</button><button class="bordered-button secondary-action" id="upload-resume" type="button">Upload Résumé</button><input id="resume-file" type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden /></div></form></section>
-<aside class="profile-summary-card"><button class="profile-avatar" id="change-avatar" type="button" aria-label="Upload or change profile photo">{% if profile.avatar_data %}<img src="{{ profile.avatar_data }}" alt="" />{% elif profile.first_name %}{{ profile.first_name[0]|upper }}{% else %}U{% endif %}</button><input id="avatar-file" type="file" accept="image/png,image/jpeg,image/webp" hidden /><small>Click photo to change</small><strong>{{ (profile.first_name ~ ' ' ~ profile.last_name)|trim if profile.first_name or profile.last_name else 'Username' }}</strong><span>{{ profile.primary_job_title or 'Add a primary job title' }}</span><span>{{ profile.home_location or 'Add your location' }}</span></aside>
+    <div class="section-heading-row">
+      <h2>Saved Jobs
+      </h2>{% if companies %}
+      <div class="collapse-all-actions"><button class="bordered-button secondary-action" id="expand-all-jobs" type="button">Expand all</button><button class="bordered-button secondary-action" id="collapse-all-jobs" type="button">Collapse all</button>
+      </div>{% endif %}
+    </div>
+    <form class="filter-panel dashboard-filter-panel" method="get" action="/dashboard">
+      <div class="filter-heading"><span class="filter-icon" aria-hidden="true">⌕</span><strong>Filters</strong>
+      </div>
+      <div class="form-field"><label for="filter-title">Job Title</label><input id="filter-title" name="title" value="{{ filters.title }}" placeholder="Filter title" data-title-suggest="single" />
+      </div>
+      <div class="form-field"><label for="filter-state">State</label><input id="filter-state" name="state" value="{{ filters.state }}" placeholder="Filter state" />
+      </div>
+      <div class="form-field"><label for="filter-status">Application Status</label><select id="filter-status" name="status"><option value="">All</option>{% for option in application_statuses %}<option value="{{ option }}" {% if filters.status == option %}selected{% endif %}>{{ option }}</option>{% endfor %}</select>
+      </div>
+      <div class="form-field"><label for="filter-sort">Sort</label><select id="filter-sort" name="sort"><option value="date_desc" {% if filters.sort == 'date_desc' %}selected{% endif %}>Newest</option><option value="date_asc" {% if filters.sort == 'date_asc' %}selected{% endif %}>Oldest</option><option value="company" {% if filters.sort == 'company' %}selected{% endif %}>Company</option><option value="title" {% if filters.sort == 'title' %}selected{% endif %}>Job Title</option><option value="status" {% if filters.sort == 'status' %}selected{% endif %}>Status</option><option value="verified" {% if filters.sort == 'verified' %}selected{% endif %}>Last Verified</option></select>
+      </div>
+      <div class="filter-actions"><button class="bordered-button primary-action" type="submit">Filter</button><a class="bordered-button secondary-link" href="/dashboard">Clear</a><button class="bordered-button secondary-action" id="refresh-dashboard" type="button" data-total="{{ companies|length }}">Refresh Saved Listings</button>
+      </div>
+    </form>
+    <p id="dashboard-refresh-status" class="field-help" role="status" hidden>
+    </p>
+
+{% if companies %}
+    <div class="saved-job-grid">{% for company in companies %}{% set listing_status = (company.job_open_status or 'Unknown')|lower %}{% set domain_url = company.domain if company.domain and '://' in company.domain else ('https://' ~ company.domain ~ '/' if company.domain else '') %}
+      <article class="saved-job-card" id="job-{{ company.id }}" data-company-id="{{ company.id }}">
+        <details class="saved-job-collapse">
+          <summary class="saved-job-summary">
+            <div class="summary-text">
+              <p class="summary-line summary-title"><strong>{{ company.career_job_title or 'Unknown Job' }}</strong><span class="summary-company">{{ company.name or 'Unknown Company' }}</span>
+              </p>
+              <p class="summary-line summary-facts"><span>{% if company.city %}{{ company.city }}, {% endif %}{{ company.state or 'Location unknown' }}</span>{% if company.distance_miles is not none %}<span>{{ '%.0f'|format(company.distance_miles) }} mi</span>{% endif %}{% if company.work_arrangement and company.work_arrangement|lower != (company.state or '')|lower %}<span>{{ company.work_arrangement }}</span>{% endif %}<span>Job Fit {{ company.job_fit.score|string ~ '%' if company.job_fit.score is not none else '?' }}</span>
+              </p>
+              <p class="summary-line summary-status"><span class="application-indicator status-{{ (company.application_status or 'None')|lower|replace(' ', '-') }}">{{ company.application_status if company.application_status not in ['Saved', 'None', None] else 'Not applied' }}</span><span class="job-open-state"><span class="status-dot {{ 'closed' if listing_status == 'closed' else 'open' if listing_status == 'open' else 'unknown' }}" data-tooltip="{{ 'This listing appears to still be active.' if listing_status == 'open' else 'This listing appears to no longer be active.' if listing_status == 'closed' else 'The current listing status could not be confirmed.' }}"></span>{{ company.job_open_status or 'Unknown' }}</span><span>Found {{ company.date_found.strftime('%b %d, %Y') if company.date_found else '?' }}</span>{% if company.notes %}<span class="summary-notes" title="{{ company.notes[:200] }}">Notes</span>{% endif %}
+              </p>
+            </div><span class="summary-chevron" aria-hidden="true"></span>
+          </summary>
+          <div class="saved-job-body">
+            <div class="job-meta"><span><strong>Location:</strong> {% if company.city %}{{ company.city }}, {% endif %}{{ company.state or 'Unknown' }}</span>{% if company.distance_miles is not none %}<span><strong>Distance:</strong> {{ '%.1f'|format(company.distance_miles) }} miles</span>{% endif %}<span><strong>Career credibility:</strong> <a class="credibility-link" href="/credibility-scores" aria-label="How this credibility score is calculated"><span class="credibility-badge credibility-{{ 'high' if (company.career_credibility or 0) >= 8 else 'medium' if (company.career_credibility or 0) >= 5 else 'low' }}">{{ (company.career_credibility or 0) * 10 }}%</span></a></span><span><strong>Job Fit:</strong> <span class="job-fit" tabindex="0" title="{{ company.job_fit.reason }}{% if company.job_fit.matched %} Matched: {{ company.job_fit.matched|join(', ') }}.{% endif %}{% if company.job_fit.missing %} Other page skills: {{ company.job_fit.missing|join(', ') }}.{% endif %}">{{ company.job_fit.score|string ~ '%' if company.job_fit.score is not none else '?' }}</span></span><span><strong>USA credibility:</strong> <a class="credibility-link" href="/credibility-scores" aria-label="How this credibility score is calculated"><span class="credibility-badge credibility-{{ 'high' if (company.usa_credibility or 0) >= 8 else 'medium' if (company.usa_credibility or 0) >= 5 else 'low' }}">{{ (company.usa_credibility or 0) * 10 }}%</span></a></span><span><strong>Source:</strong> {{ company.source_type or "SearXNG" }}</span><span><strong>Work Arrangement:</strong> {{ company.work_arrangement or '—' }}</span><span><strong>Last verified:</strong> {{ company.last_checked.strftime('%b %d, %Y %I:%M %p') if company.last_checked else 'Never' }}</span>
+            </div>
+            <div class="job-links equal-action-group">{% if company.career_url and company.source_type not in feed_names %}<a class="bordered-button" href="{{ company.career_url }}" target="_blank" rel="noopener noreferrer">View Career Page</a>{% endif %}{% if company.source_url %}<a class="bordered-button" href="{{ company.source_url }}" target="_blank" rel="noopener noreferrer">{{ "View on " ~ company.source_type if company.source_type in feed_names else "View Source" }}</a>{% endif %}<button class="bordered-button details-action" type="button" data-details-target="dashboard-details-{{ company.id }}">View Details</button>
+            </div>
+            <div id="dashboard-details-{{ company.id }}" class="card-details" hidden>
+              <div class="detail-section"><strong>Listing Details</strong><span><strong>Domain:</strong> {% if domain_url %}<a href="{{ domain_url }}" target="_blank" rel="noopener noreferrer">{{ company.domain }}</a>{% else %}Unknown{% endif %}</span><span><strong>Country:</strong> {{ company.country or 'Unknown' }}</span><span><strong>Source:</strong> {{ company.source_type or 'SearXNG' }}</span><span><strong>Found:</strong> {{ company.date_found.strftime('%b %d, %Y %I:%M %p') if company.date_found else 'Unknown' }}</span>{% if company.result_updated_at %}<span><strong>Updated:</strong> {{ company.result_updated_at.strftime('%b %d, %Y %I:%M %p') }}</span>{% endif %}
+              </div>
+            </div>
+            <div class="application-section">
+              <h4>Your Application
+              </h4>
+              <form action="/update-kept/{{ company.id }}" method="post" class="saved-job-editor compact-editor"><input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                <div class="form-field"><label for="status-{{ company.id }}">Application Status</label><select id="status-{{ company.id }}" name="application_status">{% for option in application_statuses %}<option value="{{ option }}" {% if company.application_status == option %}selected{% endif %}>{{ option }}</option>{% endfor %}</select>
+                </div>
+                <div class="form-field notes-field"><label for="notes-{{ company.id }}">Notes</label><textarea id="notes-{{ company.id }}" name="notes" rows="7" placeholder="Add notes about this job...">{{ company.notes or '' }}</textarea>
+                </div><button class="bordered-button secondary-action" type="submit">Save Changes</button>
+              </form>
+            </div>
+            <div class="actions-section">
+              <h4>Actions
+              </h4>
+              <p class="action-help">Reject hides only this listing. Block Domain prevents future results from the entire website.
+              </p>
+              <div class="card-actions"><button class="bordered-button reject-action destructive-action" type="button" data-company-id="{{ company.id }}" data-company-name="{{ company.name or 'this listing' }}" title="Hide this job, but allow other jobs from this company.">Reject Listing</button>{% if company.source_type not in feed_names %}<button class="bordered-button block-action destructive-action" type="button" data-company-id="{{ company.id }}" data-domain="{{ company.domain or '' }}" title="Hide this website and all future jobs from it.">Block Company Domain</button>{% endif %}<button class="bordered-button block-company-action destructive-action" type="button" data-company-id="{{ company.id }}" data-company-name="{{ company.name or '' }}">Block Company</button>
+                <form action="/delete-kept/{{ company.id }}" method="post" class="delete-result-form" onsubmit="return confirm('Permanently delete this saved job? This cannot be undone.');"><input type="hidden" name="csrf_token" value="{{ csrf_token }}" /><button class="bordered-button danger-action destructive-action" type="submit">Delete</button>
+                </form>
+              </div>
+            </div>
+          </div>
+        </details>
+      </article>{% endfor %}
+    </div>{% else %}
+    <div class="empty-dashboard">
+      <h3>{% if filters.title or filters.state or filters.status %}No saved jobs match these filters{% else %}No saved jobs yet{% endif %}
+      </h3>
+      <p>{% if filters.title or filters.state or filters.status %}Try clearing or changing the filters above.{% else %}Use the green Keep button on Search results to add jobs here.{% endif %}
+      </p><a class="bordered-button button-link" href="/">Search for Jobs</a>
+    </div>{% endif %}
+    <details class="history-panel history-collapse" id="recent-searches">
+      <summary class="history-summary">
+        <h2>Recent Searches
+        </h2><span class="summary-chevron" aria-hidden="true"></span>
+      </summary>{% if search_history %}
+      <div class="history-list">{% for search in search_history %}
+        <div class="history-item">
+          <div class="history-main"><strong>{{ search.job_title }}</strong><span>{{ search.state }}</span>{% if search.cities_json %}<small class="history-cities" data-cities='{{ search.cities_json or "[]" }}'></small>{% endif %}<small>{{ search.searched_at.strftime('%b %d, %Y %I:%M %p') if search.searched_at else '' }}</small>
+          </div>
+          <div class="history-actions"><button class="bordered-button save-history-title" type="button" data-job-title="{{ search.job_title }}" {% if search.job_title|lower in profile.job_titles|map('lower')|list %}disabled{% endif %}>{{ 'Saved' if search.job_title|lower in profile.job_titles|map('lower')|list else 'Save Job Title' }}</button><button class="bordered-button search-again-button" type="button" data-job-title="{{ search.job_title }}" data-state="{{ search.state }}" data-cities='{{ search.cities_json or "[]" }}'>Search Again</button>
+          </div>
+        </div>{% endfor %}
+      </div>{% else %}
+      <div class="empty-inline">No searches recorded yet.
+      </div>{% endif %}
+    </details>
+  </section>
+</main>
+<dialog id="resume-review" class="review-dialog">
+  <h2>Review résumé suggestions
+  </h2>
+  <p>Would you like to autofill your profile from the résumé you uploaded? Review and choose each section before applying it. Existing information stays in place.
+  </p>
+  <div id="resume-review-content">
+  </div>
+  <div class="review-actions"><button class="bordered-button secondary-action" id="cancel-resume-review" type="button">Cancel</button><button class="bordered-button primary-action" id="apply-resume-review" type="button">Add Selected to Profile</button>
+  </div>
+</dialog>
+<dialog id="avatar-crop" class="review-dialog">
+  <h2>Crop profile photo
+  </h2>
+  <div class="crop-preview">
+    <canvas id="avatar-canvas" width="320" height="320">
+    </canvas>
+  </div><label for="avatar-zoom">Zoom</label><input id="avatar-zoom" type="range" min="1" max="3" step="0.01" value="1" />
+  <p class="field-help">Drag the image to reposition it.
+  </p>
+  <div class="review-actions"><button class="bordered-button secondary-action" id="cancel-avatar" type="button">Cancel</button><button class="bordered-button primary-action" id="save-avatar" type="button">Save Photo</button>
+  </div>
+</dialog>
+<div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true">
 </div>
-
-<section class="history-panel"><h2>Recent Searches</h2>{% if search_history %}<div class="history-list">{% for search in search_history %}<div class="history-item"><div class="history-main"><strong>{{ search.job_title }}</strong><span>{{ search.state }}</span>{% if search.cities_json %}<small class="history-cities" data-cities='{{ search.cities_json or "[]" }}'></small>{% endif %}<small>{{ search.searched_at.strftime('%b %d, %Y %I:%M %p') if search.searched_at else '' }}</small></div><div class="history-actions"><button class="bordered-button save-history-title" type="button" data-job-title="{{ search.job_title }}" {% if search.job_title|lower in profile.job_titles|map('lower')|list %}disabled{% endif %}>{{ 'Saved' if search.job_title|lower in profile.job_titles|map('lower')|list else 'Save Job Title' }}</button><button class="bordered-button search-again-button" type="button" data-job-title="{{ search.job_title }}" data-state="{{ search.state }}" data-cities='{{ search.cities_json or "[]" }}'>Search Again</button></div></div>{% endfor %}</div>{% else %}<div class="empty-inline">No searches recorded yet.</div>{% endif %}</section>
-
-<div class="section-heading-row"><h2>Saved Jobs</h2></div>
-<form class="filter-panel dashboard-filter-panel" method="get" action="/dashboard"><div class="filter-heading"><span class="filter-icon" aria-hidden="true">⌕</span><strong>Filters</strong></div><div class="form-field"><label for="filter-title">Job Title</label><input id="filter-title" name="title" value="{{ filters.title }}" placeholder="Filter title" /></div><div class="form-field"><label for="filter-state">State</label><input id="filter-state" name="state" value="{{ filters.state }}" placeholder="Filter state" /></div><div class="form-field"><label for="filter-status">Application Status</label><select id="filter-status" name="status"><option value="">All</option>{% for option in ['None','Saved','Applied','Interview','Rejected','Closed'] %}<option value="{{ option }}" {% if filters.status == option %}selected{% endif %}>{{ option }}</option>{% endfor %}</select></div><div class="form-field"><label for="filter-sort">Sort</label><select id="filter-sort" name="sort"><option value="date_desc" {% if filters.sort == 'date_desc' %}selected{% endif %}>Newest</option><option value="date_asc" {% if filters.sort == 'date_asc' %}selected{% endif %}>Oldest</option><option value="company" {% if filters.sort == 'company' %}selected{% endif %}>Company</option><option value="title" {% if filters.sort == 'title' %}selected{% endif %}>Job Title</option><option value="status" {% if filters.sort == 'status' %}selected{% endif %}>Status</option><option value="verified" {% if filters.sort == 'verified' %}selected{% endif %}>Last Verified</option></select></div><div class="filter-actions"><button class="bordered-button primary-action" type="submit">Filter</button><a class="bordered-button secondary-link" href="/dashboard">Clear</a><button class="bordered-button secondary-action" id="refresh-dashboard" type="button" data-total="{{ companies|length }}">Refresh Saved Listings</button></div></form><p id="dashboard-refresh-status" class="field-help" role="status" hidden></p>
-
-{% if companies %}<div class="saved-job-grid">{% for company in companies %}{% set listing_status = (company.job_open_status or 'Unknown')|lower %}{% set domain_url = company.domain if company.domain and '://' in company.domain else ('https://' ~ company.domain ~ '/' if company.domain else '') %}<article class="saved-job-card" data-company-id="{{ company.id }}">
-<div class="saved-job-topline"><div><h3 class="{{ 'long-job-title' if (company.career_job_title or '')|length > 42 else '' }}">{{ company.career_job_title or 'Unknown Job' }}</h3><p class="company-name">{{ company.name or 'Unknown Company' }}</p></div><div class="job-open-state"><span class="application-indicator" aria-label="Application status">{{ company.application_status if company.application_status not in ['Saved', 'None', None] else 'Not applied' }}</span><span class="status-dot {{ 'closed' if listing_status == 'closed' else 'open' if listing_status == 'open' else 'unknown' }}" data-tooltip="{{ 'This listing appears to still be active.' if listing_status == 'open' else 'This listing appears to no longer be active.' if listing_status == 'closed' else 'The current listing status could not be confirmed.' }}"></span><span>{{ company.job_open_status or 'Unknown' }}</span></div></div>
-<div class="job-meta"><span><strong>Location:</strong> {% if company.city %}{{ company.city }}, {% endif %}{{ company.state or 'Unknown' }}</span>{% if company.distance_miles is not none %}<span><strong>Distance:</strong> {{ '%.1f'|format(company.distance_miles) }} miles</span>{% endif %}<span><strong>Career credibility:</strong> <a class="credibility-link" href="/credibility-scores" aria-label="How this credibility score is calculated"><span class="credibility-badge credibility-{{ 'high' if (company.career_credibility or 0) >= 8 else 'medium' if (company.career_credibility or 0) >= 5 else 'low' }}">{{ (company.career_credibility or 0) * 10 }}%</span></a></span><span><strong>Job Fit:</strong> <span class="job-fit" tabindex="0" title="{{ company.job_fit.reason }}{% if company.job_fit.matched %} Matched: {{ company.job_fit.matched|join(', ') }}.{% endif %}{% if company.job_fit.missing %} Other page skills: {{ company.job_fit.missing|join(', ') }}.{% endif %}">{{ company.job_fit.score|string ~ '%' if company.job_fit.score is not none else '?' }}</span></span><span><strong>USA credibility:</strong> <a class="credibility-link" href="/credibility-scores" aria-label="How this credibility score is calculated"><span class="credibility-badge credibility-{{ 'high' if (company.usa_credibility or 0) >= 8 else 'medium' if (company.usa_credibility or 0) >= 5 else 'low' }}">{{ (company.usa_credibility or 0) * 10 }}%</span></a></span><span><strong>Source:</strong> {{ company.source_type or "SearXNG" }}</span><span><strong>Work Arrangement:</strong> {{ company.work_arrangement or '—' }}</span><span><strong>Last verified:</strong> {{ company.last_checked.strftime('%b %d, %Y %I:%M %p') if company.last_checked else 'Never' }}</span></div>
-<div class="job-links equal-action-group">{% if company.career_url and company.source_type not in feed_names %}<a class="bordered-button" href="{{ company.career_url }}" target="_blank" rel="noopener noreferrer">View Career Page</a>{% endif %}{% if company.source_url %}<a class="bordered-button" href="{{ company.source_url }}" target="_blank" rel="noopener noreferrer">{{ "View on " ~ company.source_type if company.source_type in feed_names else "View Source" }}</a>{% endif %}<button class="bordered-button details-action" type="button" data-details-target="dashboard-details-{{ company.id }}">View Details</button></div>
-<div id="dashboard-details-{{ company.id }}" class="card-details" hidden><div class="detail-section"><strong>Listing Details</strong><span><strong>Domain:</strong> {% if domain_url %}<a href="{{ domain_url }}" target="_blank" rel="noopener noreferrer">{{ company.domain }}</a>{% else %}Unknown{% endif %}</span><span><strong>Country:</strong> {{ company.country or 'Unknown' }}</span><span><strong>Source:</strong> {{ company.source_type or 'SearXNG' }}</span><span><strong>Found:</strong> {{ company.date_found.strftime('%b %d, %Y %I:%M %p') if company.date_found else 'Unknown' }}</span>{% if company.result_updated_at %}<span><strong>Updated:</strong> {{ company.result_updated_at.strftime('%b %d, %Y %I:%M %p') }}</span>{% endif %}</div></div>
-<div class="application-section"><h4>Your Application</h4><form action="/update-kept/{{ company.id }}" method="post" class="saved-job-editor compact-editor"><input type="hidden" name="csrf_token" value="{{ csrf_token }}" /><div class="form-field"><label for="status-{{ company.id }}">Application Status</label><select id="status-{{ company.id }}" name="application_status">{% for option in ['None','Saved','Applied','Interview','Rejected','Closed'] %}<option value="{{ option }}" {% if company.application_status == option %}selected{% endif %}>{{ option }}</option>{% endfor %}</select></div><div class="form-field notes-field"><label for="notes-{{ company.id }}">Notes</label><textarea id="notes-{{ company.id }}" name="notes" rows="7" placeholder="Add notes about this job...">{{ company.notes or '' }}</textarea></div><button class="bordered-button secondary-action" type="submit">Save Changes</button></form></div>
-<div class="actions-section"><h4>Actions</h4><p class="action-help">Reject hides only this listing. Block Domain prevents future results from the entire website.</p><div class="card-actions"><button class="bordered-button reject-action destructive-action" type="button" data-company-id="{{ company.id }}" data-company-name="{{ company.name or 'this listing' }}" title="Hide this job, but allow other jobs from this company.">Reject Listing</button>{% if company.source_type not in feed_names %}<button class="bordered-button block-action destructive-action" type="button" data-company-id="{{ company.id }}" data-domain="{{ company.domain or '' }}" title="Hide this website and all future jobs from it.">Block Company Domain</button>{% endif %}<button class="bordered-button block-company-action destructive-action" type="button" data-company-id="{{ company.id }}" data-company-name="{{ company.name or '' }}">Block Company</button><form action="/delete-kept/{{ company.id }}" method="post" class="delete-result-form" onsubmit="return confirm('Permanently delete this saved job? This cannot be undone.');"><input type="hidden" name="csrf_token" value="{{ csrf_token }}" /><button class="bordered-button danger-action destructive-action" type="submit">Delete</button></form></div></div>
-</article>{% endfor %}</div>{% else %}<div class="empty-dashboard"><h3>{% if filters.title or filters.state or filters.status %}No saved jobs match these filters{% else %}No saved jobs yet{% endif %}</h3><p>{% if filters.title or filters.state or filters.status %}Try clearing or changing the filters above.{% else %}Use the green Keep button on Search results to add jobs here.{% endif %}</p><a class="bordered-button button-link" href="/">Search for Jobs</a></div>{% endif %}
-</section></main><dialog id="resume-review" class="review-dialog"><h2>Review résumé suggestions</h2><p>Would you like to autofill your profile from the résumé you uploaded? Review and choose each section before applying it. Existing information stays in place.</p><div id="resume-review-content"></div><div class="review-actions"><button class="bordered-button secondary-action" id="cancel-resume-review" type="button">Cancel</button><button class="bordered-button primary-action" id="apply-resume-review" type="button">Add Selected to Profile</button></div></dialog><dialog id="avatar-crop" class="review-dialog"><h2>Crop profile photo</h2><div class="crop-preview"><canvas id="avatar-canvas" width="320" height="320"></canvas></div><label for="avatar-zoom">Zoom</label><input id="avatar-zoom" type="range" min="1" max="3" step="0.01" value="1" /><p class="field-help">Drag the image to reposition it.</p><div class="review-actions"><button class="bordered-button secondary-action" id="cancel-avatar" type="button">Cancel</button><button class="bordered-button primary-action" id="save-avatar" type="button">Save Photo</button></div></dialog>
-<div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true"></div>
-<footer class="site-footer"><div class="footer-inner"><div class="footer-main"><span>© <span id="copyright-year"></span> Jamie Lee Thomas Kerig · Job Finder v{{ app_version }}</span><div class="footer-social"><a href="https://jamiekerig.com" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></svg>Portfolio</a><a href="https://github.com/jltkerig" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 19c-4 .8-4-2-6-2m12 4v-3.1a2.7 2.7 0 0 0-.8-2.1c2.7-.3 5.5-1.3 5.5-6A4.7 4.7 0 0 0 18.4 6a4.3 4.3 0 0 0-.1-3s-1 0-3.1 1.6a10.6 10.6 0 0 0-6.4 0C6.7 3 5.7 3 5.7 3a4.3 4.3 0 0 0-.1 3 4.7 4.7 0 0 0-1.3 3.8c0 4.7 2.8 5.7 5.5 6a2.7 2.7 0 0 0-.8 2.1V21"/></svg>GitHub</a><a href="https://www.linkedin.com/in/jamieleedesign/" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="M7 10v8m0-11v.1M11 18v-8m0 3c0-4 6-4 6 0v5"/></svg>LinkedIn</a></div></div><div class="footer-tech">Built with Python, Flask, MySQL/MariaDB, SearXNG, Docker, HTML, CSS &amp; JavaScript · Geocoding © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a> · Remote listings: <a href="https://remoteok.com/" target="_blank" rel="noopener noreferrer">Remote OK</a> · <a href="https://remotive.com/" target="_blank" rel="noopener noreferrer">Remotive</a> · <a href="https://weworkremotely.com/" target="_blank" rel="noopener noreferrer">We Work Remotely</a> · Skill and title suggestions include modified information from the <a href="https://www.onetcenter.org/database.html" target="_blank" rel="noopener noreferrer">O*NET 31.0 Database</a> by the U.S. Department of Labor, Employment and Training Administration, used under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>. USDOL/ETA has not approved or tested these modifications.</div></div></footer>
+<footer class="site-footer">
+  <div class="footer-inner">
+    <div class="footer-main"><span>© <span id="copyright-year"></span> Jamie Lee Thomas Kerig · Job Finder v{{ app_version }}</span>
+      <div class="footer-social"><a href="https://jamiekerig.com" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></svg>Portfolio</a><a href="https://github.com/jltkerig" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 19c-4 .8-4-2-6-2m12 4v-3.1a2.7 2.7 0 0 0-.8-2.1c2.7-.3 5.5-1.3 5.5-6A4.7 4.7 0 0 0 18.4 6a4.3 4.3 0 0 0-.1-3s-1 0-3.1 1.6a10.6 10.6 0 0 0-6.4 0C6.7 3 5.7 3 5.7 3a4.3 4.3 0 0 0-.1 3 4.7 4.7 0 0 0-1.3 3.8c0 4.7 2.8 5.7 5.5 6a2.7 2.7 0 0 0-.8 2.1V21"/></svg>GitHub</a><a href="https://www.linkedin.com/in/jamieleedesign/" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="M7 10v8m0-11v.1M11 18v-8m0 3c0-4 6-4 6 0v5"/></svg>LinkedIn</a>
+      </div>
+    </div>
+    <div class="footer-tech">Built with Python, Flask, MySQL/MariaDB, SearXNG, Docker, HTML, CSS &amp; JavaScript · Geocoding © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a> · Remote listings: <a href="https://remoteok.com/" target="_blank" rel="noopener noreferrer">Remote OK</a> · <a href="https://remotive.com/" target="_blank" rel="noopener noreferrer">Remotive</a> · <a href="https://weworkremotely.com/" target="_blank" rel="noopener noreferrer">We Work Remotely</a> · Skill and title suggestions include modified information from the <a href="https://www.onetcenter.org/database.html" target="_blank" rel="noopener noreferrer">O*NET 31.0 Database</a> by the U.S. Department of Labor, Employment and Training Administration, used under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>. USDOL/ETA has not approved or tested these modifications.
+    </div>
+  </div>
+</footer>
 <script src="/static/js/charts.js?v={{ app_version }}"></script></body></html>
