@@ -1,3 +1,4 @@
+from jobfinder.search import runner
 import json
 import sys
 import tempfile
@@ -60,7 +61,7 @@ def run_search(pages, search_url, job_title, *, cities_json='[]', max_new=2, loc
                 stack.enter_context(patch.object(module, name, function))
         stack.enter_context(patch.object(shared, 'MAX_SEARCH_PAGES', 1))
         try:
-            finder.main(job_title=job_title, state='MD', cities_json=cities_json, max_new=max_new)
+            runner.main(job_title=job_title, state='MD', cities_json=cities_json, max_new=max_new)
         finally:
             if debug_out is not None and debug_file.exists():
                 debug_out.append(json.loads(debug_file.read_text(encoding='utf-8')))
