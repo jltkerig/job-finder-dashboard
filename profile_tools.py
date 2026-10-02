@@ -33,6 +33,53 @@ SKILL_ALIASES = {
     "Project Management": ["project management", "project-managed"],
     "Canva": ["canva"], "Adobe After Effects": ["adobe after effects", "after effects"],
     "Microsoft Excel": ["microsoft excel", "excel spreadsheets"],
+    # Design, web, email and marketing skills (all distinctive: none is an everyday word on its own).
+    "Web Design": ["web design", "website design", "web designer"],
+    "Web Development": ["web development", "web developer", "front end development", "frontend development", "front-end development",
+                        "front end developer", "frontend developer", "front-end developer"],
+    "Graphic Design": ["graphic design", "graphic designer"],
+    "Visual Design": ["visual design"],
+    "Landing Pages": ["landing page", "landing pages"],
+    "A/B Testing": ["a/b testing", "a/b test", "ab testing", "split testing"],
+    "SMS Marketing": ["sms marketing", "text message marketing"],
+    "Digital Marketing": ["digital marketing"],
+    "Marketing Automation": ["marketing automation"],
+    "Social Media": ["social media"],
+    "Copywriting": ["copywriting"],
+    "Content Strategy": ["content strategy"],
+    "Branding": ["branding", "brand identity"],
+    "Typography": ["typography"],
+    "Print Design": ["print design", "print production", "prepress", "pre-press"],
+    "Wireframing": ["wireframe", "wireframes", "wireframing"],
+    "Prototyping": ["prototype", "prototypes", "prototyping"],
+    "Photo Editing": ["photo editing", "image editing", "photo manipulation", "photo retouching"],
+    "Photography": ["photography"],
+    "Video Editing": ["video editing", "video production"],
+    "Adobe Premiere Pro": ["premiere pro", "adobe premiere"],
+    "Adobe XD": ["adobe xd"],
+    "Adobe Lightroom": ["lightroom"],
+    "Adobe Acrobat": ["adobe acrobat"],
+    "Microsoft Word": ["microsoft word", "ms word"],
+    "Microsoft PowerPoint": ["powerpoint"],
+    "Microsoft Office": ["microsoft office", "ms office", "office 365", "microsoft 365"],
+    "Webflow": ["webflow"], "Squarespace": ["squarespace"], "Wix": ["wix"], "Shopify": ["shopify"],
+    "WooCommerce": ["woocommerce"],
+    "HubSpot": ["hubspot"], "Mailchimp": ["mailchimp"], "Marketo": ["marketo"], "Klaviyo": ["klaviyo"],
+    "Constant Contact": ["constant contact"],
+    "Google Ads": ["google ads", "adwords"],
+    "CRM": ["crm"],
+    "Cross-Browser Testing": ["cross-browser", "cross browser"],
+    "QA Testing": ["qa testing", "quality assurance"],
+    "Agile": ["agile", "scrum"],
+    "Tailwind CSS": ["tailwind", "tailwind css"],
+    "Webpack": ["webpack"],
+    "Next.js": ["next.js", "nextjs"],
+    "GraphQL": ["graphql"],
+    "JSON": ["json"],
+    "AWS": ["aws", "amazon web services"],
+    "DNS": ["dns"],
+    "VS Code": ["vs code", "visual studio code"],
+    "Data Analysis": ["data analysis", "data analytics"],
 }
 
 
@@ -64,6 +111,24 @@ def detect_skills(text):
                 found.append(skill)
                 break
     return found
+
+
+def skill_demand(skill_lists, saved_skills, limit=12):
+    """[(skill, how many listings name it)] for skills the profile lacks, most asked-for first.
+
+    skill_lists are the stored skills of each listing Job Finder found (JSON text or lists)."""
+    saved = {str(skill).casefold() for skill in saved_skills or []}
+    counts = {}
+    for raw in skill_lists:
+        try:
+            skills = json.loads(raw) if isinstance(raw, (str, bytes)) else raw
+        except ValueError:
+            continue
+        for skill in normalize_skills(skills if isinstance(skills, list) else []):
+            if skill.casefold() not in saved:
+                counts[skill] = counts.get(skill, 0) + 1
+    ranked = sorted(counts.items(), key=lambda item: (-item[1], item[0].casefold()))
+    return ranked[:limit]
 
 
 def uploaded_resume(folder):

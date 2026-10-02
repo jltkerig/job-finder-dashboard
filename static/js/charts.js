@@ -321,26 +321,36 @@ document.addEventListener("DOMContentLoaded", () => {
         chip.append(label, remove); skillsList.append(chip);
       }); skillsField.value = JSON.stringify(skills); showResumeSkills();
     }
-    // Skills the uploaded résumé mentions that aren't in the profile yet: tap the ones you have (Save Profile keeps them).
-    function showResumeSkills() {
-      const box = $("#resume-skill-suggestions"); if (!box) return;
+    // Suggestion chips under Skills: tap the ones you have (Save Profile keeps them). One group for skills the uploaded
+    // résumé mentions, one for skills the jobs Job Finder found keep asking for.
+    function suggestionChips(box, heading, choices) {
       box.replaceChildren();
-      let found = []; try { found = JSON.parse(box.dataset.skills || "[]"); } catch {}
-      const choices = found.filter(skill => !skills.some(saved => saved.toLowerCase() === skill.toLowerCase()));
-      if (!choices.length) return;
-      const heading = document.createElement("small");
-      heading.textContent = `Skills found in your résumé (${box.dataset.source || "uploaded résumé"}). Add the ones you have, then Save Profile:`;
-      box.append(heading);
-      for (const skill of choices) {
-        const button = document.createElement("button"); button.type = "button"; button.className = "bordered-button secondary-action"; button.textContent = `+ ${skill}`;
-        button.addEventListener("click", () => { addSkill(skill); showRelatedSkills(); });
+      const open = choices.filter(choice => !skills.some(saved => saved.toLowerCase() === choice.skill.toLowerCase()));
+      if (!open.length) return;
+      const title = document.createElement("small"); title.textContent = heading; box.append(title);
+      for (const choice of open) {
+        const button = document.createElement("button"); button.type = "button"; button.className = "bordered-button secondary-action";
+        button.textContent = `+ ${choice.skill}${choice.note ? ` (${choice.note})` : ""}`;
+        button.addEventListener("click", () => { addSkill(choice.skill); showRelatedSkills(); });
         box.append(button);
       }
-      if (choices.length > 1) {
+      if (open.length > 1) {
         const all = document.createElement("button"); all.type = "button"; all.className = "bordered-button primary-action"; all.textContent = "Add all";
-        all.addEventListener("click", () => { choices.forEach(addSkill); showRelatedSkills(); });
+        all.addEventListener("click", () => { open.forEach(choice => addSkill(choice.skill)); showRelatedSkills(); });
         box.append(all);
       }
+    }
+    function showResumeSkills() {
+      const box = $("#resume-skill-suggestions"); if (!box) return;
+      let found = []; try { found = JSON.parse(box.dataset.skills || "[]"); } catch {}
+      suggestionChips(box, `Skills found in your résumé (${box.dataset.source || "uploaded résumé"}). Add the ones you have, then Save Profile:`,
+        found.map(skill => ({ skill })));
+      const demand = $("#demand-skill-suggestions"); if (!demand) return;
+      let asked = []; try { asked = JSON.parse(demand.dataset.skills || "[]"); } catch {}
+      const fromResume = new Set(found.map(skill => skill.toLowerCase()));
+      suggestionChips(demand, "Often asked for in the jobs Job Finder found for you (add only what you have):",
+        asked.filter(item => !fromResume.has(String(item.skill).toLowerCase()))
+          .map(item => ({ skill: item.skill, note: `${item.count} job${item.count === 1 ? "" : "s"}` })));
     }
     function addSkill(skill) { const value = (skill || "").trim().slice(0, 80); if (value && !skills.some(s => s.toLowerCase() === value.toLowerCase())) { skills.push(value); renderSkills(); } }
     const relatedSkills = {HTML:["CSS","JavaScript","Responsive Design","Accessibility"],CSS:["Sass","Bootstrap","Responsive Design"],JavaScript:["TypeScript","React","jQuery"],"Web Design":["UI Design","UX Design","Figma"],WordPress:["PHP","SEO","Content Management"],"Email Marketing":["Salesforce Marketing Cloud","Litmus"],Git:["GitHub","Docker"]};

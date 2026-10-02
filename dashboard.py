@@ -19,7 +19,7 @@ from dotenv import load_dotenv
 from flask import Flask, abort, jsonify, redirect, render_template, request, send_from_directory, session
 from mysql.connector import Error
 from profile_tools import (AMBIGUOUS_SKILLS, SKILL_ALIASES, fit_score, normalize_skills, resume_skill_suggestions,
-                           resume_suggestions)
+                           resume_suggestions, skill_demand)
 from onet_data import occupation_skill_suggestions, related_title_suggestions, spelling_fix, title_matches
 from places import city_matches
 from travel import describe as describe_trip
@@ -39,7 +39,7 @@ load_dotenv(BASE_DIR / ".env")
 
 app = Flask(__name__)
 
-APP_VERSION = "1.1.131"
+APP_VERSION = "1.1.132"
 
 app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY") or secrets.token_hex(32)
 app.config["SESSION_COOKIE_HTTPONLY"] = True
@@ -519,6 +519,25 @@ def get_search_history(limit=10):
     except Error as error:
         print("Could not read search history.")
         print(error)
+        return []
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if connection is not None and connection.is_connected():
+            connection.close()
+
+
+def listing_skill_demand(saved_skills, limit=12):
+    """The skills most often named by the jobs Job Finder has found (not rejected) that your profile doesn't list."""
+    connection = None
+    cursor = None
+    try:
+        connection = mysql.connector.connect(host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD, database=DB_NAME)
+        cursor = connection.cursor()
+        cursor.execute("SELECT listing_skills FROM companies WHERE is_rejected = 0 AND listing_skills IS NOT NULL")
+        return skill_demand([row[0] for row in cursor.fetchall()], saved_skills, limit)
+    except Error as error:
+        print(f"Could not read the skills asked for in listings: {error}")
         return []
     finally:
         if cursor is not None:
@@ -1422,6 +1441,7 @@ def user_dashboard():
     add_job_fit(companies, profile.get("skills", []))
     add_drive_times(companies, profile.get("home_zip"), profile.get("state") or "")
     resume_skills = resume_skill_suggestions(RESUME_FOLDER, profile.get("skills", []))
+    demanded_skills = [{"skill": skill, "count": count} for skill, count in listing_skill_demand(profile.get("skills", []))]
     return render_template(
         "user-dashboard.html",
         companies=companies,
@@ -1430,6 +1450,7 @@ def user_dashboard():
         search_history=get_search_history(),
         skill_suggestions=profile_skill_suggestions(profile),
         resume_source=resume_skills[0], resume_skills=resume_skills[1],
+        demanded_skills=demanded_skills,
         filters={"status": status_filter, "state": state_filter, "title": title_filter, "sort": sort_by},
     )
 
