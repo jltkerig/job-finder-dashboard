@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
 from owners import search_source
 import job_finder
+from jobfinder.search import refresh
 from jobfinder.search import web_captures
 from jobfinder.search import relevance
 from jobfinder.search import geo
@@ -78,7 +79,7 @@ class Scope(unittest.TestCase):
         profile = (list(titles), [dict(c) for c in cities], state, None)
         with patch.object(web_captures, "load_profile_filters", return_value=profile), \
                 patch.object(geo, "prepare_city_targets", return_value=list(targets)):
-            return job_finder.recheck_system_rejections(database, self.scope_file)
+            return refresh.recheck_system_rejections(database, self.scope_file)
 
     def test_the_first_check_only_remembers_the_search_and_restores_nothing(self):
         database = Db([rejected_row(1, "Web Designer", "wrong_role")])
@@ -131,7 +132,7 @@ class Scope(unittest.TestCase):
         self.assertEqual(restored, 1)
 
     def test_the_quiet_version_never_stops_a_run(self):
-        job_finder.recheck_system_rejections_quietly(object())
+        refresh.recheck_system_rejections_quietly(object())
 
 
 class WhoRejected(unittest.TestCase):
@@ -156,7 +157,7 @@ class ClosedJobs(unittest.TestCase):
         today = json.dumps({"closes": "2026-10-02"})
         future = json.dumps({"closes": "2026-10-08"})
         database = Db(closing=[(1, past), (2, today), (3, future), (4, json.dumps({"closes": "soon"})), (5, "not json")])
-        self.assertEqual(job_finder.close_expired_listings(database, today=date(2026, 10, 2)), 1)
+        self.assertEqual(refresh.close_expired_listings(database, today=date(2026, 10, 2)), 1)
         [(sql, params)] = database.updates()
         self.assertIn("job_open_status = 'Closed'", sql)
         self.assertEqual(params[-1], 1)
@@ -164,7 +165,7 @@ class ClosedJobs(unittest.TestCase):
 
     def test_nothing_to_close_changes_nothing(self):
         database = Db(closing=[(1, json.dumps({"closes": "2026-12-31"}))])
-        self.assertEqual(job_finder.close_expired_listings(database, today=date(2026, 10, 2)), 0)
+        self.assertEqual(refresh.close_expired_listings(database, today=date(2026, 10, 2)), 0)
         self.assertEqual(database.updates(), [])
 
     def test_closed_unsaved_jobs_are_deleted_after_a_week_and_saved_ones_never(self):
