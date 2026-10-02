@@ -216,7 +216,104 @@ class USAJobs:
         return "Unknown"  # the API can't look up one announcement; never mark a real job closed by guessing
 
 
-JOB_SITES = [NationalLaborExchange, USAJobs]
+class Adzuna:
+    """Adzuna (adzuna.com), a job search engine that gathers listings from many boards, through its official API.
+
+    Free for personal use (api terms: "personal research"), but it needs your own free key: register at
+    developer.adzuna.com for an app id and app key, then put ADZUNA_APP_ID and ADZUNA_APP_KEY in the .env file.
+    Without them this site is skipped. The free limits are 25 requests a minute and 250 a day, so Job Finder reads
+    one page of 50 per title and place, no faster than 20 a minute. Adzuna's terms ask that listings are labelled
+    "Jobs by Adzuna": the source name and each saved description say so, with a link. The API gives only a short
+    snippet of each description, and cannot look up one listing, so a saved job's status stays "Unknown".
+    """
+    name = "Adzuna"
+    domain = "adzuna.com"
+    API = "https://api.adzuna.com/v1/api/jobs/us/search/1"
+    PAGE_SIZE = 50
+    DELAY = 3.0  # seconds between requests (20 a minute; the limit is 25)
+    DAYS = 30
+    KM_PER_MILE = 1.609344
+
+    def __init__(self, timeout=30):
+        self.timeout = timeout
+        self._last = 0.0
+        self.requests = 0
+        self.app_id = os.getenv("ADZUNA_APP_ID", "").strip()
+        self.app_key = os.getenv("ADZUNA_APP_KEY", "").strip()
+
+    @property
+    def configured(self):
+        return bool(self.app_id and self.app_key)
+
+    setup_hint = "Add ADZUNA_APP_ID and ADZUNA_APP_KEY to .env (free keys: developer.adzuna.com)."
+
+    def _get(self, params):
+        pause = self.DELAY - (time.monotonic() - self._last)
+        if pause > 0:
+            time.sleep(pause)
+        self._last = time.monotonic()
+        self.requests += 1
+        response = requests.get(self.API, params={**params, "app_id": self.app_id, "app_key": self.app_key},
+                                timeout=self.timeout, headers={"User-Agent": USER_AGENT, "Accept": "application/json"})
+        if response.status_code == 429:
+            raise SiteBlocked(f"{self.name} answered HTTP 429 (its free limit was reached)")
+        if response.status_code in (401, 403):
+            raise ValueError(f"{self.name} refused the keys (HTTP {response.status_code}). "
+                             "Check ADZUNA_APP_ID and ADZUNA_APP_KEY in .env.")
+        if response.status_code != 200:
+            raise ValueError(f"{self.name} answered HTTP {response.status_code}")
+        return response.json()
+
+    @staticmethod
+    def location_name(place):
+        """"Baltimore, MD" -> "Baltimore, Maryland" (a state alone stays as it is)."""
+        city, _, state = str(place).partition(",")
+        full = STATE_NAMES.get(state.strip().upper())
+        return f"{city.strip()}, {full}" if full else str(place).strip()
+
+    def _listing(self, item):
+        place = item.get("location") or {}
+        area = [str(part) for part in (place.get("area") or [])]
+        shown = str(place.get("display_name") or "").strip()
+        remote = bool(re.search(r"\bremote\b", f"{item.get('title') or ''} {shown}", re.I))
+        state = area[1] if len(area) > 1 else ""
+        city = area[-1] if len(area) > 2 else shown.split(",")[0].strip()
+        lat = lon = None
+        try:
+            lat, lon = float(item.get("latitude")), float(item.get("longitude"))
+        except (TypeError, ValueError):
+            pass
+        text = html_lib.unescape(re.sub(r"<[^>]+>", "", str(item.get("description") or "")))
+        parts = [re.sub(r"\s+", " ", text).strip()]
+        if item.get("salary_min") and item.get("salary_max"):
+            parts.append(f"Pay: ${float(item['salary_min']):,.0f} - ${float(item['salary_max']):,.0f} per year"
+                         + (" (estimated by Adzuna)" if str(item.get("salary_is_predicted")) == "1" else ""))
+        parts.append("Jobs by Adzuna (https://www.adzuna.com)")
+        return {
+            "guid": str(item.get("id") or "").strip(), "title": html_lib.unescape(str(item.get("title") or "")).strip(),
+            "company": str((item.get("company") or {}).get("display_name") or "").strip(),
+            "url": str(item.get("redirect_url") or "").strip(),
+            "location": "United States (Remote)" if remote else shown, "city": "" if remote else city,
+            "state": "" if remote else state, "country": "United States", "lat": lat, "lon": lon, "miles": None,
+            "posted": str(item.get("created") or "")[:10], "description": "\n\n".join(part for part in parts if part),
+        }
+
+    def search(self, keyword, place="", radius=None):
+        """Openings for a title near a place (a city, or a whole state), most relevant first. One page only."""
+        params = {"what": keyword, "results_per_page": self.PAGE_SIZE, "max_days_old": self.DAYS,
+                  "content-type": "application/json"}
+        if place:
+            params["where"] = self.location_name(place)
+            if radius:
+                params["distance"] = max(1, round(int(radius) * self.KM_PER_MILE))  # the API counts kilometres
+        items = self._get(params).get("results") or []
+        return [listing for listing in (self._listing(item) for item in items) if listing["guid"] and listing["url"]]
+
+    def status(self, url):
+        return "Unknown"  # the API can't look up one listing; never mark a real job closed by guessing
+
+
+JOB_SITES = [NationalLaborExchange, USAJobs, Adzuna]
 JOB_SITE_NAMES = frozenset(site.name for site in JOB_SITES)
 
 
