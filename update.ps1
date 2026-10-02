@@ -165,7 +165,7 @@ try {
     }
 
     # Remove files retired from newer releases so old installs do not accumulate stale copies.
-    foreach ($obsolete in @("readme.md", "test_database.py", "searxng\settings.json", ".update-in-progress")) {
+    foreach ($obsolete in @("test_database.py", "searxng\settings.json", ".update-in-progress")) {
         Remove-Item (Join-Path $ProjectDir $obsolete) -Recurse -Force -ErrorAction SilentlyContinue
     }
 
