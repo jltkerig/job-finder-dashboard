@@ -7,6 +7,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
 import job_finder as finder
+from jobfinder.search import shared
 from jobfinder.sources.employer_jobs import load_employers, record_board_result, save_discovered
 
 
@@ -38,13 +39,13 @@ class BoardRanking(unittest.TestCase):
 
 class Timing(unittest.TestCase):
     def test_time_is_added_up_by_name(self):
-        finder._timings.clear()
-        with finder.timed('work'):
+        shared._timings.clear()
+        with shared.timed('work'):
             pass
-        with finder.timed('work'):
+        with shared.timed('work'):
             pass
-        self.assertIn('work', finder.timing_summary())
-        finder._timings.clear()
+        self.assertIn('work', shared.timing_summary())
+        shared._timings.clear()
 
 
 if __name__ == '__main__':

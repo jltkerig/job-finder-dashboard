@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
 from jobfinder.records import capture_import as capture
 import job_finder as finder
+from jobfinder.search import shared
 from jobfinder.records import job_retention
 
 
@@ -186,7 +187,7 @@ class ImportFilter(unittest.TestCase):
         self.assertEqual(result[0], "added")
         args, kwargs = self.saved[0]
         self.assertEqual(args[6], "https://www.linkedin.com/jobs/view/4012345678")  # source_url
-        self.assertEqual(args[9], finder.USA_CREDIBILITY_THRESHOLD)  # usa_credibility
+        self.assertEqual(args[9], shared.USA_CREDIBILITY_THRESHOLD)  # usa_credibility
         self.assertEqual(kwargs["source_type"], "LinkedIn")
         self.assertEqual(kwargs["listing_details"]["captured_by"], "web-job-scraper")
         self.assertFalse(kwargs["listing_details"]["location_unknown"])

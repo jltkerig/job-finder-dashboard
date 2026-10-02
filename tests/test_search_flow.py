@@ -10,6 +10,9 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
 import job_finder as finder
+from owners import holders
+from jobfinder.search import docker
+from jobfinder.search import shared
 
 
 class Database:
@@ -49,11 +52,12 @@ def run_search(pages, search_url, job_title, *, cities_json='[]', max_new=2, loc
     patches.update(extra or {})
     with ExitStack() as stack:
         debug_file = Path(stack.enter_context(tempfile.TemporaryDirectory())) / 'search_debug.json'
-        stack.enter_context(patch.object(finder, 'SEARCH_DEBUG_FILE', debug_file))
+        stack.enter_context(patch.object(shared, 'SEARCH_DEBUG_FILE', debug_file))
         stack.enter_context(patch.object(finder, 'BOARD_HEALTH_FILE', debug_file.with_name('board_health.json')))
         for name, function in patches.items():
-            stack.enter_context(patch.object(finder, name, function))
-        stack.enter_context(patch.object(finder, 'MAX_SEARCH_PAGES', 1))
+            for module in holders(name):
+                stack.enter_context(patch.object(module, name, function))
+        stack.enter_context(patch.object(shared, 'MAX_SEARCH_PAGES', 1))
         try:
             finder.main(job_title=job_title, state='MD', cities_json=cities_json, max_new=max_new)
         finally:
@@ -121,7 +125,7 @@ class FeedSearch(unittest.TestCase):
         self.assertIn('Remote job limited to residents of TX', skips)
 
     def test_a_feed_can_be_switched_off_in_settings(self):
-        with patch.object(finder, 'settings', dict(finder.settings, remote_feeds={'Remotive': False})):
+        with patch.object(shared, 'settings', dict(shared.settings, remote_feeds={'Remotive': False})):
             captured, _ = self.run_feed([self.job()])
         self.assertEqual(captured, [])
 
@@ -317,8 +321,8 @@ class StopRequest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             stop_file = Path(directory) / '.stop-requested'
             stop_file.touch()
-            with patch.object(finder, 'STOP_REQUEST_FILE', stop_file):
-                self.assertFalse(finder.check_searxng_timer())
+            with patch.object(shared, 'STOP_REQUEST_FILE', stop_file):
+                self.assertFalse(docker.check_searxng_timer())
 
     def test_crash_mid_search_still_stops_searxng(self):
         stopped = []

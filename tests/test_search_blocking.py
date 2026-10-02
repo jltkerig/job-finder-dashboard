@@ -9,6 +9,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import job_finder as finder
+from jobfinder.search import docker
+from jobfinder.search import shared
 from test_search_flow import run_search
 
 
@@ -45,11 +47,11 @@ class Pacing(unittest.TestCase):
     def call(self, clock, sleeps, unresponsive=()):
         payload = {'results': [], 'unresponsive_engines': [list(item) for item in unresponsive]}
         response = SimpleNamespace(raise_for_status=lambda: None, json=lambda: payload)
-        with patch.object(finder, 'check_searxng_timer', lambda: True), \
+        with patch.object(docker, 'check_searxng_timer', lambda: True), \
                 patch.object(finder.requests, 'get', lambda *args, **kw: response), \
                 patch.object(finder.time, 'monotonic', lambda: clock[0]), \
                 patch.object(finder.time, 'sleep', lambda seconds: sleeps.append(round(seconds, 2))), \
-                patch.object(finder, 'QUERY_DELAY', 3):
+                patch.object(shared, 'QUERY_DELAY', 3):
             return finder.search_searxng('web designer jobs')
 
     def test_requests_are_spaced_out(self):

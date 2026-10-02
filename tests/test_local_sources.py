@@ -9,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import job_finder as finder
+from jobfinder.search import shared
 from jobfinder.sources.ats_discovery import identify
 from jobfinder.sources.employer_jobs import DEFAULT_EMPLOYERS, Employer, config_key
 from test_employer_jobs import Response
@@ -76,15 +77,15 @@ class DefaultList(unittest.TestCase):
 
 class Internships(unittest.TestCase):
     def test_titles_and_work_types_that_mean_internship(self):
-        self.assertTrue(finder.is_internship('2027 Summer Graphic Design & Creative Media Intern (Baltimore, MD)'))
-        self.assertTrue(finder.is_internship('Content Designer', "['INTERN']"))
-        self.assertTrue(finder.is_internship('Co-op Web Designer'))
-        self.assertFalse(finder.is_internship('Internal Communications Designer'))
-        self.assertFalse(finder.is_internship('International Brand Designer', "['FULL_TIME']"))
+        self.assertTrue(shared.is_internship('2027 Summer Graphic Design & Creative Media Intern (Baltimore, MD)'))
+        self.assertTrue(shared.is_internship('Content Designer', "['INTERN']"))
+        self.assertTrue(shared.is_internship('Co-op Web Designer'))
+        self.assertFalse(shared.is_internship('Internal Communications Designer'))
+        self.assertFalse(shared.is_internship('International Brand Designer', "['FULL_TIME']"))
 
     def test_the_setting_turns_the_rule_off(self):
-        with patch.object(finder, 'EXCLUDE_INTERNSHIPS', False):
-            self.assertFalse(finder.is_internship('Design Intern'))
+        with patch.object(shared, 'EXCLUDE_INTERNSHIPS', False):
+            self.assertFalse(shared.is_internship('Design Intern'))
 
     def test_an_internship_is_skipped_in_a_search(self):
         skips, captured = [], []
@@ -156,7 +157,7 @@ class CompanyBoards(unittest.TestCase):
 class JobBoardQueries(unittest.TestCase):
     def queries(self, sites):
         debug = []
-        with patch.object(finder, 'JOB_BOARD_SITES', sites):
+        with patch.object(shared, 'JOB_BOARD_SITES', sites):
             run_search({}, 'https://example.com/none', 'Web Designer, Visual Designer', max_new=1, debug_out=debug)
         return [item['query'] for item in debug[0]['runs'][-1]['queries']]
 
@@ -268,16 +269,16 @@ class TitleCoverage(unittest.TestCase):
             self.assertEqual(spelling_fix(fine), fine)
 
     def test_related_titles_are_matched_but_only_for_the_typed_families(self):
-        extras = finder.related_family_titles(self.TYPED)
+        extras = shared.related_family_titles(self.TYPED)
         for wanted in ('Multimedia Designer', 'Production Artist', 'Website Producer', 'UX Writer'):
             self.assertIn(wanted, extras)
-        self.assertEqual(finder.related_family_titles(['Accountant']), [])
+        self.assertEqual(shared.related_family_titles(['Accountant']), [])
         self.assertTrue(finder.matching_job_title('Brand Designer', self.TYPED + extras))
         self.assertFalse(finder.matching_job_title('Brand Accountant', self.TYPED + extras))
 
     def test_related_titles_can_be_switched_off(self):
-        with patch.object(finder, 'RELATED_TITLES', False):
-            self.assertEqual(finder.related_family_titles(self.TYPED), [])
+        with patch.object(shared, 'RELATED_TITLES', False):
+            self.assertEqual(shared.related_family_titles(self.TYPED), [])
 
     def test_a_search_corrects_the_spelling_and_does_not_query_the_related_families(self):
         debug = []
