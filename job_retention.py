@@ -2,11 +2,11 @@
 
 closed_at records when a row was first seen as Closed. Rather than touching every place that sets
 job_open_status, sync_closed_dates() stamps it after each update, import and dashboard start.
-Saved jobs (kept, or marked Saved / Applied / Interview) are never deleted.
+Saved jobs (kept, or marked Saved / Applied / Talking With Recruiter / Interview) are never deleted.
 """
 
 CLOSED_KEEP_DAYS = 30
-SAVED_STATUSES = ("Saved", "Applied", "Interview")
+SAVED_STATUSES = ("Saved", "Applied", "Talking With Recruiter", "Interview")
 
 
 def ensure_closed_at_column(cursor):

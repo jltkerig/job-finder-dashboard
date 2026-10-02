@@ -3368,7 +3368,7 @@ def geocode_queries(city, state_text):
 
 def prepare_city_targets(database, state, cities):
     targets = []
-    allowed = {10, 15, 20, 30, 50}
+    allowed = {5, 10, 15, 20, 30, 50}
     for item in cities or []:
         city = str(item.get("city", "")).strip()
         try:

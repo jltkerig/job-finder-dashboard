@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import no_database  # noqa: F401  (cuts tests off from the real database)
 import job_finder as finder
 from bs4 import BeautifulSoup
 from employer_site import _names_match
@@ -135,6 +136,16 @@ class TitleMatching(unittest.TestCase):
                                ('Web Designer', 'Web & UI Designer'), ('Front End Developer', 'Frontend Developer'),
                                ('Content Designer', 'Staff Content Designer, Investing'), ('Web Designer', 'Web Designer Intern')):
             self.assertTrue(matching_title(actual, [wanted]), actual)
+
+    def test_9_word_forms_match(self):
+        for wanted, actual in (('graphic design', 'Graphic Designer'), ('graphic design', 'Senior Graphic Designer'),
+                               ('Graphic Designer', 'Graphic Design Specialist'), ('web designer', 'Website Designer'),
+                               ('Visual Designer', 'Visual Designers'), ('Web Developer', 'Web Developers')):
+            self.assertTrue(matching_title(actual, [wanted]), actual)
+        # Still a different job: the extra words aren't compatible, or it's a different trade.
+        for wanted, actual in (('graphic design', 'Interior Graphic Designer'), ('Web Producer', 'Web Production Assistant'),
+                               ('web designer', 'Website Security Engineer')):
+            self.assertFalse(matching_title(actual, [wanted]), actual)
 
     def test_9_remote_ok_uses_the_same_rule(self):
         jobs = [{'position': 'Web Series Producer', 'location': 'Worldwide', 'url': 'https://remoteok.com/1', 'description': ''},

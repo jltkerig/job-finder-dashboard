@@ -18,8 +18,9 @@ import mysql.connector
 from dotenv import load_dotenv
 from flask import Flask, abort, jsonify, redirect, render_template, request, send_from_directory, session
 from mysql.connector import Error
-from profile_tools import SKILL_ALIASES, fit_score, normalize_skills, resume_suggestions
-from onet_data import occupation_skill_suggestions, related_title_suggestions
+from profile_tools import AMBIGUOUS_SKILLS, SKILL_ALIASES, fit_score, normalize_skills, resume_suggestions
+from onet_data import occupation_skill_suggestions, related_title_suggestions, title_matches
+from places import city_matches
 from job_listings import NON_JOB_PATH, is_pdf_url
 from db_schema import ensure_unique_source_index
 from job_feeds import FEED_NAMES
@@ -34,7 +35,7 @@ load_dotenv(BASE_DIR / ".env")
 
 app = Flask(__name__)
 
-APP_VERSION = "1.1.105"
+APP_VERSION = "1.1.115"
 
 app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY") or secrets.token_hex(32)
 app.config["SESSION_COOKIE_HTTPONLY"] = True
@@ -71,6 +72,8 @@ scraper_stopping = False
 STOP_REQUEST_FILE = BASE_DIR / ".stop-requested"
 SETTINGS_FILE = BASE_DIR / "settings.json"
 GRACEFUL_STOP_SECONDS = 90
+# Choices for a saved job's Application Status, in the order the dropdowns show them.
+APPLICATION_STATUSES = ["None", "Saved", "Applied", "Talking With Recruiter", "Interview", "Rejected", "Closed"]
 # Schema checks that already succeeded in this process; they only need to run once.
 _schema_ready = set()
 
@@ -277,7 +280,7 @@ def inject_csrf_token():
     # Job sites (National Labor Exchange) list many employers' jobs like the remote feeds: shown as job-board
     # postings, and their domain is never offered for blocking.
     return {"csrf_token": get_csrf_token(), "app_version": APP_VERSION, "feed_names": sorted(FEED_NAMES | JOB_SITE_NAMES),
-            "capture_sources": sorted(CAPTURE_SOURCES)}
+            "capture_sources": sorted(CAPTURE_SOURCES), "application_statuses": APPLICATION_STATUSES}
 
 
 @app.before_request
@@ -511,7 +514,7 @@ def get_dashboard_counts():
     ensure_job_tracking_columns()
     connection = None
     cursor = None
-    counts = {"saved": 0, "applied": 0, "interview": 0, "closed": 0}
+    counts = {"saved": 0, "applied": 0, "recruiter": 0, "interview": 0, "closed": 0}
     try:
         connection = mysql.connector.connect(
             host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD, database=DB_NAME
@@ -521,6 +524,7 @@ def get_dashboard_counts():
             SELECT
                 COUNT(*) AS saved,
                 SUM(application_status = 'Applied') AS applied,
+                SUM(application_status = 'Talking With Recruiter') AS recruiter,
                 SUM(application_status = 'Interview') AS interview,
                 SUM(job_open_status = 'Closed') AS closed
             FROM companies
@@ -717,7 +721,7 @@ def save_user_profile(first_name, last_name, state, job_titles, cities=None, *, 
             """, (job_title,))
 
         cursor.execute("DELETE FROM user_profile_cities WHERE profile_id = 1")
-        allowed_radii = {10, 15, 20, 30, 50}
+        allowed_radii = {5, 10, 15, 20, 30, 50}
         for item in (cities or []):
             city = str(item.get("city", "")).strip()[:150]
             try:
@@ -1255,6 +1259,26 @@ def extension_updates():
     return jsonify({"addons": {EXTENSION_ID: {"updates": updates}}})
 
 
+@app.route("/extension/fit-profile")
+def extension_fit_profile():
+    """What Web Job Scraper needs to mark LinkedIn jobs that may fit: your titles, skills and work preferences,
+    plus Job Finder's skill names and spellings so Job Fit is worked out the same way as on the Dashboard.
+
+    No CORS header on purpose: only the extension (which has permission for this address) can read it; an
+    ordinary web page asking for it gets nothing back.
+    """
+    profile = get_user_profile()
+    titles = [profile.get("primary_job_title") or ""] + list(profile.get("job_titles") or [])
+    return jsonify({
+        "titles": [title for i, title in enumerate(titles) if title and title.casefold() not in
+                   {t.casefold() for t in titles[:i]}],
+        "skills": profile.get("skills") or [],
+        "work_preferences": profile.get("work_preferences") or [],
+        "skill_aliases": SKILL_ALIASES,
+        "ambiguous_skills": sorted(AMBIGUOUS_SKILLS),
+    })
+
+
 @app.route("/extension/<name>")
 def extension_file(name):
     if not EXTENSION_FILE.match(name):
@@ -1585,9 +1609,10 @@ def save_profile():
         except (TypeError, ValueError):
             return []
     home_location = request.form.get("home_location", "").strip()[:150]
+    # The primary title has its own box; it is always searched too, so it leads the title list.
     primary = request.form.get("primary_job_title", "").strip()[:255]
-    if primary and primary.casefold() not in {title.casefold() for title in job_titles}:
-        primary = ""
+    if primary:
+        job_titles = [primary] + [title for title in job_titles if title.casefold() != primary.casefold()]
     avatar = request.form.get("avatar_data", "")
     if avatar and (not re.fullmatch(r"data:image/jpeg;base64,[A-Za-z0-9+/=]+", avatar) or len(avatar) > 550000):
         abort(400)
@@ -1777,8 +1802,7 @@ def update_kept(company_id):
     ensure_job_tracking_columns()
     application_status = request.form.get("application_status", "None").strip()
     notes = request.form.get("notes", "").strip()[:5000]
-    allowed = {"None", "Saved", "Applied", "Interview", "Rejected", "Closed"}
-    if application_status not in allowed:
+    if application_status not in APPLICATION_STATUSES:
         application_status = "None"
 
     connection = None
@@ -1801,7 +1825,8 @@ def update_kept(company_id):
             cursor.close()
         if connection is not None and connection.is_connected():
             connection.close()
-    return redirect(request.referrer or "/dashboard")
+    # The #job anchor reopens this card on the Dashboard, where saved jobs start collapsed.
+    return redirect((request.referrer or "/dashboard") + f"#job-{company_id}")
 
 
 @app.route("/delete-kept/<int:company_id>", methods=["POST"])
@@ -1848,7 +1873,7 @@ def validate_search_criteria(job_title, state, cities=None):
         return None, None, None, "Enter a state."
 
     cleaned_cities = []
-    allowed_radii = {10, 15, 20, 30, 50}
+    allowed_radii = {5, 10, 15, 20, 30, 50}
     if isinstance(cities, list):
         seen = set()
         for item in cities[:25]:
@@ -1944,6 +1969,28 @@ def launch_search_process(job_title, state, cities=None, mode="search"):
     return jsonify({"status": "started"}), 202
 
 
+
+
+@app.route("/job-title-matches")
+def job_title_matches():
+    """Type-ahead for job title boxes: real job titles that match what has been typed so far."""
+    return jsonify({"matches": title_matches((request.args.get("q") or "")[:100])})
+
+
+_home_state_cache = {"value": "", "at": 0.0}
+
+
+def _home_state():
+    """The profile's home state ("MD"), re-read at most once a minute so typing doesn't hit the database."""
+    if time.monotonic() - _home_state_cache["at"] > 60:
+        _home_state_cache.update(value=(get_user_profile().get("state") or "")[:2], at=time.monotonic())
+    return _home_state_cache["value"]
+
+
+@app.route("/city-matches")
+def city_matches_route():
+    """Type-ahead for the city boxes: U.S. places that start with what was typed, near home first."""
+    return jsonify({"matches": city_matches((request.args.get("q") or "")[:100], _home_state())})
 
 
 @app.route("/job-title-suggestions")

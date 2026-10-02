@@ -8,3 +8,5 @@ discovered_employers.json
 board_health.json
 feed_cache/
 *.log
+# Resumes and cover letters from Resume Builder (personal)
+user-builds/

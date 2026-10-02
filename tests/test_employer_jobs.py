@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import no_database  # noqa: F401  (cuts tests off from the real database)
 import employer_jobs
 from employer_jobs import DEFAULT_EMPLOYERS, Employer, employer_for_url, load_employers
 

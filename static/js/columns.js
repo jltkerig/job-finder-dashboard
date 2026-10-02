@@ -1,4 +1,4 @@
-// The Columns chooser in the results filters: tick or untick a column to show or hide it. The choice is remembered
+// The Columns row in the results filters: tick or untick a column to show or hide it. The choice is remembered
 // in this browser. The Job column always shows.
 (() => {
   "use strict";
@@ -35,8 +35,6 @@
         + ` #results-table > tbody > tr.result-row > td:nth-child(${column.index}) { display: none; }`)
       .join("\n");
     for (const box of options.querySelectorAll("input")) box.checked = !hidden.has(box.value);
-    const count = headers.filter((column) => hidden.has(column.name) && !ALWAYS.has(column.name)).length;
-    chooser.querySelector("summary").textContent = count ? `${count} hidden` : "Choose columns";
   }
 
   let hidden = readHidden();
@@ -57,15 +55,10 @@
     label.append(box, ` ${column.name}`);
     options.appendChild(label);
   }
-  options.appendChild(showAll); // the button sits at the bottom of the list
   showAll.addEventListener("click", () => {
     hidden = new Set();
     saveHidden(hidden);
     apply(hidden);
-  });
-  // Close the list when clicking elsewhere.
-  document.addEventListener("click", (event) => {
-    if (chooser.open && !chooser.contains(event.target)) chooser.open = false;
   });
   apply(hidden);
 })();

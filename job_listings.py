@@ -72,16 +72,30 @@ COMPATIBLE_EXTRA_WORDS = {
     "associate", "lead", "staff", "principal", "intern", "web", "website", "ii", "iii", "iv", "v", "i"}
 
 
+def _stem(word):
+    """One form per word, so "graphic design" matches "Graphic Designer(s)" and "web" matches "website"."""
+    if word == "website":
+        return "web"
+    for suffix in ("ers", "er", "s"):
+        if word.endswith(suffix) and len(word) - len(suffix) >= 4:
+            return word[: -len(suffix)]
+    return word
+
+
 def _token_list(value):
     text = str(value or "").casefold()
     for old, new in ((r"front[ -]?end", "frontend"), (r"back[ -]?end", "backend"),
                      (r"full[ -]?stack", "fullstack")):
         text = re.sub(r"\b" + old + r"\b", new, text)
-    return [word for word in re.findall(r"[a-z0-9]+", text) if word not in _DROPPED_WORDS]
+    return [_stem(word) for word in re.findall(r"[a-z0-9]+", text) if word not in _DROPPED_WORDS]
 
 
 def _tokens(value):
     return set(_token_list(value))
+
+
+_OFF_FIELD_STEMS = {_stem(word) for word in OFF_FIELD_WORDS}
+_COMPATIBLE_STEMS = {_stem(word) for word in COMPATIBLE_EXTRA_WORDS}
 
 
 def matching_title(title, wanted):
@@ -93,13 +107,13 @@ def matching_title(title, wanted):
     for phrase in wanted:
         words_list = _token_list(phrase)
         words = set(words_list)
-        if not words or (core & OFF_FIELD_WORDS) - words:
+        if not words or (core & _OFF_FIELD_STEMS) - words:
             continue
         size = len(words_list)
         if any(actual_list[i:i + size] == words_list for i in range(len(actual_list) - size + 1)):
             return True
         extras = actual - words
-        if words <= actual and all(word in COMPATIBLE_EXTRA_WORDS or word.isdigit() for word in extras):
+        if words <= actual and all(word in _COMPATIBLE_STEMS or word.isdigit() for word in extras):
             return True
         if size >= 3 and len(words & actual) >= size - 1:
             return True
