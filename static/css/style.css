@@ -1322,10 +1322,6 @@ body[data-page="rejected"] .rejected-card .card-actions > button { flex:1 1 180p
 .skill-chip-list { display:flex; flex-wrap:wrap; gap:7px; margin:12px 0; }
 .skill-chip { display:inline-flex; align-items:center; gap:6px; padding:5px 8px; border:1px solid #bdcad8; border-radius:20px; background:#fff; color:#263748; font-size:.84rem; }
 .skill-chip button { border:0; background:transparent; color:#23364b; cursor:pointer; font-size:1.2rem; line-height:1; }
-.work-entry { padding:10px; margin:8px 0; border:1px solid #cad4df; border-radius:8px; background:#fff; }
-.work-entry summary { cursor:pointer; font-weight:650; }
-.work-entry label { display:block; margin:10px 0; font-size:.85rem; }
-.work-entry input,.work-entry textarea { display:block; width:100%; max-width:100%; margin-top:4px; }
 .profile-avatar { padding:0; overflow:hidden; cursor:pointer; }
 .profile-avatar img { width:100%; height:100%; object-fit:cover; }
 .profile-summary-card strong,.profile-summary-card span { overflow-wrap:anywhere; }
@@ -1344,10 +1340,6 @@ body[data-page="rejected"] .rejected-card .card-actions > button { flex:1 1 180p
 .skill-add-row input,.skill-add-row button { box-sizing:border-box; min-height:42px; }
 #work-history-list { margin-bottom:16px; }
 #add-work-history { margin-top:8px; }
-.work-entry input[type="month"] { min-height:42px; }
-.history-months { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
-.history-months input[type="checkbox"] { width:auto; }
-@media(max-width:680px) { .history-months { grid-template-columns:1fr; } }
 .profile-preferences { display:flex; flex-wrap:wrap; }
 .profile-preferences label { display:inline-flex; align-items:center; }
 @media(max-width:680px) {
@@ -1508,3 +1500,34 @@ body[data-page="search"] .results-toolbar .column-chooser-inline .column-option 
 .skill-chip-list > button.primary-action { font-weight: 600; }
 
 .skill-chip-list > h4 { flex-basis: 100%; margin: 4px 0 0; }
+
+/* Work history: a card per job (title, company, dates and the first point visible), opened to edit. */
+.work-entry { margin:10px 0; border:1px solid #cad4df; border-left:4px solid #3d6fb4; border-radius:8px; background:#fff; box-shadow:0 1px 2px rgba(20,40,70,.05); }
+.work-entry[open] { border-color:#9fb2cf; border-left-color:#3d6fb4; box-shadow:0 2px 8px rgba(20,40,70,.10); }
+.work-entry summary { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:baseline; gap:2px 14px; padding:12px 40px 12px 14px; cursor:pointer; list-style:none; position:relative; }
+.work-entry summary::-webkit-details-marker { display:none; }
+.work-entry summary::after { content:""; position:absolute; right:16px; top:50%; width:8px; height:8px; margin-top:-6px; border-right:2px solid #5b6b7f; border-bottom:2px solid #5b6b7f; transform:rotate(45deg); transition:transform .15s ease; }
+.work-entry[open] summary::after { transform:rotate(-135deg); margin-top:-2px; }
+.work-entry summary:hover { background:#f6f9fd; }
+.work-main { display:flex; flex-wrap:wrap; align-items:baseline; gap:2px 10px; min-width:0; }
+.work-role { font-size:1rem; color:#1f2d3d; }
+.work-company { color:#4a5a6c; font-size:.92rem; }
+.work-dates { justify-self:end; color:#4a5a6c; font-size:.82rem; font-weight:600; white-space:nowrap; background:#eef3fa; border-radius:20px; padding:3px 10px; }
+.work-preview { grid-column:1 / -1; color:#5b6b7f; font-size:.85rem; font-weight:400; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+.work-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:4px 14px; padding:4px 14px 14px; border-top:1px solid #e3e9f1; }
+.work-fields label, .work-fields fieldset { display:block; margin:10px 0 0; font-size:.85rem; font-weight:600; color:#2d3b4b; }
+.work-fields input:not([type="checkbox"]), .work-fields textarea { display:block; width:100%; max-width:100%; margin-top:4px; font-weight:400; }
+.work-fields input[type="month"] { min-height:42px; }
+.work-wide, .work-dates-editor, .work-actions { grid-column:1 / -1; }
+.work-dates-editor { border:0; padding:0; min-width:0; }
+.work-dates-editor legend { padding:0; font-size:.85rem; font-weight:600; color:#2d3b4b; }
+.work-fields .field-help { display:block; margin-top:4px; font-weight:400; }
+.history-months { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-top:4px; }
+.history-months label { margin:0; font-weight:400; display:flex; flex-direction:column; }
+.history-months input[type="checkbox"] { width:auto; margin:0 0 6px; align-self:flex-start; }
+.work-actions { display:flex; justify-content:space-between; gap:10px; margin-top:12px; }
+.work-empty { margin:8px 0; color:#5b6b7f; font-size:.9rem; }
+@media(max-width:680px) { .work-fields, .history-months { grid-template-columns:1fr; } .work-entry summary { grid-template-columns:1fr; } .work-dates { justify-self:start; } }
+.work-fields input:not([type="checkbox"]), .work-fields textarea { padding:9px 11px; border:1px solid #b9bec5; border-radius:7px; background:#fff; font-family:inherit; font-size:.92rem; color:#252a31; box-sizing:border-box; }
+.work-fields input:focus, .work-fields textarea:focus { outline:2px solid #9fb8dc; outline-offset:1px; border-color:#6f8fbf; }
+.work-fields textarea { line-height:1.4; resize:vertical; }

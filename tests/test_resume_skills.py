@@ -151,5 +151,16 @@ class WorkHistory(unittest.TestCase):
         self.assertIn("Filled in from your r", (root / "static" / "js" / "charts.js").read_text(encoding="utf-8"))
 
 
+class WorkHistoryCards(unittest.TestCase):
+    def test_each_job_is_a_card_with_dates_a_preview_and_done_and_remove_buttons(self):
+        root = Path(__file__).resolve().parents[1]
+        script = (root / "static" / "js" / "charts.js").read_text(encoding="utf-8")
+        for expected in ('"work-entry"', '"work-dates"', '"work-preview"', '"Remove Job"', '"Done"', "No jobs added yet"):
+            self.assertIn(expected, script)
+        css = (root / "static" / "css" / "style.css").read_text(encoding="utf-8")
+        for expected in (".work-entry summary", ".work-fields", ".work-dates", ".work-preview"):
+            self.assertIn(expected, css)
+
+
 if __name__ == "__main__":
     unittest.main()

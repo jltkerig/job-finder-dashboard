@@ -362,30 +362,62 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     $("#add-skill").addEventListener("click", () => { addSkill($("#new-skill").value); $("#new-skill").value = ""; showRelatedSkills(); });
     $("#new-skill").addEventListener("keydown", event => { if (event.key === "Enter") { event.preventDefault(); $("#add-skill").click(); } });
+    // Work history: one card per job (title, company, dates and the first point visible), opened to edit.
+    const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const monthLabel = value => { const m = /^(\d{4})-(\d{2})$/.exec(value || ""); return m ? `${MONTHS[Number(m[2]) - 1] || m[2]} ${m[1]}` : (value || ""); };
+    const datesLabel = text => {
+      const parts = String(text || "").split(/\s*[–-]\s*(?=\d{4}|Present)/i);
+      return parts.length === 2 ? `${monthLabel(parts[0])} – ${/present/i.test(parts[1]) ? "Present" : monthLabel(parts[1])}` : String(text || "");
+    };
+    const firstPoint = text => (String(text || "").split("\n").map(line => line.replace(/^\s*[•\-*]\s*/, "").trim()).find(Boolean) || "");
+    function el(tag, className, text) { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = text; return node; }
     function renderHistory() {
       historyList.replaceChildren();
+      if (!history.length) historyList.append(el("p", "work-empty", "No jobs added yet. Add one, or upload a résumé to fill these in."));
       history.forEach((job, index) => {
-        const details = document.createElement("details"); details.className = "work-entry";
-        const summary = document.createElement("summary"); summary.textContent = `${job.role || "New role"}${job.company ? " · " + job.company : ""}`;
-        details.append(summary);
-        [["Job Title", "role", "e.g. Web Designer"], ["Company", "company", "e.g. Acme Widgets"], ["Dates", "dates", "e.g. Jan 2025 – May 2025"], ["Description", "description", "e.g. Built responsive pages for client websites"]].forEach(([labelText, key, example]) => {
-          const label = document.createElement("label"); label.textContent = labelText;
-          const input = key === "description" ? document.createElement("textarea") : document.createElement("input");
-          input.value = job[key] || ""; input.placeholder=example; input.maxLength = key === "description" ? 3000 : key === "dates" ? 100 : 150;
-          input.addEventListener("input", () => { job[key] = input.value; if (key === "role" || key === "company") summary.textContent = `${job.role || "New role"}${job.company ? " · " + job.company : ""}`; historyField.value = JSON.stringify(history); });
-          label.append(input); details.append(label);
-          if(key==="dates"){
-            const months=document.createElement("div");months.className="history-months";
-            const start=document.createElement("input"),end=document.createElement("input"),current=document.createElement("input");start.type=end.type="month";current.type="checkbox";
-            const known=(job.dates||"").match(/^(\d{4}-\d{2})\s*[–-]\s*(\d{4}-\d{2}|Present)$/i);
-            if(known){start.value=known[1];if(known[2].toLowerCase()==="present")current.checked=true;else end.value=known[2];}
-            const sync=()=>{if(!start.value)return;job.dates=`${start.value} – ${current.checked?"Present":end.value||""}`.trim();input.value=job.dates;end.disabled=current.checked;historyField.value=JSON.stringify(history);};
-            [start,end,current].forEach(control=>control.addEventListener("change",sync));end.disabled=current.checked;
-            for(const [caption,control] of [["Start month",start],["End month",end],["Current job",current]]){const field=document.createElement("label");field.textContent=caption;field.append(control);months.append(field);}details.append(months);
-          }
-        });
-        const remove = document.createElement("button"); remove.type = "button"; remove.className = "bordered-button secondary-action"; remove.textContent = "Remove Job";
-        remove.addEventListener("click", () => { history.splice(index, 1); renderHistory(); }); details.append(remove); historyList.append(details);
+        const details = el("details", "work-entry");
+        const summary = el("summary");
+        const main = el("span", "work-main"), role = el("strong", "work-role"), company = el("span", "work-company"), dates = el("span", "work-dates"), preview = el("span", "work-preview");
+        main.append(role, company); summary.append(main, dates, preview); details.append(summary);
+        const refresh = () => {
+          role.textContent = job.role || "New role"; company.textContent = job.company || "";
+          const label = datesLabel(job.dates); dates.textContent = label; dates.hidden = !label;
+          preview.textContent = firstPoint(job.description); preview.hidden = !preview.textContent;
+        };
+        refresh();
+        const save = () => { historyField.value = JSON.stringify(history); refresh(); };
+        const fields = el("div", "work-fields");
+        const field = (labelText, key, example, area) => {
+          const label = el("label", area ? "work-wide" : ""); label.append(labelText + " ");
+          const input = el(area ? "textarea" : "input"); input.value = job[key] || ""; input.placeholder = example;
+          input.maxLength = key === "description" ? 3000 : key === "dates" ? 100 : 150; if (area) input.rows = 6;
+          input.addEventListener("input", () => { job[key] = input.value; save(); });
+          label.append(input); return { label, input };
+        };
+        const title = field("Job Title", "role", "e.g. Web Designer"), companyField = field("Company", "company", "e.g. Acme Widgets");
+        fields.append(title.label, companyField.label);
+        // Dates: month pickers when the dates fit them; the typed text too when they don't (e.g. just years).
+        const datesField = field("Dates as written", "dates", "e.g. 2014 – 2015"); datesField.label.className = "work-wide";
+        const known = (job.dates || "").match(/^(\d{4}-\d{2})\s*[–-]\s*(\d{4}-\d{2}|Present)$/i);
+        const months = el("div", "history-months");
+        const start = el("input"), end = el("input"), current = el("input"); start.type = end.type = "month"; current.type = "checkbox";
+        if (known) { start.value = known[1]; if (known[2].toLowerCase() === "present") current.checked = true; else end.value = known[2]; }
+        end.disabled = current.checked;
+        const sync = () => { if (!start.value) return; job.dates = `${start.value} – ${current.checked ? "Present" : end.value || ""}`.trim(); datesField.input.value = job.dates; end.disabled = current.checked; save(); };
+        [start, end, current].forEach(control => control.addEventListener("change", sync));
+        for (const [caption, control] of [["Start month", start], ["End month", end], ["Current job", current]]) { const box = el("label"); box.append(control, caption); months.append(box); }
+        const dateBlock = el("fieldset", "work-dates-editor"); dateBlock.append(el("legend", "", "Dates"), months);
+        if (job.dates && !known) dateBlock.append(datesField.label);
+        fields.append(dateBlock);
+        const description = field("What you did", "description", "e.g. Built responsive pages for client websites", true);
+        description.label.append(el("small", "field-help", "One point per line."));
+        fields.append(description.label);
+        const actions = el("div", "work-actions");
+        const remove = el("button", "bordered-button destructive-action", "Remove Job"); remove.type = "button";
+        remove.addEventListener("click", () => { history.splice(index, 1); renderHistory(); });
+        const done = el("button", "bordered-button secondary-action", "Done"); done.type = "button";
+        done.addEventListener("click", () => { details.open = false; details.scrollIntoView({ block: "nearest" }); });
+        actions.append(remove, done); fields.append(actions); details.append(fields); historyList.append(details);
       }); historyField.value = JSON.stringify(history);
     }
     $("#add-work-history").addEventListener("click", () => { history.push({role:"",company:"",dates:"",description:""}); renderHistory(); historyList.lastElementChild.open = true; });
