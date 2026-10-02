@@ -1,6 +1,6 @@
 # Job Finder
 
-Personal job discovery project using Python, MySQL, Flask, Docker, SearXNG, Remote OK, USAJOBS (optional API key), local O*NET occupation data, and OpenStreetMap Nominatim. The version number is shown in the dashboard footer and set in `dashboard.py` (`APP_VERSION`); the sections below are a history by version.
+Personal job discovery project using Python, MySQL, Flask, Docker, SearXNG, Remote OK, USAJOBS and Adzuna (optional free API keys), local O*NET occupation data, and OpenStreetMap Nominatim. The version number is shown in the dashboard footer and set in `dashboard.py` (`APP_VERSION`); the sections below are a history by version.
 
 ## What Job Finder does
 
