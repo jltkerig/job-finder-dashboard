@@ -35,6 +35,12 @@ class DashboardWording(unittest.TestCase):
         for page in PAGES:
             self.assertNotRegex(read("templates", f"{page}.html"), r'5001/"[^>]*target=', page)
 
+    def test_menu_order_has_resume_builder_before_settings_and_tuning(self):
+        import re
+        for page in PAGES:
+            labels = re.findall(r'<a class="nav-link[^"]*" href="[^"]*">([^<]+)</a>', read("templates", f"{page}.html"))
+            self.assertEqual(labels[:5], ["Search", "Dashboard", "Résumé Builder", "Settings", "Tuning"], page)
+
     def test_search_settings_on_the_tuning_page_collapses(self):
         html = read("templates", "tuning.html")
         self.assertIn('<details class="settings-panel history-collapse" id="search-settings"', html)
