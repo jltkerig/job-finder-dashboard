@@ -1656,3 +1656,5 @@ body[data-page="search"] .results-toolbar .compact-rows-toggle { min-height:42px
 /* Explanations sit under the heading or label, above the box they describe */
 .form-field > label + .field-help { margin: 2px 0 8px; }
 #search-settings form .form-field > label + .field-help { margin: 0 0 8px; }
+
+.profile-subsection .form-field + .form-field { margin-top: 18px; }
