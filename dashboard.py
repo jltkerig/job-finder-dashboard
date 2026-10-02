@@ -36,7 +36,7 @@ load_dotenv(BASE_DIR / ".env")
 
 app = Flask(__name__)
 
-APP_VERSION = "1.1.126"
+APP_VERSION = "1.1.128"
 
 app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY") or secrets.token_hex(32)
 app.config["SESSION_COOKIE_HTTPONLY"] = True
@@ -1275,6 +1275,36 @@ def latest_extension_build():
         return None, None
     version, path = max(builds)
     return ".".join(map(str, version)), path
+
+
+LOCAL_TIMEZONE = ZoneInfo("America/New_York")
+
+
+@app.template_filter("local_time")
+def local_time(value, fmt="%b %d, %Y %I:%M %p"):
+    """Found, last-checked and updated times are saved in UTC; show them on this computer's clock."""
+    if not value:
+        return ""
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(LOCAL_TIMEZONE).strftime(fmt)
+
+
+def how_long(value, now=None):
+    """"3 days", "5 hours", "20 minutes": how long ago a saved (UTC) time was."""
+    if not value:
+        return ""
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    seconds = max(0, int(((now or datetime.now(timezone.utc)) - value).total_seconds()))
+    for unit, size in (("week", 604800), ("day", 86400), ("hour", 3600), ("minute", 60)):
+        if seconds >= size:
+            count = seconds // size
+            return f"{count} {unit}{'' if count == 1 else 's'}"
+    return "less than a minute"
+
+
+app.add_template_filter(how_long, "how_long")
 
 
 @app.route("/extension/updates.json")
