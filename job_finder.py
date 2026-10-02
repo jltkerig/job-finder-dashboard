@@ -13,6 +13,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from urllib.parse import urljoin, urlparse
 
+import db
 import mysql.connector
 import requests
 from bs4 import BeautifulSoup
@@ -622,13 +623,7 @@ def check_searxng_timer():
 
 def connect_database():
     try:
-        return mysql.connector.connect(
-            host=DB_HOST,
-            port=DB_PORT,
-            user=DB_USER,
-            password=DB_PASSWORD,
-            database=DB_NAME,
-        )
+        return db.connect()
 
     except Error as error:
         print()

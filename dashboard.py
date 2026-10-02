@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+import gzip
 import hashlib
 import os
 from pathlib import Path
@@ -14,6 +15,7 @@ import time
 from urllib.parse import quote, urlparse
 from zoneinfo import ZoneInfo
 
+import db
 import mysql.connector
 from dotenv import load_dotenv
 from flask import Flask, abort, jsonify, redirect, render_template, request, send_from_directory, session
@@ -40,7 +42,7 @@ load_dotenv(BASE_DIR / ".env")
 
 app = Flask(__name__)
 
-APP_VERSION = "1.1.148"
+APP_VERSION = "1.1.149"
 
 app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY") or secrets.token_hex(32)
 app.config["SESSION_COOKIE_HTTPONLY"] = True
@@ -224,9 +226,7 @@ def initialize_database():
     connection = None
     cursor = None
     try:
-        connection = mysql.connector.connect(
-            host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD
-        )
+        connection = db.connect(database=False)
         cursor = connection.cursor()
         cursor.execute(f"CREATE DATABASE IF NOT EXISTS `{database_name}`")
         cursor.execute(f"USE `{database_name}`")
@@ -301,6 +301,28 @@ def refuse_foreign_hosts():
     return None
 
 
+COMPRESSIBLE = {"text/html", "text/css", "application/javascript", "text/javascript", "application/json", "image/svg+xml"}
+
+
+@app.after_request
+def make_responses_lighter(response):
+    """Send pages, styles, scripts and JSON gzipped (about a fifth of the size), and let the browser keep versioned
+    static files (the page links them with ?v=<version>) so they are not downloaded again on every visit."""
+    if request.path.startswith("/static/") and request.args.get("v"):
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    wants_gzip = "gzip" in request.headers.get("Accept-Encoding", "")
+    if (response.status_code == 200 and wants_gzip and response.mimetype in COMPRESSIBLE
+            and "Content-Encoding" not in response.headers and (response.direct_passthrough or not response.is_streamed)):
+        response.direct_passthrough = False
+        data = response.get_data()
+        if len(data) > 1024:
+            response.set_data(gzip.compress(data, compresslevel=6))
+            response.headers["Content-Encoding"] = "gzip"
+            response.headers["Content-Length"] = str(len(response.get_data()))
+        response.headers.add("Vary", "Accept-Encoding")
+    return response
+
+
 @app.before_request
 def protect_local_post_requests():
     if request.method != "POST":
@@ -321,13 +343,7 @@ def ensure_keep_column():
     cursor = None
 
     try:
-        connection = mysql.connector.connect(
-            host=DB_HOST,
-            port=DB_PORT,
-            user=DB_USER,
-            password=DB_PASSWORD,
-            database=DB_NAME,
-        )
+        connection = db.connect()
         cursor = connection.cursor()
         cursor.execute("""
             ALTER TABLE companies
@@ -355,13 +371,7 @@ def ensure_job_tracking_columns():
     cursor = None
 
     try:
-        connection = mysql.connector.connect(
-            host=DB_HOST,
-            port=DB_PORT,
-            user=DB_USER,
-            password=DB_PASSWORD,
-            database=DB_NAME,
-        )
+        connection = db.connect()
         cursor = connection.cursor()
         for legacy, current in (("career_confidence", "career_credibility"),
                                 ("usa_confidence", "usa_credibility")):
@@ -457,13 +467,7 @@ def tidy_expired_closed_jobs():
     """At startup: delete jobs closed for more than a week, keeping saved ones (see job_retention.py)."""
     connection = None
     try:
-        connection = mysql.connector.connect(
-            host=DB_HOST,
-            port=DB_PORT,
-            user=DB_USER,
-            password=DB_PASSWORD,
-            database=DB_NAME,
-        )
+        connection = db.connect()
         deleted = tidy_closed_jobs(connection)
         if deleted:
             print(f"Deleted {deleted} job(s) closed for more than {CLOSED_KEEP_DAYS} days (saved jobs are kept).")
@@ -482,9 +486,7 @@ def record_search_history(job_title, state, cities=None):
     connection = None
     cursor = None
     try:
-        connection = mysql.connector.connect(
-            host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD, database=DB_NAME
-        )
+        connection = db.connect()
         cursor = connection.cursor()
         cities_text = json.dumps(cities or [])
         # The same search again (same titles, state and cities) just moves the earlier entry back to the top, so it also
@@ -540,9 +542,7 @@ def get_search_history(limit=10):
     connection = None
     cursor = None
     try:
-        connection = mysql.connector.connect(
-            host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD, database=DB_NAME
-        )
+        connection = db.connect()
         cursor = connection.cursor(dictionary=True)
         cursor.execute(
             """
@@ -569,7 +569,7 @@ def refresh_job_fit():
     """Re-read stored listings for skills the current skills list recognizes. Returns how many listings changed."""
     connection = None
     try:
-        connection = mysql.connector.connect(host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD, database=DB_NAME)
+        connection = db.connect()
         return refresh_listing_skills(connection)
     except Error as error:
         print(f"Could not refresh Job Fit: {error}")
@@ -584,7 +584,7 @@ def listing_skill_demand(saved_skills, limit=12):
     connection = None
     cursor = None
     try:
-        connection = mysql.connector.connect(host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD, database=DB_NAME)
+        connection = db.connect()
         cursor = connection.cursor()
         cursor.execute("SELECT listing_skills FROM companies WHERE is_rejected = 0 AND listing_skills IS NOT NULL")
         return skill_demand([row[0] for row in cursor.fetchall()], saved_skills, limit)
@@ -604,9 +604,7 @@ def get_dashboard_counts():
     cursor = None
     counts = {"saved": 0, "applied": 0, "recruiter": 0, "interview": 0, "closed": 0}
     try:
-        connection = mysql.connector.connect(
-            host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD, database=DB_NAME
-        )
+        connection = db.connect()
         cursor = connection.cursor(dictionary=True)
         cursor.execute("""
             SELECT
@@ -640,13 +638,7 @@ def ensure_profile_tables():
     cursor = None
 
     try:
-        connection = mysql.connector.connect(
-            host=DB_HOST,
-            port=DB_PORT,
-            user=DB_USER,
-            password=DB_PASSWORD,
-            database=DB_NAME,
-        )
+        connection = db.connect()
         cursor = connection.cursor()
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS user_profile (
@@ -721,13 +713,7 @@ def get_user_profile():
     }
 
     try:
-        connection = mysql.connector.connect(
-            host=DB_HOST,
-            port=DB_PORT,
-            user=DB_USER,
-            password=DB_PASSWORD,
-            database=DB_NAME,
-        )
+        connection = db.connect()
         cursor = connection.cursor(dictionary=True)
         cursor.execute("""
             SELECT first_name, last_name, state, home_location, home_zip, primary_job_title, avatar_data, work_preferences
@@ -783,13 +769,7 @@ def save_user_profile(first_name, last_name, state, job_titles, cities=None, *, 
     cursor = None
 
     try:
-        connection = mysql.connector.connect(
-            host=DB_HOST,
-            port=DB_PORT,
-            user=DB_USER,
-            password=DB_PASSWORD,
-            database=DB_NAME,
-        )
+        connection = db.connect()
         cursor = connection.cursor()
         cursor.execute("""
             UPDATE user_profile
@@ -955,7 +935,7 @@ def block_company(company_id):
     connection = None
     cursor = None
     try:
-        connection = mysql.connector.connect(host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD, database=DB_NAME)
+        connection = db.connect()
         cursor = connection.cursor(dictionary=True)
         cursor.execute("SELECT name FROM companies WHERE id = %s", (company_id,))
         row = cursor.fetchone()
@@ -1014,9 +994,7 @@ def get_rejected_companies():
     connection = None
     cursor = None
     try:
-        connection = mysql.connector.connect(
-            host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD, database=DB_NAME
-        )
+        connection = db.connect()
         cursor = connection.cursor(dictionary=True)
         cursor.execute("""
             SELECT id, name, career_job_title, career_credibility, domain, career_url,
@@ -1044,9 +1022,7 @@ def get_kept_companies(status_filter="", state_filter="", title_filter="", sort_
     cursor = None
 
     try:
-        connection = mysql.connector.connect(
-            host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD, database=DB_NAME
-        )
+        connection = db.connect()
         cursor = connection.cursor(dictionary=True)
 
         where = ["is_kept = 1", "is_rejected = 0"]
@@ -1120,13 +1096,7 @@ def get_companies():
     cursor = None
 
     try:
-        connection = mysql.connector.connect(
-            host=DB_HOST,
-            port=DB_PORT,
-            user=DB_USER,
-            password=DB_PASSWORD,
-            database=DB_NAME,
-        )
+        connection = db.connect()
 
         cursor = connection.cursor(dictionary=True)
 
@@ -1595,6 +1565,9 @@ def credibility_scores():
     return render_template("credibility-scores.html")
 
 
+SKIPS_PER_PAGE = 25
+
+
 @app.route("/rejected-listings")
 def rejected_listings():
     ensure_job_tracking_columns()
@@ -1612,10 +1585,23 @@ def rejected_listings():
             except (ValueError, TypeError):
                 pass
         search_skips.append({**event, "next_check": next_check})
+    # The skipped pages run to thousands, so only one page of them is sent (and searched on the server).
+    skip_query = (request.args.get("skip_q") or "").strip()[:200]
+    if skip_query:
+        needle = skip_query.casefold()
+        search_skips = [item for item in search_skips
+                        if needle in " ".join(str(item.get(k) or "") for k in ("title", "reason", "url")).casefold()]
+    skip_total = len(search_skips)
+    skip_pages = max(1, -(-skip_total // SKIPS_PER_PAGE))
+    try:
+        skip_page = min(max(int(request.args.get("skip_page", 1)), 1), skip_pages)
+    except ValueError:
+        skip_page = 1
+    search_skips = search_skips[(skip_page - 1) * SKIPS_PER_PAGE:skip_page * SKIPS_PER_PAGE]
     return render_template(
         "rejected-listings.html",
         companies=get_rejected_companies(),
-        search_skips=search_skips,
+        search_skips=search_skips, skip_total=skip_total, skip_page=skip_page, skip_pages=skip_pages, skip_query=skip_query,
         blocked_domains=get_blocked_domains(),
         blocked_companies=get_blocked_companies(),
         blocked_domain_info=block_details("domains", get_blocked_domains()),
@@ -1636,9 +1622,7 @@ def reject_listing(company_id):
     if reason not in {"wrong_role", "wrong_location", "not_a_job", "duplicate", "other"}:
         reason = "other"
     try:
-        connection = mysql.connector.connect(
-            host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD, database=DB_NAME
-        )
+        connection = db.connect()
         cursor = connection.cursor(dictionary=True)
         cursor.execute("SELECT domain FROM companies WHERE id = %s", (company_id,))
         row = cursor.fetchone()
@@ -1684,9 +1668,7 @@ def restore_rejected(company_id):
     cursor = None
     domain = None
     try:
-        connection = mysql.connector.connect(
-            host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD, database=DB_NAME
-        )
+        connection = db.connect()
         cursor = connection.cursor(dictionary=True)
         cursor.execute("SELECT domain, pre_reject_kept FROM companies WHERE id = %s AND is_rejected = 1", (company_id,))
         row = cursor.fetchone()
@@ -1732,7 +1714,7 @@ def block_domain(company_id):
     connection = None
     cursor = None
     try:
-        connection = mysql.connector.connect(host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD, database=DB_NAME)
+        connection = db.connect()
         cursor = connection.cursor(dictionary=True)
         cursor.execute("SELECT domain, source_type FROM companies WHERE id = %s", (company_id,))
         row = cursor.fetchone()
@@ -1866,13 +1848,7 @@ def save_kept():
     cursor = None
 
     try:
-        connection = mysql.connector.connect(
-            host=DB_HOST,
-            port=DB_PORT,
-            user=DB_USER,
-            password=DB_PASSWORD,
-            database=DB_NAME,
-        )
+        connection = db.connect()
         cursor = connection.cursor()
         placeholders = ",".join(["%s"] * len(cleaned_ids))
         cursor.execute(
@@ -1897,9 +1873,7 @@ def unsave_kept(company_id):
     connection = None
     cursor = None
     try:
-        connection = mysql.connector.connect(
-            host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD, database=DB_NAME
-        )
+        connection = db.connect()
         cursor = connection.cursor()
         cursor.execute(
             "UPDATE companies SET is_kept = 0, application_status = 'None' WHERE id = %s",
@@ -1980,9 +1954,7 @@ def update_kept(company_id):
     connection = None
     cursor = None
     try:
-        connection = mysql.connector.connect(
-            host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD, database=DB_NAME
-        )
+        connection = db.connect()
         cursor = connection.cursor()
         cursor.execute(
             "UPDATE companies SET application_status = %s, notes = %s WHERE id = %s AND is_kept = 1",
@@ -2008,13 +1980,7 @@ def delete_kept(company_id):
     cursor = None
 
     try:
-        connection = mysql.connector.connect(
-            host=DB_HOST,
-            port=DB_PORT,
-            user=DB_USER,
-            password=DB_PASSWORD,
-            database=DB_NAME,
-        )
+        connection = db.connect()
         cursor = connection.cursor()
         cursor.execute(
             "DELETE FROM companies WHERE id = %s AND is_kept = 1",
