@@ -1,5 +1,5 @@
 // The Columns row in the results filters: tick or untick a column to show or hide it. The choice is remembered
-// in this browser. The Job column always shows.
+// in this browser. The Job column always shows, so it isn't in the list.
 (() => {
   "use strict";
   const table = document.getElementById("results-table");
@@ -39,13 +39,12 @@
 
   let hidden = readHidden();
   for (const column of headers) {
-    if (!column.name) continue;
+    if (!column.name || ALWAYS.has(column.name)) continue; // the Job column can't be hidden, so it isn't listed
     const label = document.createElement("label");
     label.className = "column-option";
     const box = document.createElement("input");
     box.type = "checkbox";
     box.value = column.name;
-    box.disabled = ALWAYS.has(column.name);
     box.addEventListener("change", () => {
       if (box.checked) hidden.delete(column.name);
       else hidden.add(column.name);
