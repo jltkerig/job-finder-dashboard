@@ -9,9 +9,9 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
-import capture_import as capture
+from jobfinder.records import capture_import as capture
 import job_finder as finder
-import job_retention
+from jobfinder.records import job_retention
 
 
 def capture_file(root, site="linkedin", jobs=None, day="passive-09-30-2026"):

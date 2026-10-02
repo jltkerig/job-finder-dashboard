@@ -99,7 +99,7 @@ class FeedSearch(unittest.TestCase):
                 'url': f'https://remotive.com/remote-jobs/design/web-designer-{number}', 'description': description}
 
     def run_feed(self, jobs=None, fetch=None, max_new=2):
-        from job_feeds import Feed
+        from jobfinder.sources.job_feeds import Feed
         feed = Feed('Remotive', 'remotive.com', fetch or (lambda: jobs), {'remotive.com'})
         captured, skips = [], []
         run_search({}, 'https://example.com/none', 'Web Designer', max_new=max_new,

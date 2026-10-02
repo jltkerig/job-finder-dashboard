@@ -6,8 +6,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
-import employer_jobs
-from employer_jobs import DEFAULT_EMPLOYERS, Employer, employer_for_url, load_employers
+from jobfinder import paths
+from jobfinder.sources import employer_jobs
+from jobfinder.sources.employer_jobs import DEFAULT_EMPLOYERS, Employer, employer_for_url, load_employers
 
 HOME_DEPOT = next(config for config in DEFAULT_EMPLOYERS if config["name"] == "The Home Depot")
 JPMORGAN = next(config for config in DEFAULT_EMPLOYERS if config["name"] == "JPMorgan Chase")
@@ -300,7 +301,7 @@ class EmployerList(unittest.TestCase):
             self.assertEqual([e.name for e in load_employers(path, Path('no-discovered.json'))], ['The Home Depot'])
 
     def test_the_shipped_file_matches_the_defaults(self):
-        shipped = json.loads((Path(employer_jobs.__file__).parent / 'watched_employers.json').read_text(encoding='utf-8'))
+        shipped = json.loads((paths.DEFAULTS_DIR / 'watched_employers.json').read_text(encoding='utf-8'))
         self.assertEqual(shipped, DEFAULT_EMPLOYERS)
 
     def test_a_posting_url_finds_its_employer(self):

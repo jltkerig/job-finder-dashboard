@@ -6,8 +6,8 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
-from job_listings import canonical_url, excludes_us, extract_jobs, is_pdf_url, job_links
-from ats_feeds import public_board_links
+from jobfinder.sources.job_listings import canonical_url, excludes_us, extract_jobs, is_pdf_url, job_links
+from jobfinder.sources.ats_feeds import public_board_links
 
 
 class ListingChecks(unittest.TestCase):
@@ -50,7 +50,7 @@ class ListingChecks(unittest.TestCase):
             def raise_for_status(self): pass
             def json(self): return [{'text': 'Web Designer', 'hostedUrl': 'https://jobs.lever.co/example/1'},
                                     {'text': 'Accountant', 'hostedUrl': 'https://jobs.lever.co/example/2'}]
-        with patch('ats_feeds.requests.get', return_value=Response()):
+        with patch('jobfinder.sources.ats_feeds.requests.get', return_value=Response()):
             self.assertEqual(public_board_links('https://jobs.lever.co/example', ['Web Designer']),
                              ['https://jobs.lever.co/example/1'])
 

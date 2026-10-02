@@ -47,7 +47,7 @@ class NewVersusAlreadySaved(unittest.TestCase):
 
 class TrackingParameters(unittest.TestCase):
     def test_the_same_job_with_and_without_apply_tracking_is_one_url(self):
-        from job_listings import canonical_url
+        from jobfinder.sources.job_listings import canonical_url
         self.assertEqual(canonical_url("https://www.builtinnyc.com/job/lead-ux/11399021?applyRequired=true"),
                          canonical_url("https://www.builtinnyc.com/job/lead-ux/11399021"))
         self.assertNotEqual(canonical_url("https://x.example/jobs?id=1"), canonical_url("https://x.example/jobs?id=2"))

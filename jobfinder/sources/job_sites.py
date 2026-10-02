@@ -19,7 +19,7 @@ from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 import requests
 
-from places import STATE_NAMES
+from jobfinder.profiles.places import STATE_NAMES
 
 USER_AGENT = "Mozilla/5.0 (compatible; PersonalJobFinder/1.1; local job search)"
 

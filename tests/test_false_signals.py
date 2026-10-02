@@ -8,10 +8,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
 import job_finder as finder
 from bs4 import BeautifulSoup
-from employer_site import _names_match
-from job_listings import NON_JOB_PATH, excludes_us, extract_jobs, matching_title
-from profile_tools import listing_skills
-from remote_ok import matching_jobs
+from jobfinder.sources.employer_site import _names_match
+from jobfinder.sources.job_listings import NON_JOB_PATH, excludes_us, extract_jobs, matching_title
+from jobfinder.profiles.profile_tools import listing_skills
+from jobfinder.sources.remote_ok import matching_jobs
 
 
 def arrangement(title, description, location='Austin, TX'):

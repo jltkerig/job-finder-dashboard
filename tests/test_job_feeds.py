@@ -7,8 +7,8 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
-import job_feeds
-from job_feeds import FEEDS, FEED_NAMES, Feed, parse_we_work_remotely
+from jobfinder.sources import job_feeds
+from jobfinder.sources.job_feeds import FEEDS, FEED_NAMES, Feed, parse_we_work_remotely
 
 REMOTIVE_JSON = {'jobs': [
     {'id': 1, 'url': 'https://remotive.com/remote-jobs/design/web-designer-1', 'title': 'Web Designer',

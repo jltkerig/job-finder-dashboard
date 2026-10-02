@@ -30,7 +30,7 @@ DASHBOARD = ROOT / "dashboard.py"
 VERSION_LINE = re.compile(r'^APP_VERSION = "(\d+)\.(\d+)\.(\d+)"$', re.M)
 EXCLUDE = [
     ".env", "*.log", "search_skips.jsonl", "block_metadata.json", ".stop-requested", ".update-in-progress",
-    "watched_employers.before-*.json", "user-builds/*", "feed_cache/*", "*.pyc",
+    "watched_employers.before-*.json", "user-builds/*", "user-data/*", "logs/*", "feed_cache/*", "*.pyc",
 ]
 DASHBOARD_URL = "http://127.0.0.1:5000"
 

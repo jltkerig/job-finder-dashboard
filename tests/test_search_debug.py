@@ -6,8 +6,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
-import search_debug
-from search_debug import DebugRun
+from jobfinder.records import search_debug
+from jobfinder.records.search_debug import DebugRun
 
 
 class DebugFile(unittest.TestCase):

@@ -13,6 +13,9 @@ $UpdateLog = Join-Path $ProjectDir "update.log"
 # but not hash-checked, or every backup would fail as "changed during backup".
 $VolatileFiles = @("update.log", "dashboard.log", "dashboard-error.log", "job_finder.log", "startup.log") |
     ForEach-Object { Join-Path $ProjectDir $_ }
+# Everything in logs\ is also a log that keeps growing.
+$LogFolder = Join-Path $ProjectDir "logs"
+function Test-Volatile($item) { ($item.FullName -in $VolatileFiles) -or $item.FullName.StartsWith($LogFolder + "\") }
 $backup = $null
 $backupVerified = $false
 $installationStarted = $false
@@ -123,7 +126,7 @@ try {
         $_.FullName.Substring($ProjectDir.Length + 1)
     })
     # Log files are actively appended; update.log is also never deleted by rollback.
-    $backupFiles = @($originalItems | Where-Object { -not $_.PSIsContainer -and $_.FullName -notin $VolatileFiles } | ForEach-Object {
+    $backupFiles = @($originalItems | Where-Object { -not $_.PSIsContainer -and -not (Test-Volatile $_) } | ForEach-Object {
         [PSCustomObject]@{
             Path = $_.FullName.Substring($ProjectDir.Length + 1)
             Hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash
@@ -138,8 +141,8 @@ try {
             throw "Project changed during backup: $($entry.Path)"
         }
     }
-    $currentPaths = @(Get-ChildItem -LiteralPath $ProjectDir -Recurse -Force | ForEach-Object { $_.FullName } | Where-Object { $_ -notin $VolatileFiles })
-    $originalPaths = @($originalItems | ForEach-Object { $_.FullName } | Where-Object { $_ -notin $VolatileFiles })
+    $currentPaths = @(Get-ChildItem -LiteralPath $ProjectDir -Recurse -Force | Where-Object { -not (Test-Volatile $_) } | ForEach-Object { $_.FullName })
+    $originalPaths = @($originalItems | Where-Object { -not (Test-Volatile $_) } | ForEach-Object { $_.FullName })
     if (Compare-Object $originalPaths $currentPaths) { throw "Project contents changed during backup." }
     $backupVerified = $true
     Write-UpdateLog "Backup verified at $backup"
@@ -165,11 +168,15 @@ try {
     }
 
     # Remove files retired from newer releases so old installs do not accumulate stale copies.
-    foreach ($obsolete in @("test_database.py", "searxng\settings.json", ".update-in-progress")) {
+    # Older versions kept the code at the top of the project; it now lives in jobfinder\.
+    $movedModules = @("db", "db_schema", "job_listings", "job_sites", "job_feeds", "remote_ok", "remote_states", "employer_jobs", "employer_site",
+        "ats_discovery", "ats_feeds", "ats_lookup", "closed_jobs", "profile_tools", "onet_data", "places", "travel",
+        "board_health", "search_skips", "search_debug", "capture_import", "job_retention") | ForEach-Object { "$_.py" }
+    foreach ($obsolete in (@("test_database.py", "searxng\settings.json", ".update-in-progress", "recommended_domains.txt") + $movedModules)) {
         Remove-Item (Join-Path $ProjectDir $obsolete) -Recurse -Force -ErrorAction SilentlyContinue
     }
 
-    foreach ($required in @("dashboard.py", "job_finder.py", "start.ps1", "templates", "static")) {
+    foreach ($required in @("dashboard.py", "job_finder.py", "start.ps1", "templates", "static", "jobfinder")) {
         if (-not (Test-Path (Join-Path $ProjectDir $required))) { throw "Required updated item is missing: $required" }
     }
 

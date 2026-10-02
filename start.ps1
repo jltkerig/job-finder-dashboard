@@ -8,9 +8,11 @@ $EnvPath = Join-Path $ProjectPath ".env"
 $EnvExamplePath = Join-Path $ProjectPath ".env.example"
 $MySqlStartPath = "C:\xampp\mysql_start.bat"
 $DashboardUrl = "http://127.0.0.1:5000"
-$DashboardStdoutLog = Join-Path $ProjectPath "dashboard.log"
-$DashboardStderrLog = Join-Path $ProjectPath "dashboard-error.log"
-$StartupLog = Join-Path $ProjectPath "startup.log"
+$LogDir = Join-Path $ProjectPath "logs"
+New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
+$DashboardStdoutLog = Join-Path $LogDir "dashboard.log"
+$DashboardStderrLog = Join-Path $LogDir "dashboard-error.log"
+$StartupLog = Join-Path $LogDir "startup.log"
 $DashboardSource = Get-Content -Path $DashboardPath -Raw -ErrorAction Stop
 if ($DashboardSource -notmatch '(?m)^APP_VERSION\s*=\s*["'']([0-9]+\.[0-9]+\.[0-9]+)["'']') {
     throw "Cannot read APP_VERSION from $DashboardPath"

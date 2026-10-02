@@ -9,8 +9,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import job_finder as finder
-from ats_discovery import identify
-from employer_jobs import DEFAULT_EMPLOYERS, Employer, config_key
+from jobfinder.sources.ats_discovery import identify
+from jobfinder.sources.employer_jobs import DEFAULT_EMPLOYERS, Employer, config_key
 from test_employer_jobs import Response
 from test_search_flow import FakeEmployer, employer_opening, run_search
 
@@ -103,7 +103,7 @@ class Internships(unittest.TestCase):
 
 class CompanyBoards(unittest.TestCase):
     def setUp(self):
-        import ats_lookup
+        from jobfinder.sources import ats_lookup
         ats_lookup.clear_cache()
 
     @staticmethod
@@ -119,23 +119,23 @@ class CompanyBoards(unittest.TestCase):
            'descriptionPlain': 'Design the product.', 'publishedAt': '2026-09-25T00:00:00Z'}
 
     def test_board_names_are_built_from_the_company_name(self):
-        from ats_lookup import slug_candidates
+        from jobfinder.sources.ats_lookup import slug_candidates
         self.assertEqual(slug_candidates('Aegis AI'), ['aegis-ai', 'aegisai'])
         self.assertEqual(slug_candidates('Acme Labs LLC'), ['acme-labs', 'acmelabs', 'acme'])
 
     def test_the_companys_own_ashby_posting_is_found_and_cleaned_of_tracking(self):
-        from ats_lookup import find_ats_posting
+        from jobfinder.sources.ats_lookup import find_ats_posting
         found = find_ats_posting('Aegis AI', 'Visual Designer', self.ashby_http('aegis-ai', [self.JOB]))
         self.assertEqual(found['system'], 'ashby')
         self.assertEqual(found['url'], 'https://jobs.ashbyhq.com/aegis-ai/726f20fd-7a70-421c-93b2-87b6f54a688c')
 
     def test_another_job_at_the_board_is_not_mistaken_for_it(self):
-        from ats_lookup import find_ats_posting
+        from jobfinder.sources.ats_lookup import find_ats_posting
         other = dict(self.JOB, title='Senior Backend Engineer')
         self.assertIsNone(find_ats_posting('Aegis AI', 'Visual Designer', self.ashby_http('aegis-ai', [other])))
 
     def test_a_company_with_no_board_returns_none(self):
-        from ats_lookup import find_ats_posting
+        from jobfinder.sources.ats_lookup import find_ats_posting
         self.assertIsNone(find_ats_posting('Nobody Inc', 'Visual Designer', self.ashby_http('somewhere-else', [])))
 
     def test_a_search_uses_the_companys_own_posting_for_view(self):
@@ -193,14 +193,14 @@ class SitemapLookup(unittest.TestCase):
         return fetch, fetch_raw
 
     def test_an_opening_is_found_through_the_sitemap_and_checked_against_its_page(self):
-        import employer_site
+        from jobfinder.sources import employer_site
         employer_site.clear_cache()
         fetch, fetch_raw = self.pages({'https://acme.example/sitemap.xml': self.SITEMAP})
         found = employer_site._find_in_sitemap('acme.example', 'Senior Graphic Designer', fetch=fetch, fetch_raw=fetch_raw)
         self.assertEqual(found, 'https://acme.example/jobs/senior-graphic-designer-baltimore')
 
     def test_nested_sitemaps_and_robots_files_are_followed(self):
-        import employer_site
+        from jobfinder.sources import employer_site
         employer_site.clear_cache()
         index = '<sitemapindex><sitemap><loc>https://acme.example/job-sitemap.xml</loc></sitemap></sitemapindex>'
         fetch, fetch_raw = self.pages({'https://acme.example/robots.txt': 'Sitemap: https://acme.example/sitemap_main.xml',
@@ -209,25 +209,25 @@ class SitemapLookup(unittest.TestCase):
         self.assertIsNotNone(employer_site._find_in_sitemap('acme.example', 'Graphic Designer', fetch=fetch, fetch_raw=fetch_raw))
 
     def test_a_page_that_does_not_name_the_job_is_not_accepted(self):
-        import employer_site
+        from jobfinder.sources import employer_site
         employer_site.clear_cache()
         fetch_raw = lambda url: SimpleNamespace(url=url, text=self.SITEMAP) if url.endswith('/sitemap.xml') else None
         wrong_page = lambda url: SimpleNamespace(url=url, text='<title>Careers | Acme</title><h1>Join us</h1>')
         self.assertIsNone(employer_site._find_in_sitemap('acme.example', 'Senior Graphic Designer', fetch=wrong_page, fetch_raw=fetch_raw))
 
     def test_no_sitemap_means_no_result(self):
-        import employer_site
+        from jobfinder.sources import employer_site
         employer_site.clear_cache()
         self.assertIsNone(employer_site._find_in_sitemap('acme.example', 'Graphic Designer', fetch=lambda u: None, fetch_raw=lambda u: None))
 
 
 class SubdomainSites(unittest.TestCase):
     def setUp(self):
-        import employer_site
+        from jobfinder.sources import employer_site
         employer_site.clear_cache()
 
     def test_a_listing_on_a_subdomain_of_the_employers_site_shows_that_subdomain(self):
-        import employer_site
+        from jobfinder.sources import employer_site
         posting = 'https://corcoran.gwu.edu/web-designer-university-maryland'
         pages = {'https://www.gwu.edu/': '<title>The George Washington University | GW</title><a href="/careers">Careers</a>',
                  'https://www.gwu.edu/careers': '<title>Careers | GW</title><h1>Careers</h1>'}
@@ -261,7 +261,7 @@ class TitleCoverage(unittest.TestCase):
     TYPED = ['content designer', 'graphic design', 'production specalist', 'Visual Designer', 'web designer', 'Web Producer']
 
     def test_misspelled_words_are_corrected_and_correct_ones_left_alone(self):
-        from onet_data import spelling_fix
+        from jobfinder.profiles.onet_data import spelling_fix
         self.assertEqual(spelling_fix('production specalist'), 'production specialist')
         self.assertEqual(spelling_fix('Sr. Graphic Desginer'), 'Sr. Graphic Designer')
         for fine in ('Web Producer', 'UX Researcher', 'Kubernetes Engineer', 'graphic design'):

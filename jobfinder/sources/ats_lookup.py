@@ -6,9 +6,9 @@ boards, reads each through its public API, and returns the matching opening when
 """
 import re
 
-from employer_jobs import Employer
-from employer_site import _GENERIC_TAIL, name_tokens
-from job_listings import canonical_url
+from jobfinder.sources.employer_jobs import Employer
+from jobfinder.sources.employer_site import _GENERIC_TAIL, name_tokens
+from jobfinder.sources.job_listings import canonical_url
 
 # Systems whose board address is just the company's name, tried in this order.
 SYSTEMS = (("ashby", "slug"), ("greenhouse", "slug"), ("lever", "slug"), ("workable", "slug"),

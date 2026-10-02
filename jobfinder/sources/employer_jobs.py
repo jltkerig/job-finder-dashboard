@@ -18,13 +18,14 @@ from urllib.parse import urljoin, urlparse
 import requests
 from bs4 import BeautifulSoup
 
-from job_listings import extract_jobs, matching_title
-from remote_states import is_remote_place, place_states
+from jobfinder import paths
+from jobfinder.sources.job_listings import extract_jobs, matching_title
+from jobfinder.sources.remote_states import is_remote_place, place_states
 
 SOURCE_TYPE = "Employer careers"
-CONFIG_FILE = Path(__file__).resolve().parent / "watched_employers.json"
+CONFIG_FILE = paths.WATCHED_EMPLOYERS_FILE
 # Boards found in web searches; managed by Job Finder and searched again on later runs.
-DISCOVERED_FILE = Path(__file__).resolve().parent / "discovered_employers.json"
+DISCOVERED_FILE = paths.DISCOVERED_EMPLOYERS_FILE
 MAX_DISCOVERED = 40
 MIN_SEARCHES_BEFORE_DROP = 5  # a found board with no title match after this many searches is no longer searched
 USER_AGENT = "Mozilla/5.0 (compatible; PersonalJobFinder/1.1; local job search)"

@@ -13,34 +13,34 @@ from pathlib import Path
 from types import SimpleNamespace
 from urllib.parse import urljoin, urlparse
 
-import db
 import mysql.connector
+from jobfinder import db, paths
 import requests
 from bs4 import BeautifulSoup
 from mysql.connector import Error
 from dotenv import load_dotenv
-from profile_tools import listing_skills, refresh_listing_skills
-from employer_jobs import (SOURCE_TYPE as EMPLOYER_SOURCE, Http as EmployerHttp, Employer, config_key, employer_for_url,
+from jobfinder.profiles.profile_tools import listing_skills, refresh_listing_skills
+from jobfinder.sources.employer_jobs import (SOURCE_TYPE as EMPLOYER_SOURCE, Http as EmployerHttp, Employer, config_key, employer_for_url,
                            load_employers, record_board_result, save_discovered)
-from ats_discovery import identify as identify_board, identify_unreadable, pretty_name as board_name
-from job_feeds import FEEDS, FEED_NAMES
-from job_listings import arrangement_types, canonical_url, extract_jobs, is_article_page, is_pdf_url, job_links, pagination_links, excludes_us, matching_title as matching_job_title
-from ats_feeds import public_board_links
-from onet_data import related_title_suggestions, spelling_fix
-from search_skips import cached_skip, latest_decisions, record_decision
-from closed_jobs import listing_closed
-from db_schema import ensure_unique_source_index
-from employer_site import clear_cache as clear_employer_cache, is_third_party, resolve_employer_site
-from search_debug import DebugRun
-from remote_states import restriction_states
-from board_health import BoardHealth, HEALTH_FILE as BOARD_HEALTH_FILE
-from ats_lookup import clear_cache as clear_ats_cache, find_ats_posting
-from capture_import import (CAPTURE_MARK, CAPTURE_SOURCES, IMPORT_ERRORS, SITES as CAPTURE_SITES, add_also_on,
+from jobfinder.sources.ats_discovery import identify as identify_board, identify_unreadable, pretty_name as board_name
+from jobfinder.sources.job_feeds import FEEDS, FEED_NAMES
+from jobfinder.sources.job_listings import arrangement_types, canonical_url, extract_jobs, is_article_page, is_pdf_url, job_links, pagination_links, excludes_us, matching_title as matching_job_title
+from jobfinder.sources.ats_feeds import public_board_links
+from jobfinder.profiles.onet_data import related_title_suggestions, spelling_fix
+from jobfinder.records.search_skips import cached_skip, latest_decisions, record_decision
+from jobfinder.sources.closed_jobs import listing_closed
+from jobfinder.db_schema import ensure_unique_source_index
+from jobfinder.sources.employer_site import clear_cache as clear_employer_cache, is_third_party, resolve_employer_site
+from jobfinder.records.search_debug import DebugRun
+from jobfinder.sources.remote_states import restriction_states
+from jobfinder.records.board_health import BoardHealth, HEALTH_FILE as BOARD_HEALTH_FILE
+from jobfinder.sources.ats_lookup import clear_cache as clear_ats_cache, find_ats_posting
+from jobfinder.records.capture_import import (CAPTURE_MARK, CAPTURE_SOURCES, IMPORT_ERRORS, SITES as CAPTURE_SITES, add_also_on,
                             capture_dirs, files_to_import, mark_imported, match_key, merge_details,
                             page_html as capture_page_html, read_jobs, remove_old_folders, unreadable_files)
-from travel import miles_between
-from job_retention import CLOSED_KEEP_DAYS, tidy_closed_jobs
-from job_sites import JOB_SITES, JOB_SITE_NAMES, SiteBlocked, job_site_for, search_places
+from jobfinder.profiles.travel import miles_between
+from jobfinder.records.job_retention import CLOSED_KEEP_DAYS, tidy_closed_jobs
+from jobfinder.sources.job_sites import JOB_SITES, JOB_SITE_NAMES, SiteBlocked, job_site_for, search_places
 
 # =========================================================
 # FILES
@@ -49,15 +49,15 @@ from job_sites import JOB_SITES, JOB_SITE_NAMES, SiteBlocked, job_site_for, sear
 BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR / ".env")
 
-SETTINGS_FILE = BASE_DIR / "settings.json"
-BLOCKED_DOMAINS_FILE = BASE_DIR / "blocked_domains.txt"
-BLOCKED_COMPANIES_FILE = BASE_DIR / "blocked_companies.txt"
-BLOCKED_COUNTRY_DOMAINS_FILE = BASE_DIR / "blocked_country_domains.txt"
-SEARCH_SKIPS_FILE = BASE_DIR / "search_skips.jsonl"
+SETTINGS_FILE = paths.SETTINGS_FILE
+BLOCKED_DOMAINS_FILE = paths.BLOCKED_DOMAINS_FILE
+BLOCKED_COMPANIES_FILE = paths.BLOCKED_COMPANIES_FILE
+BLOCKED_COUNTRY_DOMAINS_FILE = paths.BLOCKED_COUNTRY_DOMAINS_FILE
+SEARCH_SKIPS_FILE = paths.SEARCH_SKIPS_FILE
 # The dashboard creates this file to ask a running search to stop and clean up.
-STOP_REQUEST_FILE = BASE_DIR / ".stop-requested"
+STOP_REQUEST_FILE = paths.STOP_REQUEST_FILE
 # Rolling record of the last few runs (inputs and why each lead was kept or skipped).
-SEARCH_DEBUG_FILE = BASE_DIR / "search_debug.json"
+SEARCH_DEBUG_FILE = paths.SEARCH_DEBUG_FILE
 _debug_run = None
 _skip_decisions = {}
 
@@ -2309,7 +2309,7 @@ def find_employer_site(name, job_title, job_url, page_html, titles, location_hin
 # =========================================================
 
 
-SEARCH_SCOPE_FILE = BASE_DIR / "search_scope.json"
+SEARCH_SCOPE_FILE = paths.SEARCH_SCOPE_FILE
 RESTORABLE_REASONS = ("wrong_role", "wrong_location")
 
 

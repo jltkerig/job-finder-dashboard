@@ -15,25 +15,25 @@ import time
 from urllib.parse import quote, urlparse
 from zoneinfo import ZoneInfo
 
-import db
 import mysql.connector
+from jobfinder import db, paths
 from dotenv import load_dotenv
 from flask import Flask, abort, jsonify, redirect, render_template, request, send_from_directory, session
 from mysql.connector import Error
-from profile_tools import (AMBIGUOUS_SKILLS, SKILL_ALIASES, fit_score, normalize_skills, resume_skill_suggestions,
+from jobfinder.profiles.profile_tools import (AMBIGUOUS_SKILLS, SKILL_ALIASES, fit_score, normalize_skills, resume_skill_suggestions,
                            parse_work_history, refresh_listing_skills, resume_suggestions, skill_demand,
                            uploaded_resume)
-from onet_data import occupation_skill_suggestions, proper_title, related_title_suggestions, spelling_fix, title_matches
-from places import city_matches
-from travel import describe as describe_trip
-from job_listings import NON_JOB_PATH, is_pdf_url
-from db_schema import ensure_unique_source_index
-from job_feeds import FEED_NAMES
-from job_sites import JOB_SITE_NAMES
-from board_health import STATUSES as HEALTH_STATUSES, read_health
-from search_skips import TTL_HOURS, latest_decisions
-from capture_import import CAPTURE_SOURCES, capture_dirs, move_pending, pending_files
-from job_retention import CLOSED_KEEP_DAYS, SAVED_STATUSES, tidy_closed_jobs
+from jobfinder.profiles.onet_data import occupation_skill_suggestions, proper_title, related_title_suggestions, spelling_fix, title_matches
+from jobfinder.profiles.places import city_matches
+from jobfinder.profiles.travel import describe as describe_trip
+from jobfinder.sources.job_listings import NON_JOB_PATH, is_pdf_url
+from jobfinder.db_schema import ensure_unique_source_index
+from jobfinder.sources.job_feeds import FEED_NAMES
+from jobfinder.sources.job_sites import JOB_SITE_NAMES
+from jobfinder.records.board_health import STATUSES as HEALTH_STATUSES, read_health
+from jobfinder.records.search_skips import TTL_HOURS, latest_decisions
+from jobfinder.records.capture_import import CAPTURE_SOURCES, capture_dirs, move_pending, pending_files
+from jobfinder.records.job_retention import CLOSED_KEEP_DAYS, SAVED_STATUSES, tidy_closed_jobs
 
 BASE_DIR = Path(__file__).resolve().parent
 # Where the Resume Builder keeps the résumé you uploaded there (its text is read to suggest skills).
@@ -42,7 +42,7 @@ load_dotenv(BASE_DIR / ".env")
 
 app = Flask(__name__)
 
-APP_VERSION = "1.1.149"
+APP_VERSION = "1.1.150"
 
 app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY") or secrets.token_hex(32)
 app.config["SESSION_COOKIE_HTTPONLY"] = True
@@ -55,14 +55,14 @@ DB_PASSWORD = os.getenv("DB_PASSWORD", "")
 DB_NAME = os.getenv("DB_NAME", "job_finder")
 
 JOB_FINDER_PATH = BASE_DIR / "job_finder.py"
-BLOCKED_DOMAINS_FILE = BASE_DIR / "blocked_domains.txt"
-BLOCKED_COMPANIES_FILE = BASE_DIR / "blocked_companies.txt"
-BLOCK_METADATA_FILE = BASE_DIR / "block_metadata.json"
-RECOMMENDED_DOMAINS_FILE = BASE_DIR / "recommended_domains.txt"
-SCRAPER_LOG_FILE = BASE_DIR / "job_finder.log"
-SEARCH_SKIPS_FILE = BASE_DIR / "search_skips.jsonl"
-UPDATE_SCRIPT = BASE_DIR / "update.ps1"
-UPDATE_MARKER = BASE_DIR / ".update-in-progress"
+BLOCKED_DOMAINS_FILE = paths.BLOCKED_DOMAINS_FILE
+BLOCKED_COMPANIES_FILE = paths.BLOCKED_COMPANIES_FILE
+BLOCK_METADATA_FILE = paths.BLOCK_METADATA_FILE
+RECOMMENDED_DOMAINS_FILE = paths.RECOMMENDED_DOMAINS_FILE
+SCRAPER_LOG_FILE = paths.SEARCH_LOG
+SEARCH_SKIPS_FILE = paths.SEARCH_SKIPS_FILE
+UPDATE_SCRIPT = paths.UPDATE_SCRIPT
+UPDATE_MARKER = paths.UPDATE_MARKER
 # Update ZIPs are named job-finder-dashboard-vX.Y.Z.zip; older ones (job-finder-vX.Y.Z.zip) still count.
 UPDATE_ZIP_PATTERN = re.compile(r"^job-finder(?:-dashboard)?-v(\d+)\.(\d+)\.(\d+)\.zip$", re.IGNORECASE)
 UPDATE_SEARCH_DIRS = [
@@ -76,8 +76,8 @@ scraper_lock = threading.Lock()
 scraper_started_at = None
 scraper_stopping = False
 # job_finder.py watches for this file and shuts down cleanly when it appears.
-STOP_REQUEST_FILE = BASE_DIR / ".stop-requested"
-SETTINGS_FILE = BASE_DIR / "settings.json"
+STOP_REQUEST_FILE = paths.STOP_REQUEST_FILE
+SETTINGS_FILE = paths.SETTINGS_FILE
 GRACEFUL_STOP_SECONDS = 90
 # Choices for a saved job's Application Status, in the order the dropdowns show them.
 APPLICATION_STATUSES = ["None", "Saved", "Applied", "Talking With Recruiter", "Interview", "Rejected", "Closed"]

@@ -5,7 +5,7 @@ from urllib.parse import urljoin, urlparse
 
 from bs4 import BeautifulSoup
 
-from job_listings import canonical_url, extract_jobs, is_pdf_url, job_links
+from jobfinder.sources.job_listings import canonical_url, extract_jobs, is_pdf_url, job_links
 
 _LEGAL_WORDS = {"inc", "llc", "ltd", "co", "corp", "corporation", "company", "the", "group",
                 "holdings", "limited", "lp", "llp", "pllc", "incorporated"}

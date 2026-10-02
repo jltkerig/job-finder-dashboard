@@ -7,8 +7,8 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import job_sites
-from job_sites import NationalLaborExchange, SiteBlocked, search_places
+from jobfinder.sources import job_sites
+from jobfinder.sources.job_sites import NationalLaborExchange, SiteBlocked, search_places
 from test_search_flow import run_search
 
 GUID = "2A10561554C74DC4AA13F030D7B3494C"

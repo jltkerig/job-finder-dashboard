@@ -9,7 +9,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
 import job_finder
-import job_retention
+from jobfinder.records import job_retention
 
 ROOT = Path(__file__).resolve().parents[1]
 BEL_AIR = {"latitude": 39.5359, "longitude": -76.3483}

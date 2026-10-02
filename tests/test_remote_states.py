@@ -8,8 +8,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import job_finder as finder
-from employer_jobs import Employer
-from remote_states import is_remote_place, list_states, place_states
+from jobfinder.sources.employer_jobs import Employer
+from jobfinder.sources.remote_states import is_remote_place, list_states, place_states
 from test_employer_jobs import Response
 from test_search_flow import FakeEmployer, employer_opening, run_search
 

@@ -10,7 +10,9 @@ import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
-HEALTH_FILE = Path(__file__).resolve().parent / "board_health.json"
+from jobfinder import paths
+
+HEALTH_FILE = paths.BOARD_HEALTH_FILE
 
 # status -> what it means for the reader
 STATUSES = {"ok": "Working", "no matches": "Working, no matching titles", "blocked": "Blocked", "down": "Down",

@@ -2,7 +2,7 @@
 from urllib.parse import urlparse
 
 import requests
-from job_listings import matching_title
+from jobfinder.sources.job_listings import matching_title
 
 
 def public_board_links(board_url, wanted, timeout=10):

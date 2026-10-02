@@ -5,7 +5,7 @@ from urllib.parse import urlparse
 import requests
 from bs4 import BeautifulSoup
 
-from job_listings import matching_title
+from jobfinder.sources.job_listings import matching_title
 
 FEED_URL = "https://remoteok.com/api"
 

@@ -4,7 +4,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
-from profile_tools import resume_suggestions
+from jobfinder.profiles.profile_tools import resume_suggestions
 
 
 class ResumeSuggestions(unittest.TestCase):

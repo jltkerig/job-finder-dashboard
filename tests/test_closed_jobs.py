@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
-from closed_jobs import apply_targets, check_apply_target, listing_closed
+from jobfinder.sources.closed_jobs import apply_targets, check_apply_target, listing_closed
 
 PAGE = 'https://www.mediabistro.com/jobs/3542960377-graphic-designer-iii'
 REDIRECT = 'https://jobs-us.disruptedcloud.com/redirectfeedjob?jobid=4768060D'
