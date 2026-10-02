@@ -287,6 +287,10 @@ class Adzuna:
         remote = bool(re.search(r"\bremote\b", f"{item.get('title') or ''} {shown}", re.I))
         state = area[1] if len(area) > 1 else ""
         city = area[-1] if len(area) > 2 else shown.split(",")[0].strip()
+        # Adzuna names a county or no state ("Edgewood, Harford County"); "Edgewood, MD" is what the location checks read.
+        code = next((abbr for abbr, full in STATE_NAMES.items() if full.casefold() == state.casefold()), "")
+        if code and city and area[0] == "US":
+            shown = f"{city}, {code}"
         lat = lon = None
         try:
             lat, lon = float(item.get("latitude")), float(item.get("longitude"))

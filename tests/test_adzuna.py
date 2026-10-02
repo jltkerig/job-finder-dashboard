@@ -52,6 +52,7 @@ class AdzunaSite(unittest.TestCase):
         self.assertEqual(job["title"], "Graphic Designer")
         self.assertEqual(job["company"], "Acme Print")
         self.assertEqual((job["city"], job["state"]), ("Bel Air", "Maryland"))
+        self.assertEqual(job["location"], "Bel Air, MD")  # a city and state, so the U.S. and distance checks can read it
         self.assertEqual((job["lat"], job["lon"]), (39.53, -76.35))
         self.assertEqual(job["posted"], "2026-09-30")
         self.assertEqual(job["url"], "https://www.adzuna.com/land/ad/4400112233?utm_medium=api&utm_source=id123&v=SIGNED")  # no per-search "se" code
