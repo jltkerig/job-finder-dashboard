@@ -54,6 +54,15 @@ class DashboardWording(unittest.TestCase):
         self.assertIn('#search-settings form .switch-row input[type="checkbox"] { width: 18px;', css)  # not the full-width input style
         self.assertIn("#search-settings form .primary-action { display: block; margin: 28px 0 0; }", css)
 
+    def test_the_search_location_box_wording(self):
+        for page in ("index", "user-dashboard"):
+            html = read("templates", f"{page}.html")
+            self.assertIn(">Add Location</button>", html)
+            self.assertNotIn("Add City", html)
+        html = read("templates", "index.html")
+        self.assertIn('<label for="search-city-input">City, Zip, Country, State</label>', html)
+        self.assertIn(".city-search-field .city-list-below:empty { display: none; }", read("static", "css", "style.css"))
+
     def test_every_section_on_the_settings_page_collapses(self):
         import re
         html = read("templates", "rejected-listings.html")
