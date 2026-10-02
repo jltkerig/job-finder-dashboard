@@ -9,6 +9,7 @@ import no_database  # noqa: F401  (cuts tests off from the real database)
 from owners import search_source
 import dashboard
 import job_finder
+from jobfinder.search import refresh
 from jobfinder.profiles.profile_tools import fit_score, refresh_listing_skills
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -115,7 +116,7 @@ class WhenTheSkillsChange(unittest.TestCase):
         self.assertEqual(source.count("    refresh_job_fit_quietly(database)\n"), 2)
 
     def test_the_quiet_re_read_never_stops_a_run(self):
-        job_finder.refresh_job_fit_quietly(object())  # no cursor at all: ignored
+        refresh.refresh_job_fit_quietly(object())  # no cursor at all: ignored
 
 
 if __name__ == "__main__":
