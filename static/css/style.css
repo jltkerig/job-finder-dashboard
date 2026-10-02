@@ -1658,3 +1658,20 @@ body[data-page="search"] .results-toolbar .compact-rows-toggle { min-height:42px
 #search-settings form .form-field > label + .field-help { margin: 0 0 8px; }
 
 .profile-subsection .form-field + .form-field { margin-top: 18px; }
+
+/* Suggested items are dark pills like the ticked column filters */
+.job-suggestion-button, .skill-chip-list > button:not(.primary-action) { background:#1f2937; border:1px solid #1f2937; color:#fff; font-weight:600; cursor:pointer; }
+.job-suggestion-button:hover, .skill-chip-list > button:not(.primary-action):hover { background:#374151; border-color:#374151; color:#fff; }
+.job-suggestion-button:focus-visible, .skill-chip-list > button:not(.primary-action):focus-visible { outline:3px solid #93c5fd; outline-offset:2px; }
+
+/* Job Titles on the Dashboard: dark labels, even spacing from label to note to box */
+.profile-subsection .form-field > label { display:block; margin:0 0 4px; color:#111827; font-weight:700; }
+.profile-subsection .form-field > label + .field-help { margin:0 0 10px; }
+.profile-subsection .form-field > input[type="text"] { margin:0; color:#111827; }
+.profile-subsection .form-field + .form-field { margin-top:22px; }
+.profile-subsection .title-chips { margin-top:14px; gap:8px; }
+.profile-subsection .title-chips > .field-help { flex-basis:100%; margin:0; font-weight:700; color:#111827; }
+.profile-subsection .title-chips .chip-row { gap:8px; }
+
+.profile-summary-card > span { color:#1f2937; }
+.profile-summary-card > strong + span { font-weight:600; color:#111827; }
