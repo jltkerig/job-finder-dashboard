@@ -13,7 +13,7 @@ ITEM = {"id": "4400112233", "title": "Graphic Designer", "company": {"display_na
         "location": {"display_name": "Bel Air, Harford County", "area": ["US", "Maryland", "Harford County", "Bel Air"]},
         "latitude": 39.53, "longitude": -76.35, "created": "2026-09-30T08:00:00Z",
         "description": "Design <b>print</b> &amp; web layouts...", "salary_min": 52000, "salary_max": 64000.4,
-        "salary_is_predicted": "1", "redirect_url": "https://www.adzuna.com/land/ad/4400112233?se=abc"}
+        "salary_is_predicted": "1", "redirect_url": "https://www.adzuna.com/land/ad/4400112233?se=abc&utm_medium=api&utm_source=id123&v=SIGNED"}
 
 
 def response(items, status=200):
@@ -54,7 +54,7 @@ class AdzunaSite(unittest.TestCase):
         self.assertEqual((job["city"], job["state"]), ("Bel Air", "Maryland"))
         self.assertEqual((job["lat"], job["lon"]), (39.53, -76.35))
         self.assertEqual(job["posted"], "2026-09-30")
-        self.assertEqual(job["url"], "https://www.adzuna.com/land/ad/4400112233?se=abc")
+        self.assertEqual(job["url"], "https://www.adzuna.com/land/ad/4400112233?utm_medium=api&utm_source=id123&v=SIGNED")  # no per-search "se" code
         self.assertIn("Design print & web layouts...", job["description"])
         self.assertIn("Pay: $52,000 - $64,000 per year (estimated by Adzuna)", job["description"])
         self.assertIn("Jobs by Adzuna", job["description"])  # the attribution its terms ask for
@@ -78,6 +78,13 @@ class AdzunaSite(unittest.TestCase):
         with patch.object(job_sites.requests, "get", return_value=response([], status=429)):
             with self.assertRaises(SiteBlocked):
                 Adzuna().search("designer")
+
+    def test_the_same_ad_gives_the_same_link_every_search(self):
+        again = dict(ITEM, redirect_url="https://www.adzuna.com/land/ad/4400112233?se=DIFFERENT&utm_medium=api&utm_source=id123&v=SIGNED")
+        with patch.object(job_sites.requests, "get", side_effect=[response([ITEM]), response([again])]):
+            [first] = Adzuna().search("graphic designer", "Bel Air, MD", 5)
+            [second] = Adzuna().search("web designer", "Baltimore, MD", 5)
+        self.assertEqual(first["url"], second["url"])  # or the job would be saved again as new each search
 
     def test_status_never_guesses_closed(self):
         self.assertEqual(Adzuna().status("https://www.adzuna.com/land/ad/1"), "Unknown")
