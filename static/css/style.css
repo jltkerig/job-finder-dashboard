@@ -1652,3 +1652,7 @@ body[data-page="search"] .results-toolbar .compact-rows-toggle { min-height:42px
 .city-remove:hover, .skill-chip button:hover { background:#fff; color:#991b1b; }
 .city-remove:focus-visible, .skill-chip button:focus-visible { outline:2px solid #93c5fd; outline-offset:1px; }
 .skill-chip button { display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; padding:0; border-radius:50%; font-size:1rem; }
+
+/* Explanations sit under the heading or label, above the box they describe */
+.form-field > label + .field-help { margin: 2px 0 8px; }
+#search-settings form .form-field > label + .field-help { margin: 0 0 8px; }

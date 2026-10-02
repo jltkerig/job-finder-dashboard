@@ -61,9 +61,9 @@
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
     {% for key, spec in fields.items() %}
     <div class="form-field"><label for="tune-{{ key }}">{{ spec[0] }}</label>
-      <input id="tune-{{ key }}" name="{{ key }}" type="number" step="{{ '1' if spec[2].__name__ == 'int' else '0.5' }}" min="{{ spec[3] }}" max="{{ spec[4] }}" value="{{ values.get(key, spec[5]) }}" required />
       <p class="field-help">{{ spec[1] }} ({{ spec[3] }}–{{ spec[4] }}, standard {{ spec[5] }})
           </p>
+      <input id="tune-{{ key }}" name="{{ key }}" type="number" step="{{ '1' if spec[2].__name__ == 'int' else '0.5' }}" min="{{ spec[3] }}" max="{{ spec[4] }}" value="{{ values.get(key, spec[5]) }}" required />
         </div>
     {% endfor %}
     {% for key, spec in switches.items() %}

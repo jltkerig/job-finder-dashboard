@@ -63,6 +63,19 @@ class DashboardWording(unittest.TestCase):
         self.assertIn('<label for="search-city-input">City, Zip, Country, State</label>', html)
         self.assertIn(".city-search-field .city-list-below:empty { display: none; }", read("static", "css", "style.css"))
 
+    def test_explanations_sit_under_the_label_not_below_the_box(self):
+        import re
+        dash = read("templates", "user-dashboard.html")
+        self.assertNotIn("Job Finder searches for every title here.", dash)
+        for label_id, text in (("primary-job-title", "The main job you want. Shown below your photo."), ("job-titles", "Separate titles with commas.")):
+            self.assertRegex(dash, r'<label for="' + label_id + r'">[^<]*</label>\s*<p class="field-help">' + re.escape(text))
+        search = read("templates", "index.html")
+        for label_id, text in (("job-title", "Separate multiple titles"), ("search-city-input", "Add a city for a radius search"), ("result-min-credibility", "Only individual openings")):
+            self.assertRegex(search, r'(?s)<label for="' + label_id + r'">[^<]*</label>(?:(?!</div>).)*?<p [^>]*class="field-help"[^>]*>\s*' + re.escape(text))
+        self.assertNotIn("Search by job title and city radius or an entire state.", search)
+        tuning = read("templates", "tuning.html")
+        self.assertRegex(tuning, r'<label for="tune-\{\{ key \}\}">[^<]*</label>\s*<p class="field-help">')
+
     def test_every_section_on_the_settings_page_collapses(self):
         import re
         html = read("templates", "rejected-listings.html")
