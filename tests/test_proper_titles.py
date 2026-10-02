@@ -29,5 +29,17 @@ class ProperTitles(unittest.TestCase):
         self.assertEqual(related_title_suggestions("Web Designer"), related_title_suggestions("WEB designer"))
 
 
+class SavedTitles(unittest.TestCase):
+    def test_saving_a_profile_writes_titles_properly_capitalized(self):
+        source = (Path(__file__).resolve().parents[1] / "dashboard.py").read_text(encoding="utf-8")
+        self.assertIn('title = proper_title(part.strip()[:255])', source)
+        self.assertIn('primary = proper_title(request.form.get("primary_job_title", "").strip()[:255])', source)
+        self.assertIn('title = proper_title(str(data.get("title", "")).strip()[:255])', source)
+
+    def test_the_profile_is_shown_with_proper_capitalization(self):
+        source = (Path(__file__).resolve().parents[1] / "dashboard.py").read_text(encoding="utf-8")
+        self.assertIn('profile["job_titles"] = list(dict.fromkeys(proper_title(title) for title in profile["job_titles"]))', source)
+
+
 if __name__ == "__main__":
     unittest.main()
