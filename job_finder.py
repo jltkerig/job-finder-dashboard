@@ -109,6 +109,19 @@ from jobfinder.search.storage import (  # noqa: F401  (also used by callers that
     clear_companies_table,
 )
 from jobfinder.search import storage
+from jobfinder.search.fetching import (  # noqa: F401  (also used by callers that import these from here)
+    _fetch_page,
+    _safe_request,
+    get_domain,
+    has_blocked_country_domain,
+    is_blocked_domain,
+    is_valid_url,
+    prefetch_for_update,
+    prefetch_pages,
+    remember_page,
+    wait_for_host,
+)
+from jobfinder.search import fetching
 
 # =========================================================
 # FILES
@@ -193,199 +206,6 @@ US_STATE_ABBREVIATIONS = set(US_STATES.values())
 # =========================================================
 
 web_search_started = False
-
-
-# =========================================================
-# DOMAIN FILTERS
-# =========================================================
-
-
-def is_valid_url(url):
-    parsed = urlparse(url)
-
-    return parsed.scheme in {
-        "http",
-        "https",
-    }
-
-
-def get_domain(url):
-    domain = urlparse(url).netloc.lower()
-
-    return domain.removeprefix("www.")
-
-
-def is_blocked_domain(domain):
-    return any(
-        domain == blocked or domain.endswith("." + blocked)
-        for blocked in BLOCKED_DOMAINS
-    )
-
-
-def has_blocked_country_domain(domain):
-    if not USA_ONLY:
-        return False
-
-    return any(domain.endswith(blocked) for blocked in BLOCKED_COUNTRY_DOMAINS)
-
-
-# =========================================================
-# SAFE REQUEST
-# =========================================================
-
-
-def wait_for_host(url):
-    """Space out requests to one site by shared.REQUEST_DELAY; requests to different sites do not wait for each other."""
-    host = (urlparse(url).netloc or "").casefold()
-    with _host_lock:
-        now = time.monotonic()
-        start = max(now, _host_next_request.get(host, 0.0))
-        _host_next_request[host] = start + shared.REQUEST_DELAY
-    if start > now:
-        time.sleep(start - now)
-
-
-def remember_page(key, response):
-    """Keep a fetched page (or a failed fetch) for this search; the oldest entry goes when the cache is full."""
-    if shared.update_existing_mode:
-        return
-    with _host_lock:
-        if key not in _page_cache and len(_page_cache) >= 250:
-            _page_cache.pop(next(iter(_page_cache)))
-        _page_cache[key] = response
-
-
-def prefetch_pages(urls, workers=None):
-    """Download several pages at once so the checks that follow find them in the cache."""
-    if shared.update_existing_mode:
-        return
-    todo = [url for url in dict.fromkeys(urls) if url and is_valid_url(url) and not is_pdf_url(url)
-            and canonical_url(url) not in _page_cache]
-    if len(todo) < 2:
-        return
-
-    def fetch(url):
-        try:
-            response = safe_request(url)
-            if response is None and docker.check_searxng_timer():
-                remember_page(canonical_url(url), None)
-        except Exception:
-            pass
-
-    with ThreadPoolExecutor(max_workers=workers or PREFETCH_WORKERS) as pool:
-        list(pool.map(fetch, todo))
-
-
-def safe_request(url):
-    with timed("Page downloads (added up across parallel downloads)"):
-        return _safe_request(url)
-
-
-def _safe_request(url):
-    if not shared.update_existing_mode and not docker.check_searxng_timer():
-        return None
-
-    if not is_valid_url(url) or is_pdf_url(url):
-        return None
-
-    key = canonical_url(url)
-    if not shared.update_existing_mode and key in _page_cache:
-        return _page_cache[key]
-    if shared.update_existing_mode:
-        # A page fetched a moment ago for this same row is fresh enough; each is handed out only once.
-        with _host_lock:
-            ready = _prefetched.pop(key, None)
-        if ready is not None:
-            response, failure_status = ready
-            if response is None:
-                shared._last_failure_status = failure_status
-            return response
-    return _fetch_page(url, key)
-
-
-def prefetch_for_update(urls):
-    """Download the pages the next rows will need, several at a time (Update and Refresh only)."""
-    todo = [url for url in dict.fromkeys(urls) if url and is_valid_url(url) and not is_pdf_url(url)
-            and canonical_url(url) not in _prefetched]
-    if len(todo) < 2:
-        return
-
-    def fetch(url):
-        key = canonical_url(url)
-        failure = []
-        try:
-            response = _fetch_page(url, key, failure)
-        except Exception:
-            response = None
-        with _host_lock:
-            _prefetched[key] = (response, failure[0] if failure else None)
-
-    with timed("Page downloads (added up across parallel downloads)"):
-        with ThreadPoolExecutor(max_workers=PREFETCH_WORKERS) as pool:
-            list(pool.map(fetch, todo))
-
-
-def _fetch_page(url, key, failure=None):
-    """Download one page. A failed download's HTTP status goes into `failure` (a list), or shared._last_failure_status."""
-    try:
-        wait_for_host(url)
-
-        response = requests.get(
-            url,
-            headers=HEADERS,
-            timeout=TIMEOUT,
-            allow_redirects=True,
-            stream=True,
-        )
-
-        response.raise_for_status()
-
-        content_type = response.headers.get(
-            "Content-Type",
-            "",
-        ).lower()
-
-        if "text/html" not in content_type:
-            response.close()
-            return None
-
-        content_length = response.headers.get("Content-Length")
-
-        if content_length:
-            try:
-                if int(content_length) > MAX_HTML_SIZE:
-                    response.close()
-                    return None
-
-            except ValueError:
-                pass
-
-        content = b""
-
-        for chunk in response.iter_content(chunk_size=8192):
-            if not chunk:
-                continue
-
-            content += chunk
-
-            if len(content) > MAX_HTML_SIZE:
-                response.close()
-                return None
-
-        response._content = content
-
-        remember_page(key, response)
-
-        return response
-
-    except requests.RequestException as error:
-        # Lets callers tell a removed page (404/410) from a temporary failure.
-        code = getattr(error.response, "status_code", None)
-        if failure is not None:
-            failure.append(code)
-        else:
-            shared._last_failure_status = code
-        return None
 
 
 # =========================================================
@@ -1349,7 +1169,7 @@ def inspect_company_site(homepage, search_title, domain, deep=True):
     A direct job posting is not read deeply: its own page already says where the job is, and the extra pages
     (often ten or more requests to one site) only add the company's head-office address.
     """
-    response = safe_request(homepage)
+    response = fetching.safe_request(homepage)
 
     if response is None:
         return {
@@ -1390,7 +1210,7 @@ def inspect_company_site(homepage, search_title, domain, deep=True):
     robots_links = discover_robots_links(homepage) if deep else []
 
     for support_url in support_links + sitemap_links + robots_links:
-        support_response = safe_request(support_url)
+        support_response = fetching.safe_request(support_url)
         if support_response is None:
             continue
 
@@ -1606,7 +1426,7 @@ def fetch_text(url, max_bytes=6_000_000):
 
 def find_employer_site(name, job_title, job_url, page_html, titles, location_hint="", allow_search=True, notes=None):
     return resolve_employer_site(
-        name, job_title, job_url, page_html, titles, fetch=safe_request,
+        name, job_title, job_url, page_html, titles, fetch=fetching.safe_request,
         search=search_searxng if allow_search else None, score_page=score_career_page,
         is_excluded=is_excluded_employer_host, location_hint=location_hint,
         allow_search=allow_search, notes=notes, fetch_raw=fetch_text)
@@ -2075,7 +1895,7 @@ def update_existing_results(company_ids=None):
 
         if career_url and is_valid_url(career_url):
             shared._last_failure_status = None
-            response = safe_request(career_url)
+            response = fetching.safe_request(career_url)
             if response is not None:
                 # The employer's careers page is not the job description, so keep the skills already saved.
                 if not employer_row or canonical_url(career_url) == canonical_url(source_url or ""):
@@ -3575,7 +3395,7 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
                     continue
                 discover_board(url, title)
                 websites_checked += 1
-                landing = safe_request(url)
+                landing = fetching.safe_request(url)
                 if landing is None:
                     record_skip("Page unavailable", url, title)
                     continue
@@ -3611,7 +3431,7 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
                         continue
                     checked.add(page_url)
                     fetched_pages.add(page_url)
-                    page = landing if page_url == url else safe_request(page_url)
+                    page = landing if page_url == url else fetching.safe_request(page_url)
                     if page is None:
                         record_skip("Job page unavailable", page_url, title)
                         continue
