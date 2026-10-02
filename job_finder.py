@@ -224,6 +224,7 @@ from jobfinder.search.relevance import (  # noqa: F401  (also used by callers th
     stale_remote_limit,
 )
 from jobfinder.search import relevance
+from jobfinder.search import judging
 
 # =========================================================
 # FILES
@@ -1020,7 +1021,7 @@ class CaptureImport:
         return site.get("domain") or site_domain, site.get("posting_url") or board.get("url") or url
 
     def assess(self, job, arrangement):
-        """assess_opening's result for a captured job, or a plain pass for one without a location."""
+        """judging.assess_opening's result for a captured job, or a plain pass for one without a location."""
         location = str(job.get("location") or "").strip()
         if not location:
             return {"skip": None, "arrangement": arrangement, "location": {"score": 0}, "detail_score": CAREER_CREDIBILITY_THRESHOLD,
@@ -1029,7 +1030,7 @@ class CaptureImport:
         opening = {"title": job["title"], "company": job.get("company") or "", "description": job.get("description") or "",
                    "type": arrangement, "location": location, "locations": [location], "remote_states": [],
                    "schedule": "", "evidence": []}
-        outcome = assess_opening(self.database, opening, capture_page_html(job), job["url"], self.state,
+        outcome = judging.assess_opening(self.database, opening, capture_page_html(job), job["url"], self.state,
                                  self.selected_states, self.statewide, self.city_targets)
         # A card has no page text to prove the job is in the U.S.; the site's own location field is trusted instead.
         if outcome["skip"] == "US eligibility unverified" and site_location_in_us(location):
@@ -1207,59 +1208,6 @@ def import_captures():
 # =========================================================
 # MAIN
 # =========================================================
-
-
-def assess_opening(database, opening, page_html, job_url, search_state, selected_states, statewide_states, city_targets):
-    """The U.S., location and remote checks every source shares (web pages, employer career sites).
-
-    Returns a dict. outcome["skip"] is the reason the job is out, or None when it passes; the rest
-    (arrangement, location analysis, city, distance, ...) is what gets saved with it.
-    """
-    text = opening["description"] or BeautifulSoup(page_html, "html.parser").get_text(" ", strip=True)
-    arrangement = opening["type"] or detect_work_arrangement(opening["title"], page_html)
-    outcome = {"skip": None, "arrangement": arrangement, "location": None, "detail_score": 0, "country": None,
-               "state_name": None, "remote_limited_to": set(), "city": None, "lat": None, "lon": None, "miles": None}
-    if is_internship(opening.get("title"), opening.get("schedule")):
-        outcome["skip"] = "Internship"
-        return outcome
-    if excludes_us(opening["location"], text):
-        outcome["skip"] = "Posting restricts applicants outside the US"
-        return outcome
-    location = analyze_usa_location(page_html, extra_text=opening["location"], source_label=f"job posting {job_url}", page_url=job_url)
-    # An individual opening was already confirmed, so it meets the career-credibility threshold.
-    detail_score = max(CAREER_CREDIBILITY_THRESHOLD, score_career_page(job_url, page_html)["score"])
-    # A confirmed opening on the employer's own applicant-system board (or read from an employer careers API)
-    # is strong evidence even when the page is script-rendered and scores little on its text.
-    if on_official_board(job_url) or any("careers site (" in str(line) for line in opening.get("evidence") or ()):
-        detail_score = max(detail_score, OFFICIAL_BOARD_CREDIBILITY)
-    # The listing's own location beats anything found elsewhere on the page.
-    state_name = (find_state_from_text(opening["location"] or "") or location["state"] or opening["location"] or None)
-    code = US_STATES.get(str(state_name or "").casefold(), str(state_name or "").upper())
-    outcome.update(location=location, detail_score=detail_score, country=location["country"], state_name=state_name)
-    # Remote jobs pass any location filter unless the listing says the applicant must live in particular
-    # states. A statewide match passes even when city radii are also selected.
-    within_radius, skip_reason = True, "Outside selected location"
-    if arrangement == "Remote":
-        limited_to = remote_state_restrictions(text, code if code in US_STATE_ABBREVIATIONS else None,
-                                               opening.get("locations") or [opening.get("location")])
-        limited_to |= set(opening.get("remote_states") or ())
-        outcome["remote_limited_to"] = limited_to
-        if limited_to and selected_states and not (limited_to & selected_states):
-            within_radius = False
-            skip_reason = "Remote job limited to residents of " + ", ".join(sorted(limited_to))
-    elif statewide_states and code in statewide_states:
-        pass
-    elif city_targets:
-        within_radius, outcome["city"], outcome["lat"], outcome["lon"], outcome["miles"] = distance_to_city_targets(
-            database, page_html, opening["location"] or opening["title"], search_state, city_targets,
-            allow_footer=not is_third_party(job_url, opening.get("company") or ""))
-    elif statewide_states:
-        within_radius = False
-    if not within_radius:
-        outcome["skip"] = skip_reason
-    elif USA_ONLY and location["score"] < shared.USA_CREDIBILITY_THRESHOLD:
-        outcome["skip"] = "US eligibility unverified"
-    return outcome
 
 
 def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
@@ -1500,7 +1448,7 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
             # A posting can list several places; it passes if any one of them fits.
             outcome = None
             for place in opening["locations"]:
-                outcome = assess_opening(database, dict(opening, location=place), opening["html"], job_url, state,
+                outcome = judging.assess_opening(database, dict(opening, location=place), opening["html"], job_url, state,
                                          selected_states, statewide_states, city_targets)
                 if not outcome["skip"]:
                     opening = dict(opening, location=place)
@@ -1661,7 +1609,7 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
         opening = {"title": title, "company": company, "description": listing["description"], "type": None,
                    "location": listing["location"], "locations": [listing["location"]], "remote_states": [],
                    "schedule": "", "evidence": [f"{site.name} listing"]}
-        outcome = assess_opening(database, opening, capture_page_html(listing), job_url, state, selected_states,
+        outcome = judging.assess_opening(database, opening, capture_page_html(listing), job_url, state, selected_states,
                                  statewide_states, city_targets)
         # The site's own location field ("Aberdeen, MD") is trusted as U.S. proof, as for captured LinkedIn jobs.
         if outcome["skip"] == "US eligibility unverified" and site_location_in_us(listing["location"]):
@@ -1984,7 +1932,7 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
                         details = {key: opening.get(key) for key in ("schedule", "salary", "posted", "evidence", "location")}
                         details["source"] = url
                         details["matched_title"] = next((wanted for wanted in job_titles if matching_job_title(opening["title"], [wanted])), job_titles[0])
-                        outcome = assess_opening(database, opening, page.text, job_url, state, selected_states,
+                        outcome = judging.assess_opening(database, opening, page.text, job_url, state, selected_states,
                                                  statewide_states, city_targets)
                         if outcome["skip"]:
                             record_skip(outcome["skip"], job_url, opening["title"])

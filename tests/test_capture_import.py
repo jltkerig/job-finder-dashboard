@@ -10,7 +10,8 @@ from unittest.mock import MagicMock, patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
 from jobfinder.records import capture_import as capture
-import job_finder as finder
+import job_finder as finder
+from jobfinder.search import judging
 from owners import holders
 
 from jobfinder.search import storage
@@ -175,7 +176,7 @@ class ImportFilter(unittest.TestCase):
         """(result, assess mock, _set_details mock) for one captured job; nothing touches a database.
         self.applied_ids collects the rows marked Saved + Applied."""
         self.applied_ids = []
-        with patch.object(finder, "assess_opening", return_value=outcome or passing()) as assess, \
+        with patch.object(judging, "assess_opening", return_value=outcome or passing()) as assess, \
                 patch.object(run, "_saved_row", return_value=saved_row), \
                 patch.object(run, "_set_details") as set_details, patch.object(run, "_mark_closed"), \
                 patch.object(run, "_mark_applied", side_effect=self.applied_ids.append):
