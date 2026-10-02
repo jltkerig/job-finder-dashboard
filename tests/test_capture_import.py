@@ -11,7 +11,6 @@ from unittest.mock import MagicMock, patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
 from jobfinder.records import capture_import as capture
-import job_finder as finder
 from jobfinder.search import judging
 from owners import holders
 

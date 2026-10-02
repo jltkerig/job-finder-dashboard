@@ -6,7 +6,6 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
-import job_finder as finder
 from jobfinder.search import shared
 from jobfinder.sources.employer_jobs import load_employers, record_board_result, save_discovered
 

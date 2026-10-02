@@ -9,7 +9,6 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
 from owners import search_source
-import job_finder
 from jobfinder.search import refresh
 from jobfinder.search import web_captures
 from jobfinder.search import relevance
