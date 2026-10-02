@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import no_database  # noqa: F401  (tests use a temporary user-data folder)
 from jobfinder import paths
 
 
@@ -44,7 +45,7 @@ class UserFiles(unittest.TestCase):
     def test_every_path_is_inside_the_project(self):
         for name in dir(paths):
             value = getattr(paths, name)
-            if name.isupper() and isinstance(value, Path):
+            if name.isupper() and isinstance(value, Path) and not value.is_relative_to(paths.USER_DIR) and value != paths.LOG_DIR                     and paths.LOG_DIR not in value.parents:  # user-data and logs may be moved by the environment (the tests do)
                 self.assertIn(paths.ROOT, [value, *value.parents], name)
 
     def test_the_shipped_defaults_exist(self):

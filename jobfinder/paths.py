@@ -20,8 +20,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = ROOT / "data"
 DEFAULTS_DIR = DATA_DIR / "defaults"
-USER_DIR = ROOT / "user-data"
-LOG_DIR = ROOT / "logs"
+# JOBFINDER_USER_DIR and JOBFINDER_LOG_DIR move them elsewhere (the tests use a temporary folder so they never touch yours).
+USER_DIR = Path(os.environ.get("JOBFINDER_USER_DIR") or ROOT / "user-data")
+LOG_DIR = Path(os.environ.get("JOBFINDER_LOG_DIR") or ROOT / "logs")
 ENV_FILE = ROOT / ".env"
 
 # Reference data shipped with Job Finder.
@@ -73,22 +74,24 @@ def ensure_user_files(root=None):
     """Make the folders, move files from their old places, and start any missing list from its default.
 
     Safe to call again and again (every start does). Nothing that already exists in user-data/ is overwritten.
+    `root` is only for tests: a folder laid out like the project.
     """
     base = Path(root) if root else ROOT
-    user, logs = base / "user-data", base / "logs"
-    user.mkdir(exist_ok=True)
-    logs.mkdir(exist_ok=True)
+    user = base / "user-data" if root else USER_DIR
+    logs = base / "logs" if root else LOG_DIR
+    user.mkdir(parents=True, exist_ok=True)
+    logs.mkdir(parents=True, exist_ok=True)
     for old_name, new in _MOVED:
         old = base / old_name
-        target = base / new.relative_to(ROOT)
+        target = (logs / new.name) if new.parent == LOG_DIR else (user / new.relative_to(USER_DIR))
         if old.exists() and not target.exists():
             try:
                 shutil.move(str(old), str(target))
             except OSError:
                 pass  # a log that is open right now stays where it is; the new one starts fresh
-    for target in _DEFAULTED:
-        target = base / target.relative_to(ROOT)
-        default = base / "data" / "defaults" / target.name
+    for new in _DEFAULTED:
+        target = user / new.relative_to(USER_DIR)
+        default = base / "data" / "defaults" / new.name
         if not target.exists() and default.exists():
             shutil.copyfile(default, target)
 

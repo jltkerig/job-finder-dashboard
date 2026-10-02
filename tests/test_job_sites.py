@@ -7,6 +7,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from jobfinder.search import shared
 from jobfinder.sources import job_sites
 from jobfinder.sources.job_sites import NationalLaborExchange, SiteBlocked, search_places
 from test_search_flow import run_search
@@ -128,7 +129,7 @@ class JobSiteSearch(unittest.TestCase):
         run_search({}, "https://example.com/none", "Web Designer", extra={"JOB_SITES": (Watched,)})
         self.assertTrue(searched)  # on by default
         searched.clear()
-        with patch("job_finder.settings", {"job_sites": {"National Labor Exchange": False}}):
+        with patch("jobfinder.search.shared.settings", {"job_sites": {"National Labor Exchange": False}}):
             run_search({}, "https://example.com/none", "Web Designer", extra={"JOB_SITES": (Watched,)})
         self.assertEqual(searched, [])
 

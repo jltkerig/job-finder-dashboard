@@ -41,50 +41,69 @@ from jobfinder.records.capture_import import (CAPTURE_MARK, CAPTURE_SOURCES, IMP
 from jobfinder.profiles.travel import miles_between
 from jobfinder.records.job_retention import CLOSED_KEEP_DAYS, tidy_closed_jobs
 from jobfinder.sources.job_sites import JOB_SITES, JOB_SITE_NAMES, SiteBlocked, job_site_for, search_places
+from jobfinder.search.shared import (  # noqa: F401  (also used by callers that import these from here)
+    BASE_DIR,
+    BLOCKED_COMPANIES,
+    BLOCKED_COMPANIES_FILE,
+    BLOCKED_COUNTRY_DOMAINS,
+    BLOCKED_COUNTRY_DOMAINS_FILE,
+    BLOCKED_DOMAINS,
+    BLOCKED_DOMAINS_FILE,
+    CAREER_CREDIBILITY_THRESHOLD,
+    EMPTY_QUERY_LIMIT,
+    HEADERS,
+    MAX_DISCOVERY_PAGES,
+    MAX_HTML_SIZE,
+    PREFETCH_WORKERS,
+    SEARCH_SKIPS_FILE,
+    SEARXNG_COMPOSE_FILE,
+    SEARXNG_CONTAINER,
+    SEARXNG_MAX_RUNTIME,
+    SEARXNG_URL,
+    SETTINGS_FILE,
+    SITE_QUERY_PAGES,
+    START_DOCKER_AUTOMATICALLY,
+    STOP_DOCKER_WHEN_FINISHED,
+    TIMEOUT,
+    USA_ONLY,
+    USER_AGENT,
+    _INTERNSHIP,
+    _TITLE_FAMILIES,
+    _board_health,
+    _host_lock,
+    _host_next_request,
+    _page_cache,
+    _prefetched,
+    _skip_decisions,
+    _timings,
+    debug_lead,
+    debug_skip,
+    is_internship,
+    load_domain_file,
+    load_settings,
+    record_skip,
+    related_family_titles,
+    settings,
+    timed,
+    timing_summary,
+)
+from jobfinder.search import shared
+from jobfinder.search.docker import (  # noqa: F401
+    docker_engine_running,
+    docker_started_by_program,
+    run_command,
+    run_docker_command,
+    searxng_exists,
+    searxng_is_running,
+    searxng_start_time,
+    stop_announced,
+    wait_for_searxng,
+)
+from jobfinder.search import docker
 
 # =========================================================
 # FILES
 # =========================================================
-
-BASE_DIR = Path(__file__).resolve().parent
-load_dotenv(BASE_DIR / ".env")
-
-SETTINGS_FILE = paths.SETTINGS_FILE
-BLOCKED_DOMAINS_FILE = paths.BLOCKED_DOMAINS_FILE
-BLOCKED_COMPANIES_FILE = paths.BLOCKED_COMPANIES_FILE
-BLOCKED_COUNTRY_DOMAINS_FILE = paths.BLOCKED_COUNTRY_DOMAINS_FILE
-SEARCH_SKIPS_FILE = paths.SEARCH_SKIPS_FILE
-# The dashboard creates this file to ask a running search to stop and clean up.
-STOP_REQUEST_FILE = paths.STOP_REQUEST_FILE
-# Rolling record of the last few runs (inputs and why each lead was kept or skipped).
-SEARCH_DEBUG_FILE = paths.SEARCH_DEBUG_FILE
-_debug_run = None
-_skip_decisions = {}
-
-
-def stop_requested():
-    return STOP_REQUEST_FILE.exists()
-
-
-def debug_skip(reason, url, title=""):
-    """Record a skip in the debug file only (for paths that are not cached as skips)."""
-    if _debug_run is not None:
-        _debug_run.skip(reason, url, title)
-
-
-def debug_lead(**fields):
-    """Record why a lead was kept (or updated) in the debug file."""
-    if _debug_run is not None:
-        _debug_run.lead(**fields)
-
-
-def record_skip(reason, url, title=""):
-    """Keep each search decision for review and short-lived cache checks."""
-    print(f"Skipped ({reason}): {title[:70]} {url[:120]}", flush=True)
-    record_decision(SEARCH_SKIPS_FILE, _skip_decisions, reason, url, title)
-    debug_skip(reason, url, title)
-
-SEARXNG_COMPOSE_FILE = BASE_DIR / "searxng" / "docker-compose.yml"
 
 
 # =========================================================
@@ -92,155 +111,12 @@ SEARXNG_COMPOSE_FILE = BASE_DIR / "searxng" / "docker-compose.yml"
 # =========================================================
 
 
-def load_settings():
-    try:
-        with SETTINGS_FILE.open(
-            "r",
-            encoding="utf-8",
-        ) as file:
-            return json.load(file)
-
-    except FileNotFoundError:
-        print("settings.json was not found.")
-        raise
-
-    except json.JSONDecodeError as error:
-        print("There is a problem in settings.json.")
-        print(error)
-        raise
-
-
-def load_domain_file(path):
-    if not path.exists():
-        print(f"Warning: {path.name} was not found.")
-        return set()
-
-    with path.open(
-        "r",
-        encoding="utf-8",
-    ) as file:
-        return {
-            line.strip().lower()
-            for line in file
-            if line.strip() and not line.strip().startswith("#")
-        }
-
-
-settings = load_settings()
-
-BLOCKED_DOMAINS = load_domain_file(BLOCKED_DOMAINS_FILE)
-BLOCKED_COMPANIES = load_domain_file(BLOCKED_COMPANIES_FILE)
-
-BLOCKED_COUNTRY_DOMAINS = load_domain_file(BLOCKED_COUNTRY_DOMAINS_FILE)
-
-
 # =========================================================
 # PROGRAM SETTINGS
 # =========================================================
 
-SEARXNG_URL = "http://localhost:8080/search"
-SEARXNG_CONTAINER = "searxng"
 
-SEARXNG_MAX_RUNTIME = settings["searxng_timeout_minutes"] * 60
-
-MAX_SEARCH_RESULTS = settings["max_search_results"]
-MAX_SEARCH_PAGES = settings.get("max_search_pages", 20)
-REQUEST_DELAY = settings["request_delay_seconds"]
-# Pause between search-engine requests, and how many empty queries in a row mean the engines are blocking us.
-QUERY_DELAY = settings.get("search_query_delay_seconds", 2)
-PREFETCH_WORKERS = settings.get("parallel_page_fetches", 6)
-EMPTY_QUERY_LIMIT = settings.get("stop_after_empty_queries", 8)
-TIMEOUT = settings["website_timeout_seconds"]
-
-START_DOCKER_AUTOMATICALLY = settings.get(
-    "start_docker_automatically",
-    True,
-)
-
-STOP_DOCKER_WHEN_FINISHED = settings.get(
-    "stop_docker_when_finished",
-    True,
-)
-
-USA_ONLY = settings.get(
-    "usa_only",
-    True,
-)
-
-# Internships and co-ops are skipped unless "exclude_internships" is switched off on the Tuning page.
-EXCLUDE_INTERNSHIPS = settings.get("exclude_internships", True)
-# Closely related job titles that are matched (not searched for by name), so "Multimedia Designer" is not missed
-# just because it was not typed. Switch off with "related_titles": false.
-RELATED_TITLES = settings.get("related_titles", True)
-_TITLE_FAMILIES = (
-    (re.compile(r"\bdesign(?:er)?\b", re.I), ("Multimedia Designer", "Brand Designer", "Creative Designer", "Marketing Designer",
-                                                "Email Designer", "Communications Designer")),
-    (re.compile(r"\bproduction\b", re.I), ("Production Artist", "Web Production Specialist", "Digital Production Specialist")),
-    (re.compile(r"\bproducer\b", re.I), ("Website Producer", "Digital Producer")),
-    (re.compile(r"\bcontent designer\b", re.I), ("UX Writer",)),
-)
-
-
-def related_family_titles(typed):
-    """Extra titles to match, from the families the typed titles belong to; never a title already covered."""
-    if not RELATED_TITLES:
-        return []
-    have = {title.casefold() for title in typed}
-    extras = []
-    for pattern, titles in _TITLE_FAMILIES:
-        if any(pattern.search(title) for title in typed):
-            for title in titles:
-                if title.casefold() not in have and title not in extras:
-                    extras.append(title)
-    return extras
-# Job-board sites searched directly (one query per title). Each company board found there is then read in full
-# through its public API. Add more, such as "boards.greenhouse.io", in settings.json under "job_board_sites".
-JOB_BOARD_SITES = settings.get("job_board_sites", ["jobs.ashbyhq.com", "greenhouse.io", "jobs.lever.co", "apply.workable.com",
-                                                       "jobs.smartrecruiters.com"])
-# Board-site queries return many companies and few pages matter, so they read fewer result pages than title queries.
-SITE_QUERY_PAGES = settings.get("site_query_pages", 2)
-_INTERNSHIP = re.compile(r"\b(?:intern|interns|internship|internships|co-?op)\b", re.I)
-
-
-def is_internship(title, schedule=""):
-    """True for an internship or co-op: the title says so, or the listing's work type is 'intern'."""
-    return bool(EXCLUDE_INTERNSHIPS and (_INTERNSHIP.search(str(title or ""))
-                                         or re.search(r"\bintern", str(schedule or ""), re.I)))
-
-USER_AGENT = "PersonalJobFinder/1.0"
-MAX_HTML_SIZE = 2_000_000
-_page_cache = {}
-_prefetched = {}  # Update/Refresh: pages downloaded ahead of the row that needs them (used once)
-_timings = {}
-_board_health = BoardHealth()
 _ats_http = None
-
-
-class timed:
-    """Adds the time spent inside a with-block to _timings[name] (safe to use from several threads)."""
-
-    def __init__(self, name):
-        self.name = name
-
-    def __enter__(self):
-        self.started = time.monotonic()
-
-    def __exit__(self, *exc):
-        with _host_lock:
-            _timings[self.name] = _timings.get(self.name, 0.0) + time.monotonic() - self.started
-
-
-def timing_summary():
-    return {name: round(seconds, 1) for name, seconds in _timings.items()}
-_host_lock = threading.Lock()
-_host_next_request = {}
-_last_failure_status = None
-
-HEADERS = {"User-Agent": USER_AGENT}
-
-CAREER_CREDIBILITY_THRESHOLD = 3
-USA_CREDIBILITY_THRESHOLD = 5
-MAX_DISCOVERY_PAGES = 8
 
 
 # =========================================================
@@ -318,302 +194,7 @@ US_STATE_ABBREVIATIONS = set(US_STATES.values())
 # GLOBAL STATE
 # =========================================================
 
-searxng_start_time = None
-docker_started_by_program = False
-update_existing_mode = False
-stop_announced = False
 web_search_started = False
-
-
-# =========================================================
-# COMMAND HELPERS
-# =========================================================
-
-
-def run_command(command):
-    try:
-        return subprocess.run(
-            command,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-
-    except FileNotFoundError:
-        return None
-
-
-def run_docker_command(arguments):
-    return run_command(["docker"] + arguments)
-
-
-# =========================================================
-# DOCKER DESKTOP
-# =========================================================
-
-
-def docker_engine_running():
-    result = run_docker_command(["info"])
-
-    if result is None:
-        return False
-
-    return result.returncode == 0
-
-
-def start_docker_desktop():
-    global docker_started_by_program
-
-    if docker_engine_running():
-        print("Docker is already running.")
-        return True
-
-    if not START_DOCKER_AUTOMATICALLY:
-        print()
-        print("Docker is not running.")
-        print("Start Docker Desktop and " "run Job Finder again.")
-        return False
-
-    print("Starting Docker Desktop...")
-
-    result = run_docker_command(
-        [
-            "desktop",
-            "start",
-        ]
-    )
-
-    if result is None:
-        print("Docker command was not found.")
-        return False
-
-    if result.returncode != 0:
-        print("Docker Desktop could not " "be started automatically.")
-
-        print(result.stderr.strip())
-
-        return False
-
-    docker_started_by_program = True
-
-    print("Waiting for Docker...")
-
-    for _ in range(60):
-        if docker_engine_running():
-            print("Docker is running.")
-            return True
-
-        time.sleep(2)
-
-    print("Docker did not become ready.")
-
-    return False
-
-
-def stop_docker_desktop():
-    if not STOP_DOCKER_WHEN_FINISHED:
-        return
-
-    if not docker_started_by_program:
-        print("Docker was already running " "before Job Finder started.")
-        print("Leaving Docker running.")
-        return
-
-    print()
-    print("Stopping Docker Desktop...")
-
-    result = run_docker_command(
-        [
-            "desktop",
-            "stop",
-        ]
-    )
-
-    if result is not None and result.returncode == 0:
-        print("Docker Desktop stopped.")
-
-    else:
-        print("Docker Desktop could not " "be stopped automatically.")
-
-
-# =========================================================
-# SEARXNG
-# =========================================================
-
-
-def searxng_is_running():
-    result = run_docker_command(
-        [
-            "ps",
-            "--filter",
-            f"name={SEARXNG_CONTAINER}",
-            "--format",
-            "{{.Names}}",
-        ]
-    )
-
-    if result is None:
-        return False
-
-    containers = result.stdout.strip().splitlines()
-
-    return SEARXNG_CONTAINER in containers
-
-
-def searxng_exists():
-    result = run_docker_command(
-        [
-            "ps",
-            "-a",
-            "--filter",
-            f"name={SEARXNG_CONTAINER}",
-            "--format",
-            "{{.Names}}",
-        ]
-    )
-
-    if result is None:
-        return False
-
-    containers = result.stdout.strip().splitlines()
-
-    return SEARXNG_CONTAINER in containers
-
-
-def wait_for_searxng():
-    print("Waiting for SearXNG...")
-
-    for _ in range(30):
-        try:
-            response = requests.get(
-                "http://localhost:8080",
-                timeout=2,
-            )
-
-            if response.ok:
-                return True
-
-        except requests.RequestException:
-            pass
-
-        time.sleep(1)
-
-    return False
-
-
-def start_searxng():
-    global searxng_start_time
-
-    if searxng_is_running():
-        print("SearXNG is already running.")
-
-        searxng_start_time = time.time()
-
-        return True
-
-    print("Starting SearXNG...")
-
-    result = run_docker_command(
-        [
-            "compose",
-            "--env-file",
-            str(BASE_DIR / ".env"),
-            "-f",
-            str(SEARXNG_COMPOSE_FILE),
-            "up",
-            "-d",
-        ]
-    )
-
-    if result is None:
-        return False
-
-    if result.returncode != 0:
-        print("Could not start SearXNG.")
-        print(result.stderr.strip())
-
-        return False
-
-    if not wait_for_searxng():
-        print("SearXNG did not become ready.")
-
-        return False
-
-    searxng_start_time = time.time()
-
-    print("SearXNG is running.")
-
-    print("Maximum runtime: " f"{settings['searxng_timeout_minutes']} " "minutes.")
-
-    return True
-
-
-def stop_searxng():
-    if not searxng_is_running():
-        return
-
-    print()
-    print("Stopping SearXNG...")
-
-    result = run_docker_command(
-        [
-            "stop",
-            SEARXNG_CONTAINER,
-        ]
-    )
-
-    if result is not None and result.returncode == 0:
-        print("SearXNG stopped.")
-
-
-def search_stop_reason(saved, blocked_message):
-    """Why the search ended, with what to change when that is something the user can act on."""
-    if stop_requested():
-        return "Stopped by user"
-    if saved >= MAX_SEARCH_RESULTS:
-        return f"{saved} of {MAX_SEARCH_RESULTS} distinct jobs found"
-    if blocked_message:
-        return blocked_message
-    minutes = round(SEARXNG_MAX_RUNTIME / 60)
-    if searxng_start_time is not None and time.time() - searxng_start_time >= SEARXNG_MAX_RUNTIME:
-        return f"Search time limit reached ({minutes} minutes). Raise the time limit on the Tuning page to search longer."
-    if not check_searxng_timer():
-        return "The search engine stopped unexpectedly. Check that Docker Desktop is running, then start the search again."
-    return ("Search sources exhausted: every query was checked. Try more job titles, more cities or a larger radius "
-            "to find more.")
-
-
-def check_searxng_timer():
-    global stop_announced
-
-    if stop_requested():
-        if not stop_announced:
-            stop_announced = True
-            print()
-            print("Stop requested.")
-
-        return False
-
-    if not searxng_is_running():
-        print()
-        print("SearXNG has stopped.")
-
-        return False
-
-    if searxng_start_time is None:
-        return True
-
-    elapsed = time.time() - searxng_start_time
-
-    if elapsed >= SEARXNG_MAX_RUNTIME:
-        print()
-        print("SearXNG reached its " "time limit.")
-
-        stop_searxng()
-
-        return False
-
-    return True
 
 
 # =========================================================
@@ -925,19 +506,19 @@ def has_blocked_country_domain(domain):
 
 
 def wait_for_host(url):
-    """Space out requests to one site by REQUEST_DELAY; requests to different sites do not wait for each other."""
+    """Space out requests to one site by shared.REQUEST_DELAY; requests to different sites do not wait for each other."""
     host = (urlparse(url).netloc or "").casefold()
     with _host_lock:
         now = time.monotonic()
         start = max(now, _host_next_request.get(host, 0.0))
-        _host_next_request[host] = start + REQUEST_DELAY
+        _host_next_request[host] = start + shared.REQUEST_DELAY
     if start > now:
         time.sleep(start - now)
 
 
 def remember_page(key, response):
     """Keep a fetched page (or a failed fetch) for this search; the oldest entry goes when the cache is full."""
-    if update_existing_mode:
+    if shared.update_existing_mode:
         return
     with _host_lock:
         if key not in _page_cache and len(_page_cache) >= 250:
@@ -947,7 +528,7 @@ def remember_page(key, response):
 
 def prefetch_pages(urls, workers=None):
     """Download several pages at once so the checks that follow find them in the cache."""
-    if update_existing_mode:
+    if shared.update_existing_mode:
         return
     todo = [url for url in dict.fromkeys(urls) if url and is_valid_url(url) and not is_pdf_url(url)
             and canonical_url(url) not in _page_cache]
@@ -957,7 +538,7 @@ def prefetch_pages(urls, workers=None):
     def fetch(url):
         try:
             response = safe_request(url)
-            if response is None and check_searxng_timer():
+            if response is None and docker.check_searxng_timer():
                 remember_page(canonical_url(url), None)
         except Exception:
             pass
@@ -972,24 +553,23 @@ def safe_request(url):
 
 
 def _safe_request(url):
-    global _last_failure_status
-    if not update_existing_mode and not check_searxng_timer():
+    if not shared.update_existing_mode and not docker.check_searxng_timer():
         return None
 
     if not is_valid_url(url) or is_pdf_url(url):
         return None
 
     key = canonical_url(url)
-    if not update_existing_mode and key in _page_cache:
+    if not shared.update_existing_mode and key in _page_cache:
         return _page_cache[key]
-    if update_existing_mode:
+    if shared.update_existing_mode:
         # A page fetched a moment ago for this same row is fresh enough; each is handed out only once.
         with _host_lock:
             ready = _prefetched.pop(key, None)
         if ready is not None:
             response, failure_status = ready
             if response is None:
-                _last_failure_status = failure_status
+                shared._last_failure_status = failure_status
             return response
     return _fetch_page(url, key)
 
@@ -1017,8 +597,7 @@ def prefetch_for_update(urls):
 
 
 def _fetch_page(url, key, failure=None):
-    """Download one page. A failed download's HTTP status goes into `failure` (a list), or _last_failure_status."""
-    global _last_failure_status
+    """Download one page. A failed download's HTTP status goes into `failure` (a list), or shared._last_failure_status."""
     try:
         wait_for_host(url)
 
@@ -1076,7 +655,7 @@ def _fetch_page(url, key, failure=None):
         if failure is not None:
             failure.append(code)
         else:
-            _last_failure_status = code
+            shared._last_failure_status = code
         return None
 
 
@@ -1627,11 +1206,11 @@ def search_searxng(query, page=1):
 
 def _search_searxng(query, page=1):
     global _last_search_time
-    if not check_searxng_timer():
+    if not docker.check_searxng_timer():
         return []
 
     # Spacing requests out keeps engines like DuckDuckGo from answering with a CAPTCHA.
-    wait = QUERY_DELAY - (time.monotonic() - _last_search_time)
+    wait = shared.QUERY_DELAY - (time.monotonic() - _last_search_time)
     if wait > 0:
         time.sleep(wait)
 
@@ -1952,11 +1531,11 @@ def discover_robots_links(homepage):
     root = f"{parsed.scheme}://{parsed.netloc}"
     robots_url = urljoin(root + "/", "robots.txt")
 
-    if not update_existing_mode and not check_searxng_timer():
+    if not shared.update_existing_mode and not docker.check_searxng_timer():
         return []
 
     try:
-        time.sleep(REQUEST_DELAY)
+        time.sleep(shared.REQUEST_DELAY)
         response = requests.get(robots_url, headers=HEADERS, timeout=TIMEOUT)
         if not response.ok or len(response.content) > 500_000:
             return []
@@ -2454,8 +2033,7 @@ def refresh_job_fit_quietly(database):
 
 def update_existing_results(company_ids=None):
     """Recheck existing rows without starting Docker or the search engine."""
-    global update_existing_mode, _last_failure_status, _debug_run
-    update_existing_mode = True
+    shared.update_existing_mode = True
     print()
     print("================================")
     print("     UPDATE EXISTING RESULTS")
@@ -2517,8 +2095,8 @@ def update_existing_results(company_ids=None):
     selected_now = load_selected_states(database)
     city_targets_now, search_state_text = load_city_targets(database)
     clear_employer_cache()
-    _debug_run = DebugRun(SEARCH_DEBUG_FILE, "update", JOB_FINDER_VERSION)
-    _debug_run.set_inputs(rows_checked=len(companies), update_ids=company_ids,
+    shared._debug_run = DebugRun(shared.SEARCH_DEBUG_FILE, "update", JOB_FINDER_VERSION)
+    shared._debug_run.set_inputs(rows_checked=len(companies), update_ids=company_ids,
                           titles_used_for_relevance=wanted_titles)
 
     updated = 0
@@ -2585,7 +2163,7 @@ def update_existing_results(company_ids=None):
                        else f"is remote but only open to residents of {', '.join(sorted(remote_limit))}" if remote_limit
                        else f"is located outside the United States ({details.get('location')})")
                 print(f"Rejected: '{search_title}' {why}. It is in Rejected Listings for review.")
-                _debug_run.lead(action="rejected", id=company_id, title=search_title,
+                shared._debug_run.lead(action="rejected", id=company_id, title=search_title,
                                 company=company.get("name"), url=source_url or career_url,
                                 reason=reject_reason, detail=why)
                 continue
@@ -2767,7 +2345,7 @@ def update_existing_results(company_ids=None):
             print(f"View link now goes to the job posting itself: {source_url}")
 
         if career_url and is_valid_url(career_url):
-            _last_failure_status = None
+            shared._last_failure_status = None
             response = safe_request(career_url)
             if response is not None:
                 # The employer's careers page is not the job description, so keep the skills already saved.
@@ -2809,9 +2387,9 @@ def update_existing_results(company_ids=None):
                 print(f"Career credibility: {career_credibility}")
                 for reason in career_data.get("evidence", []):
                     print(f"  Evidence: {reason}")
-            elif _last_failure_status in (404, 410):
+            elif shared._last_failure_status in (404, 410):
                 job_open_status = "Closed"
-                print(f"Career page returned HTTP {_last_failure_status}; marking job Closed.")
+                print(f"Career page returned HTTP {shared._last_failure_status}; marking job Closed.")
             else:
                 job_open_status = "Unknown"
                 print("Career page could not be loaded right now; marking job Unknown.")
@@ -2822,7 +2400,7 @@ def update_existing_results(company_ids=None):
         if apply_closed:
             job_open_status = "Closed"
             print(f"Job is closed: {apply_closed['reason']} ({apply_closed['url'][:90]})")
-            _debug_run.note(f"row {company_id} ({company.get('name')}) marked Closed: {apply_closed['reason']} "
+            shared._debug_run.note(f"row {company_id} ({company.get('name')}) marked Closed: {apply_closed['reason']} "
                             f"[{apply_closed['apply_link']}]")
 
         if location_data["score"] == 0 and not location_data["evidence"]:
@@ -2907,11 +2485,11 @@ def update_existing_results(company_ids=None):
             updated += 1
             print("Existing row updated in place.")
             if employer:
-                _debug_run.lead(action="employer site added", id=company_id, title=search_title,
+                shared._debug_run.lead(action="employer site added", id=company_id, title=search_title,
                                 company=company.get("name"), original_source=source_url,
                                 employer_site=details["employer_site"], view_link=career_url)
             elif employer_notes:
-                _debug_run.note(f"row {company_id} ({company.get('name')}): " + "; ".join(employer_notes))
+                shared._debug_run.note(f"row {company_id} ({company.get('name')}): " + "; ".join(employer_notes))
         except Error as error:
             database.rollback()
             failed += 1
@@ -2935,8 +2513,8 @@ def update_existing_results(company_ids=None):
     print(f"Rows updated: {updated}")
     print(f"Rows rejected (wrong role or outside the U.S.): {rejected_count}")
     print(f"Rows failed: {failed}")
-    _debug_run.finish(f"update complete: {updated} updated, {rejected_count} rejected, {failed} failed")
-    _debug_run = None
+    shared._debug_run.finish(f"update complete: {updated} updated, {rejected_count} rejected, {failed} failed")
+    shared._debug_run = None
 
 
 # =========================================================
@@ -3093,7 +2671,7 @@ class CaptureImport:
         if outcome["skip"] == "US eligibility unverified" and site_location_in_us(location):
             outcome["skip"] = None
             outcome["country"] = "United States"
-            outcome["location"]["score"] = max(outcome["location"]["score"], USA_CREDIBILITY_THRESHOLD)
+            outcome["location"]["score"] = max(outcome["location"]["score"], shared.USA_CREDIBILITY_THRESHOLD)
         return outcome
 
     def import_job(self, site, job):
@@ -3175,10 +2753,9 @@ class CaptureImport:
 
 def import_captures():
     """--import-captures: filter and save the jobs in web-job-scraper\\searches that changed since the last import."""
-    global update_existing_mode
     # Like Refresh, the import runs without the search engine: page downloads (the company-website check) must not
     # wait for SearXNG, which is not running.
-    update_existing_mode = True
+    shared.update_existing_mode = True
     print()
     print("================================")
     print("     IMPORT CAPTURED JOBS")
@@ -3221,7 +2798,7 @@ def import_captures():
             return
         print("Matching job titles: " + ", ".join(run.wanted))
         for number, (path, site, job) in enumerate(work, start=1):
-            if stop_requested():
+            if shared.stop_requested():
                 stopped = True
                 break
             print(f"Importing {number}/{len(work)}: {job['title'][:70]} ({CAPTURE_SITES[site][0]})", flush=True)
@@ -3610,18 +3187,18 @@ def assess_opening(database, opening, page_html, job_url, search_state, selected
         within_radius = False
     if not within_radius:
         outcome["skip"] = skip_reason
-    elif USA_ONLY and location["score"] < USA_CREDIBILITY_THRESHOLD:
+    elif USA_ONLY and location["score"] < shared.USA_CREDIBILITY_THRESHOLD:
         outcome["skip"] = "US eligibility unverified"
     return outcome
 
 
 def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
-    global MAX_SEARCH_RESULTS, web_search_started
+    global web_search_started
     _page_cache.clear()
     _skip_decisions.clear()
     _skip_decisions.update(latest_decisions(SEARCH_SKIPS_FILE))
     if max_new is not None:
-        MAX_SEARCH_RESULTS = max_new
+        shared.MAX_SEARCH_RESULTS = max_new
     print()
     print("================================")
     print("       PERSONAL JOB FINDER")
@@ -3707,17 +3284,17 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
         print(f"Warning: {len(requested_cities) - len(city_targets)} selected city/cities could not be geocoded and were skipped.")
     if statewide_states:
         print("Statewide locations: " + ", ".join(sorted(statewide_states)))
-    if _debug_run is not None:
-        _debug_run.set_inputs(
+    if shared._debug_run is not None:
+        shared._debug_run.set_inputs(
             job_title_typed=job_title, typed_titles=selected_titles,
             related_onet_titles=query_titles[len(selected_titles):], related_family_titles=related_extras,
             spelling_corrections=[{"typed": a, "corrected": b} for a, b in corrected_titles], state=state, cities_requested=cities,
             cities_geocoded=[{"city": target.get("city"), "radius": target.get("radius"),
                               "lat": target.get("lat"), "lon": target.get("lon")} for target in city_targets],
-            statewide_states=sorted(statewide_states), max_new_results=MAX_SEARCH_RESULTS,
-            settings={"usa_only": USA_ONLY, "max_search_pages": MAX_SEARCH_PAGES,
-                      "request_delay_seconds": REQUEST_DELAY, "website_timeout_seconds": TIMEOUT,
-                      "searxng_timeout_minutes": settings.get("searxng_timeout_minutes")},
+            statewide_states=sorted(statewide_states), max_new_results=shared.MAX_SEARCH_RESULTS,
+            settings={"usa_only": USA_ONLY, "max_search_pages": shared.MAX_SEARCH_PAGES,
+                      "request_delay_seconds": shared.REQUEST_DELAY, "website_timeout_seconds": TIMEOUT,
+                      "searxng_timeout_minutes": shared.settings.get("searxng_timeout_minutes")},
             blocked_domain_count=len(BLOCKED_DOMAINS), blocked_company_count=len(BLOCKED_COMPANIES))
 
     print()
@@ -3745,13 +3322,13 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
     # Public remote-job feeds. Each provider's own page stays the View link and the provider is named,
     # as their terms ask; employer URLs are not invented.
     feed_saved_total = 0
-    feed_cap = max(1, MAX_SEARCH_RESULTS // 3)
+    feed_cap = max(1, shared.MAX_SEARCH_RESULTS // 3)
     for feed in FEEDS:
-        if feed_saved_total >= feed_cap or companies_saved >= MAX_SEARCH_RESULTS:
+        if feed_saved_total >= feed_cap or companies_saved >= shared.MAX_SEARCH_RESULTS:
             break
         # Turned on by default. The blocked-domains list only affects web-search results, so these
         # aggregator sites can stay blocked there; switch one off here: "remote_feeds": {"Remotive": false}.
-        if not settings.get("remote_feeds", {}).get(feed.name, True):
+        if not shared.settings.get("remote_feeds", {}).get(feed.name, True):
             print(f"{feed.name} is turned off in settings.json.")
             _board_health.note(feed.name, "Remote feed", "off")
             continue
@@ -3765,8 +3342,8 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
         print(f"{feed.name} matches: {len(feed_jobs)}")
         feed_saved = 0
         for job in feed_jobs:
-            if (companies_saved >= MAX_SEARCH_RESULTS or feed_saved_total >= feed_cap
-                    or feed_saved >= max(1, MAX_SEARCH_RESULTS // 3)):
+            if (companies_saved >= shared.MAX_SEARCH_RESULTS or feed_saved_total >= feed_cap
+                    or feed_saved >= max(1, shared.MAX_SEARCH_RESULTS // 3)):
                 break
             candidate_number += 1
             results_checked += 1
@@ -3803,7 +3380,7 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
                 companies_saved += 1
                 feed_saved += 1
                 feed_saved_total += 1
-                print(f"Saved viable company ({companies_saved}/{MAX_SEARCH_RESULTS}).")
+                print(f"Saved viable company ({companies_saved}/{shared.MAX_SEARCH_RESULTS}).")
             else:
                 existing_companies += 1
         _board_health.note(feed.name, "Remote feed", "ok" if feed_jobs else "no matches", len(feed_jobs), feed_saved)
@@ -3812,12 +3389,12 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
     # the same U.S., location and remote checks as web results.
     employer_saved_total = 0
     # Employer boards share up to half of a search's jobs, two per board, so several get a turn.
-    employer_cap = max(1, MAX_SEARCH_RESULTS // 2)
+    employer_cap = max(1, shared.MAX_SEARCH_RESULTS // 2)
     employer_http = EmployerHttp()
     def search_employer(employer, per_employer_cap, total_cap):
         """Search one employer's board and save passing openings; returns how many were saved."""
         nonlocal candidate_number, results_checked, companies_saved, existing_companies, passed_count, employer_saved_total
-        if employer_saved_total >= total_cap or companies_saved >= MAX_SEARCH_RESULTS or stop_requested():
+        if employer_saved_total >= total_cap or companies_saved >= shared.MAX_SEARCH_RESULTS or shared.stop_requested():
             return 0
         print(f"Checking {employer.name} careers...")
         try:
@@ -3831,7 +3408,7 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
             record_board_result(employer.config, len(employer_openings))
         employer_saved = 0
         for opening in employer_openings:
-            if (companies_saved >= MAX_SEARCH_RESULTS or employer_saved_total >= total_cap
+            if (companies_saved >= shared.MAX_SEARCH_RESULTS or employer_saved_total >= total_cap
                     or employer_saved >= per_employer_cap):
                 break
             job_url = canonical_url(opening["url"])
@@ -3887,7 +3464,7 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
                 companies_saved += 1
                 employer_saved += 1
                 employer_saved_total += 1
-                print(f"Saved job {companies_saved}/{MAX_SEARCH_RESULTS}: {job_url}")
+                print(f"Saved job {companies_saved}/{shared.MAX_SEARCH_RESULTS}: {job_url}")
             else:
                 existing_companies += 1
         _board_health.note(employer.name, "Discovered board" if employer.discovered else "Employer board",
@@ -3908,7 +3485,7 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
     def discover_board(page_url, company_hint=""):
         """A web result on a hiring platform (UltiPro, Greenhouse, ...): search that employer's whole board."""
         nonlocal boards_discovered
-        if boards_discovered >= MAX_BOARDS_PER_RUN or stop_requested():
+        if boards_discovered >= MAX_BOARDS_PER_RUN or shared.stop_requested():
             return
         config = identify_board(page_url)
         if not config:
@@ -3932,12 +3509,12 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
             return
         print(f"Found {config['system'].title()} job board for {name}; searching its openings...", flush=True)
         save_discovered({k: v for k, v in config.items() if k != "discovered"})
-        search_employer(employer, 3, MAX_SEARCH_RESULTS)
+        search_employer(employer, 3, shared.MAX_SEARCH_RESULTS)
 
     # Job sites that list many employers (the National Labor Exchange, usnlx.com): searched for the titles you
     # typed around each of your places. Their openings go through the same title, location and U.S. checks.
     site_saved_total = 0
-    site_cap = max(1, MAX_SEARCH_RESULTS // 3)
+    site_cap = max(1, shared.MAX_SEARCH_RESULTS // 3)
     same_job_index = None
 
     def saved_job_row(url):
@@ -4020,7 +3597,7 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
         if outcome["skip"] == "US eligibility unverified" and site_location_in_us(listing["location"]):
             outcome["skip"] = None
             outcome["country"] = "United States"
-            outcome["location"]["score"] = max(outcome["location"]["score"], USA_CREDIBILITY_THRESHOLD)
+            outcome["location"]["score"] = max(outcome["location"]["score"], shared.USA_CREDIBILITY_THRESHOLD)
         if outcome["skip"]:
             record_skip(outcome["skip"], job_url, title)
             return False
@@ -4059,7 +3636,7 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
         if inserted:
             companies_saved += 1
             site_saved_total += 1
-            print(f"Saved job {companies_saved}/{MAX_SEARCH_RESULTS}: {job_url}")
+            print(f"Saved job {companies_saved}/{shared.MAX_SEARCH_RESULTS}: {job_url}")
             try:
                 if same_job_index is not None:
                     new_row = saved_job_row(job_url)
@@ -4075,7 +3652,7 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
         nonlocal site_saved_total
         places = search_places(state, cities, US_STATES)
         for site_class in JOB_SITES:
-            if not settings.get("job_sites", {}).get(site_class.name, True):
+            if not shared.settings.get("job_sites", {}).get(site_class.name, True):
                 print(f"{site_class.name} is turned off in settings.json.")
                 _board_health.note(site_class.name, "Job site", "off")
                 continue
@@ -4090,13 +3667,13 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
             try:
                 for title in selected_titles:
                     for place, radius in places:
-                        if stop_requested() or site_saved_total >= site_cap or companies_saved >= MAX_SEARCH_RESULTS:
+                        if shared.stop_requested() or site_saved_total >= site_cap or companies_saved >= shared.MAX_SEARCH_RESULTS:
                             break
                         for listing in site.search(title, place, radius):
                             found += 1
                             if check_site_listing(site, listing):
                                 saved += 1
-                            if site_saved_total >= site_cap or companies_saved >= MAX_SEARCH_RESULTS:
+                            if site_saved_total >= site_cap or companies_saved >= shared.MAX_SEARCH_RESULTS:
                                 break
             except SiteBlocked as error:
                 print(f"{site.name} asked Job Finder to slow down; leaving it alone for the rest of this search ({error}).")
@@ -4128,15 +3705,15 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
     # for the other. The web search begins only after both have finished.
     employer_thread = threading.Thread(target=search_known_employers, daemon=True)
     employer_thread.start()
-    docker_up = False if stop_requested() else start_docker_desktop()
-    searxng_up = docker_up and start_searxng()
+    docker_up = False if shared.stop_requested() else docker.start_docker_desktop()
+    searxng_up = docker_up and docker.start_searxng()
     employer_thread.join()
 
-    if stop_requested():
+    if shared.stop_requested():
         print("Stop requested before the web search started.")
         if docker_up:
-            stop_searxng()
-            stop_docker_desktop()
+            docker.stop_searxng()
+            docker.stop_docker_desktop()
         database.close()
         return
 
@@ -4147,12 +3724,12 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
         return
     if not searxng_up:
         database.close()
-        stop_docker_desktop()
+        docker.stop_docker_desktop()
         return
     web_search_started = True
 
     # Only the titles you typed are searched on the company-board sites (every board found is then read in full).
-    search_queries = [f'site:{site} "{title}"' for title in selected_titles for site in JOB_BOARD_SITES]
+    search_queries = [f'site:{site} "{title}"' for title in selected_titles for site in shared.JOB_BOARD_SITES]
     city_names = [item.get("city", "").strip() for item in cities if isinstance(item, dict)
                   and item.get("city") and item.get("city", "").strip().casefold() not in US_STATES
                   and not _ZIP_CODE.fullmatch(item.get("city", "").strip())]
@@ -4185,25 +3762,25 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
     blocked_message = None
 
     for search_query in search_queries:
-        if companies_saved >= MAX_SEARCH_RESULTS or blocked_message or not check_searxng_timer():
+        if companies_saved >= shared.MAX_SEARCH_RESULTS or blocked_message or not docker.check_searxng_timer():
             break
 
         print()
         print(f'Search variation: "{search_query}"')
-        if _debug_run is not None:
-            _debug_run.query(search_query)
+        if shared._debug_run is not None:
+            shared._debug_run.query(search_query)
 
         empty_or_repeating_pages = 0
         dry_pages = 0
 
-        query_pages = SITE_QUERY_PAGES if search_query.startswith("site:") else MAX_SEARCH_PAGES
+        query_pages = SITE_QUERY_PAGES if search_query.startswith("site:") else shared.MAX_SEARCH_PAGES
         for page in range(1, query_pages + 1):
-            if companies_saved >= MAX_SEARCH_RESULTS or not check_searxng_timer():
+            if companies_saved >= shared.MAX_SEARCH_RESULTS or not docker.check_searxng_timer():
                 break
 
             results = search_searxng(search_query, page)
-            if _debug_run is not None:
-                _debug_run.query_page(len(results or []))
+            if shared._debug_run is not None:
+                shared._debug_run.query_page(len(results or []))
             if page == 1:
                 # Many queries in a row with no results at all means the engines are refusing us.
                 empty_query_streak = 0 if results else empty_query_streak + 1
@@ -4250,7 +3827,7 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
                             and not cached_skip(_skip_decisions, url)][:24])
 
             for result in web_results:
-                if companies_saved >= MAX_SEARCH_RESULTS or not check_searxng_timer():
+                if companies_saved >= shared.MAX_SEARCH_RESULTS or not docker.check_searxng_timer():
                     break
                 candidate_number += 1
                 title = str(result.get("title") or "")
@@ -4297,7 +3874,7 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
                 for board_url in pending[:10]:
                     pending.extend(public_board_links(board_url, job_titles))
                 checked = set()
-                while pending and len(checked) < 18 and companies_saved < MAX_SEARCH_RESULTS and check_searxng_timer():
+                while pending and len(checked) < 18 and companies_saved < shared.MAX_SEARCH_RESULTS and docker.check_searxng_timer():
                     page_url = pending.pop(0)
                     if page_url != url:
                         discover_board(page_url, company_name)
@@ -4408,7 +3985,7 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
                                    posted=details.get("posted"))
                         if inserted:
                             companies_saved += 1
-                            print(f"Saved job {companies_saved}/{MAX_SEARCH_RESULTS}: {job_url}")
+                            print(f"Saved job {companies_saved}/{shared.MAX_SEARCH_RESULTS}: {job_url}")
                         else:
                             existing_companies += 1
                 if not checked:
@@ -4422,11 +3999,11 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
                 print("Three search pages in a row gave no matching jobs; moving to the next query.", flush=True)
                 break
 
-    if companies_saved < MAX_SEARCH_RESULTS:
+    if companies_saved < shared.MAX_SEARCH_RESULTS:
         print()
         print(
             f"Search exhausted after saving {companies_saved}/"
-            f"{MAX_SEARCH_RESULTS} viable companies."
+            f"{shared.MAX_SEARCH_RESULTS} viable companies."
         )
 
     database.close()
@@ -4435,11 +4012,11 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
     print("=" * 60)
     print("SEARCH COMPLETE")
     print()
-    stop_reason = search_stop_reason(companies_saved, blocked_message)
+    stop_reason = docker.search_stop_reason(companies_saved, blocked_message)
     print(f"Stop reason: {stop_reason}")
-    if _debug_run is not None:
-        _debug_run.stop_reason = stop_reason
-        _debug_run.data["summary"] = {
+    if shared._debug_run is not None:
+        shared._debug_run.stop_reason = stop_reason
+        shared._debug_run.data["summary"] = {
             "results_checked": results_checked, "search_pages_checked": pages_checked,
             "websites_checked": websites_checked, "passed_validation": passed_count,
             "saved_new": companies_saved, "already_saved": existing_companies,
@@ -4467,24 +4044,24 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
 
 
 def main(job_title=None, state=None, cities_json=None, max_new=None):
-    global web_search_started, _debug_run
+    global web_search_started
     web_search_started = False
     clear_employer_cache()
     clear_ats_cache()
     _board_health.clear()
-    _debug_run = DebugRun(SEARCH_DEBUG_FILE, "replacement" if max_new == 1 else "search", JOB_FINDER_VERSION)
+    shared._debug_run = DebugRun(shared.SEARCH_DEBUG_FILE, "replacement" if max_new == 1 else "search", JOB_FINDER_VERSION)
     try:
         _run_search(job_title=job_title, state=state, cities_json=cities_json, max_new=max_new)
     except BaseException as error:
-        _debug_run.stop_reason = f"stopped by {type(error).__name__}: {error}"
+        shared._debug_run.stop_reason = f"stopped by {type(error).__name__}: {error}"
         raise
     finally:
         # Also runs after a crash or stop request, so SearXNG and Docker are not left running.
         if web_search_started:
-            stop_searxng()
-            stop_docker_desktop()
-        _debug_run.finish(_debug_run.stop_reason or "ended early (setup failed or a stop was requested)")
-        _debug_run = None
+            docker.stop_searxng()
+            docker.stop_docker_desktop()
+        shared._debug_run.finish(shared._debug_run.stop_reason or "ended early (setup failed or a stop was requested)")
+        shared._debug_run = None
         _board_health.write(BOARD_HEALTH_FILE, "replacement" if max_new == 1 else "search")
 
 
