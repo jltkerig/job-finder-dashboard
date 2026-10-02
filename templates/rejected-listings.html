@@ -1,4 +1,4 @@
-<!doctype html><html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="csrf-token" content="{{ csrf_token }}" /><title>Settings | Job Finder</title><link rel="stylesheet" href="/static/css/style.css" /></head><body data-page="rejected">
+<!doctype html><html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="csrf-token" content="{{ csrf_token }}" /><title>Settings | Job Finder</title><link rel="stylesheet" href="/static/css/style.css?v={{ app_version }}" /></head><body data-page="rejected">
 <nav class="top-nav" aria-label="Main navigation">
   <div class="nav-inner"><a class="nav-link" href="/">Search</a><a class="nav-link" href="/dashboard">Dashboard</a><a class="nav-link" href="http://127.0.0.1:5001/">Résumé Builder</a><a class="nav-link active" href="/rejected-listings">Settings</a><a class="nav-link" href="/tuning">Tuning</a>
   </div>
@@ -51,13 +51,13 @@
       </p><a class="bordered-button button-link" href="/">Go to Search</a>
     </div>{% endif %}
   </details>
-  <details class="settings-panel history-collapse" id="search-skips" data-remember="jobFinder.searchSkipsOpen">
+  <details class="settings-panel history-collapse" id="search-skips" data-remember="jobFinder.searchSkipsOpen"{% if skip_query or skip_page > 1 %} data-open-now{% endif %}>
     <summary><h2>Search Skips</h2><span class="summary-chevron" aria-hidden="true"></span></summary>
     <p>Pages checked by Job Finder that did not qualify. Clear non-job pages are checked again after a short wait; temporary errors are retried on the next search. A page that later qualifies moves into Search results.
-    </p>{% if search_skips %}
-    <div class="settings-search"><label for="search-skip-search">Find a skipped page</label><input id="search-skip-search" type="search" placeholder="Search title, reason, or any part of the URL" autocomplete="off" />
-    </div>
-    <ul class="search-skip-list" data-page-size="10">{% for item in search_skips %}
+    </p>{% if search_skips or skip_query %}
+    <form class="settings-search" method="get" action="/rejected-listings#search-skips"><label for="search-skip-search">Find a skipped page</label><input id="search-skip-search" name="skip_q" type="search" value="{{ skip_query }}" placeholder="Search title, reason, or any part of the URL" autocomplete="off" /><button class="bordered-button secondary-action" type="submit">Search</button>{% if skip_query %} <a class="bordered-button" href="/rejected-listings#search-skips">Clear</a>{% endif %}
+    </form>
+    <ul class="search-skip-list">{% for item in search_skips %}
       <li>
         <div><strong><a href="{{ item.url }}" target="_blank" rel="noopener noreferrer">{{ item.title or 'Untitled page' }}</a></strong>
           <p class="skip-meta"><small>Reason: {{ item.reason }} · Last checked: {{ item.checked_at[:16].replace('T', ' ') if item.checked_at else 'Earlier search' }} UTC · Next check: {{ item.next_check }}</small><span class="skip-url" title="{{ item.url }}">{{ item.url }}</span>
@@ -65,7 +65,10 @@
         </div>
       </li>{% endfor %}
     </ul>
-    <nav class="pagination-controls" data-pagination="search-skip-list" aria-label="Search skip pages">
+    <nav class="pagination-controls" aria-label="Search skip pages"><span>{{ skip_total }} skipped page{{ '' if skip_total == 1 else 's' }}{% if skip_query %} match{{ 'es' if skip_total == 1 else '' }} your search{% endif %}</span>{% if skip_pages > 1 %}
+      {% if skip_page > 1 %}<a class="bordered-button secondary-action" href="/rejected-listings?skip_page={{ skip_page - 1 }}{% if skip_query %}&skip_q={{ skip_query|urlencode }}{% endif %}#search-skips">Previous</a>{% endif %}
+      <span>Page {{ skip_page }} of {{ skip_pages }}</span>
+      {% if skip_page < skip_pages %}<a class="bordered-button secondary-action" href="/rejected-listings?skip_page={{ skip_page + 1 }}{% if skip_query %}&skip_q={{ skip_query|urlencode }}{% endif %}#search-skips">Next</a>{% endif %}{% endif %}
     </nav>{% else %}
     <p>No skipped pages have been recorded yet.
     </p>{% endif %}

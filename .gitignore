@@ -11,3 +11,5 @@ feed_cache/
 # Resumes and cover letters from Resume Builder (personal)
 user-builds/
 search_scope.json
+watched_employers.before-*.json
+*.bak
