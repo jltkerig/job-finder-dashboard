@@ -133,5 +133,23 @@ class JobSiteSearch(unittest.TestCase):
         self.assertEqual(searched, [])
 
 
+    def test_each_job_site_gets_its_own_share_of_the_search(self):
+        """The first site filling its share (a third of the search) must not leave the next site with nothing."""
+        class SecondSite(FakeSite):
+            name = "Adzuna"
+            domain = "adzuna.com"
+
+            def search(self, keyword, place="", radius=None):
+                self.searches.append((keyword, place, radius))
+                return [NationalLaborExchange()._listing(nlx_job(guid="D" * 32, title="Web Designer", company="Second Co"))]
+
+        saved = run_search({}, "https://example.com/none", "Web Designer", max_new=3,
+                           cities_json='[{"city": "Bel Air, MD", "radius": 20}]',
+                           city_targets=[{"city": "Bel Air, MD", "radius": 20, "lat": 39.53, "lon": -76.35}],
+                           distance=lambda database, html, fallback, state, targets, allow_footer=False: (
+                               ("Seattle" not in fallback), fallback.split(",")[0], 39.5, -76.16, 7.7),
+                           extra={"JOB_SITES": (FakeSite, SecondSite)})
+        self.assertEqual(saved, {f"https://usnlx.com/{GUID}/job/", f"https://usnlx.com/{'D' * 32}/job/"})
+
 if __name__ == "__main__":
     unittest.main()
