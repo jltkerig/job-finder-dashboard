@@ -40,15 +40,13 @@
           <section class="profile-subsection">
             <h3>Job Titles
             </h3>
-            <p class="field-help">Job Finder searches for every title here.
-            </p>
-            <div class="form-field"><label for="primary-job-title">Primary Job Title</label><input id="primary-job-title" name="primary_job_title" type="text" data-title-suggest="single" value="{{ profile.primary_job_title }}" placeholder="e.g. Web Designer" autocomplete="off" />
-              <p class="field-help">The main job you want. Shown below your photo.
-              </p>
+            <div class="form-field"><label for="primary-job-title">Primary Job Title</label>
+          <p class="field-help">The main job you want. Shown below your photo.
+              </p><input id="primary-job-title" name="primary_job_title" type="text" data-title-suggest="single" value="{{ profile.primary_job_title }}" placeholder="e.g. Web Designer" autocomplete="off" />
             </div>
-            <div class="form-field"><label for="job-titles">Other Job Titles to Search For</label><input id="job-titles" name="job_titles" type="text" data-title-suggest="list" value="{{ profile.job_titles | reject('equalto', profile.primary_job_title) | join(', ') }}" placeholder="Front End Developer, Visual Designer" />
-              <p class="field-help">Separate titles with commas.
-              </p>
+            <div class="form-field"><label for="job-titles">Other Job Titles to Search For</label>
+          <p class="field-help">Separate titles with commas.
+              </p><input id="job-titles" name="job_titles" type="text" data-title-suggest="list" value="{{ profile.job_titles | reject('equalto', profile.primary_job_title) | join(', ') }}" placeholder="Front End Developer, Visual Designer" />
               <div id="title-suggestion-chips" class="title-chips" hidden><span class="field-help">Suggested:</span>
                 <div class="chip-row">
                 </div>
