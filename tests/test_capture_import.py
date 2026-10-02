@@ -83,6 +83,7 @@ class CaptureFiles(unittest.TestCase):
             self.assertEqual(site, "mwe")
             self.assertEqual(jobs[0]["title"], "Graphic Designer")
         self.assertIn("Maryland Workforce Exchange", capture.CAPTURE_SOURCES)  # never re-fetched by Refresh
+        self.assertIn("USAJOBS", capture.CAPTURE_SOURCES)  # read from search pages the user opened
 
     def test_other_json_files_are_not_capture_files(self):
         with tempfile.TemporaryDirectory() as folder:

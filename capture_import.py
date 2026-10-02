@@ -23,6 +23,8 @@ SITES = {
     "glassdoor": ("Glassdoor", "glassdoor.com"),
     # Its robots.txt forbids automated visitors: jobs come only from pages you opened, and Refresh never visits it.
     "mwe": ("Maryland Workforce Exchange", "mwejobs.maryland.gov"),
+    # Blocks automated visitors too: jobs come only from search pages you opened (the optional API stays separate).
+    "usajobs": ("USAJOBS", "usajobs.gov"),
 }
 # Rows with these source types came from the extension. The dashboard shows them even though their domains are
 # on the blocked list (that list is for web-search results), and Refresh never re-fetches them: the sites answer
