@@ -1495,3 +1495,14 @@ body[data-page="search"] .results-toolbar .column-chooser-inline .column-option 
 .found-cell .found-age { font-weight:600; }
 
 .skill-chip-list > small { flex-basis: 100%; }
+
+/* Suggested skills are the same small pills as the skills already added. */
+.skill-chip-list > button {
+  min-height: 0;
+  padding: 5px 10px;
+  border-radius: 20px;
+  font-size: .84rem;
+  font-weight: 400;
+  line-height: 1.25;
+}
+.skill-chip-list > button.primary-action { font-weight: 600; }
