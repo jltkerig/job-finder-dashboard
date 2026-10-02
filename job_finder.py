@@ -3861,6 +3861,10 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
                 _board_health.note(site_class.name, "Job site", "off")
                 continue
             site = site_class()
+            if not getattr(site, "configured", True):
+                print(f"{site.name} needs setup, so it was skipped: {site.setup_hint}")
+                _board_health.note(site.name, "Job site", "off", detail=site.setup_hint)
+                continue
             found = saved = 0
             print(f"Searching {site.name} for your titles near {', '.join(place for place, _ in places) or 'anywhere'}...")
             try:
