@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
 from owners import search_source
 import job_finder
+from jobfinder.search import web_captures
 from jobfinder.search import relevance
 from jobfinder.search import geo
 from jobfinder.records import job_retention
@@ -75,7 +76,7 @@ class Scope(unittest.TestCase):
 
     def recheck(self, database, titles, cities=(), state="Maryland", targets=()):
         profile = (list(titles), [dict(c) for c in cities], state, None)
-        with patch.object(job_finder, "load_profile_filters", return_value=profile), \
+        with patch.object(web_captures, "load_profile_filters", return_value=profile), \
                 patch.object(geo, "prepare_city_targets", return_value=list(targets)):
             return job_finder.recheck_system_rejections(database, self.scope_file)
 

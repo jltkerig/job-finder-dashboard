@@ -1,3 +1,4 @@
+from jobfinder.search import web_captures
 import json
 import os
 import sys
@@ -10,7 +11,7 @@ from unittest.mock import MagicMock, patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
 from jobfinder.records import capture_import as capture
-import job_finder as finder
+import job_finder as finder
 from jobfinder.search import judging
 from owners import holders
 
@@ -138,7 +139,7 @@ class Matching(unittest.TestCase):
 
 def import_run(rows=()):
     """A CaptureImport without a database: the profile wants Web Designer jobs in Texas."""
-    run = object.__new__(finder.CaptureImport)
+    run = object.__new__(web_captures.CaptureImport)
     run.database = None
     run.state, run.wanted = "TX", ["Web Designer"]
     run.statewide, run.selected_states, run.city_targets = set(), {"TX"}, []
@@ -298,10 +299,10 @@ class ImportErrorCodes(unittest.TestCase):
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text(text, encoding="utf-8")
             output = io.StringIO()
-            with patch.object(finder, "capture_dirs", return_value=(Path(searches), Path(searches))), \
+            with patch.object(web_captures, "capture_dirs", return_value=(Path(searches), Path(searches))), \
                     patch.object(storage, "connect_database", return_value=database), \
                     contextlib.redirect_stdout(output):
-                finder.import_captures()
+                web_captures.import_captures()
             return output.getvalue()
 
     def test_an_unreachable_database_stops_with_E6001(self):
