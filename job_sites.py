@@ -12,10 +12,13 @@ Exchange is one of the main sources state job banks like it draw on, so many of 
 """
 
 import html as html_lib
+import os
 import re
 import time
 
 import requests
+
+from places import STATE_NAMES
 
 USER_AGENT = "Mozilla/5.0 (compatible; PersonalJobFinder/1.1; local job search)"
 
@@ -104,7 +107,116 @@ class NationalLaborExchange:
         return "Open" if int((data.get("pagination") or {}).get("total") or 0) > 0 else "Closed"
 
 
-JOB_SITES = [NationalLaborExchange]
+class USAJobs:
+    """USAJOBS.gov, the federal government's job board, through its official search API (data.usajobs.gov).
+
+    The API is free but needs a personal key: request one at developer.usajobs.gov (it is tied to your email),
+    then put USAJOBS_API_KEY and USAJOBS_EMAIL in the .env file. Without them this site is skipped. The email is
+    sent as the User-Agent, as the API requires. Only openings open to the public (WhoMayApply=public) from the
+    last 30 days are read. The API cannot look up one announcement, so a saved job's status stays "Unknown".
+    """
+    name = "USAJOBS"
+    domain = "usajobs.gov"
+    API = "https://data.usajobs.gov/api/search"
+    PAGE_SIZE = 25
+    MAX_PAGES = 2  # per title and place
+    DELAY = 1.0  # seconds between requests
+    DAYS = 30
+
+    def __init__(self, timeout=30):
+        self.timeout = timeout
+        self._last = 0.0
+        self.requests = 0
+        self.key = os.getenv("USAJOBS_API_KEY", "").strip()
+        self.email = os.getenv("USAJOBS_EMAIL", "").strip()
+
+    @property
+    def configured(self):
+        return bool(self.key and self.email)
+
+    setup_hint = "Add USAJOBS_API_KEY and USAJOBS_EMAIL to .env (free key: developer.usajobs.gov)."
+
+    def _get(self, params):
+        pause = self.DELAY - (time.monotonic() - self._last)
+        if pause > 0:
+            time.sleep(pause)
+        self._last = time.monotonic()
+        self.requests += 1
+        response = requests.get(self.API, params=params, timeout=self.timeout, headers={
+            "Host": "data.usajobs.gov", "User-Agent": self.email, "Authorization-Key": self.key})
+        if response.status_code == 429:
+            raise SiteBlocked(f"{self.name} answered HTTP 429")
+        if response.status_code in (401, 403):
+            raise ValueError(f"{self.name} refused the API key (HTTP {response.status_code}). "
+                             "Check USAJOBS_API_KEY and USAJOBS_EMAIL in .env.")
+        if response.status_code != 200:
+            raise ValueError(f"{self.name} answered HTTP {response.status_code}")
+        return response.json()
+
+    @staticmethod
+    def job_url(job_id):
+        return f"https://www.usajobs.gov/job/{job_id}"
+
+    @staticmethod
+    def location_name(place):
+        """"Baltimore, MD" -> "Baltimore, Maryland": the API's location names spell the state out."""
+        city, _, state = str(place).partition(",")
+        full = STATE_NAMES.get(state.strip().upper())
+        return f"{city.strip()}, {full}" if full else str(place).strip()
+
+    def _listing(self, item):
+        job = item.get("MatchedObjectDescriptor") or {}
+        job_id = str(job.get("PositionID") or item.get("MatchedObjectId") or "").strip()
+        places = job.get("PositionLocation") or []
+        first = places[0] if places else {}
+        shown = str(first.get("LocationName") or job.get("PositionLocationDisplay") or "").strip()
+        remote = bool(re.search(r"anywhere in the u\.?s|remote", shown, re.I))
+        location = "United States (Remote)" if remote else shown
+        city = "" if remote else shown.split(",")[0].strip()
+        state = "" if remote else str(first.get("CountrySubDivisionCode") or "").strip()
+        lat = lon = None
+        try:
+            lat, lon = float(first.get("Latitude")), float(first.get("Longitude"))
+        except (TypeError, ValueError):
+            pass
+        details = (job.get("UserArea") or {}).get("Details") or {}
+        duties = details.get("MajorDuties")
+        parts = [details.get("JobSummary"), "\n".join(duties) if isinstance(duties, list) else duties,
+                 job.get("QualificationSummary"), details.get("Requirements"), details.get("Education")]
+        pay = (job.get("PositionRemuneration") or [{}])[0]
+        if pay.get("MinimumRange"):
+            parts.append(f"Pay: ${pay.get('MinimumRange')} - ${pay.get('MaximumRange')} per {pay.get('Description') or 'year'}")
+        description = "\n\n".join(html_lib.unescape(str(part)).strip() for part in parts if part)
+        return {
+            "guid": job_id, "title": str(job.get("PositionTitle") or "").strip(),
+            "company": str(job.get("OrganizationName") or job.get("DepartmentName") or "").strip(),
+            "url": self.job_url(job_id), "location": location, "city": city, "state": state,
+            "country": str(first.get("CountryCode") or "United States").strip(), "lat": lat, "lon": lon, "miles": None,
+            "posted": str(job.get("PublicationStartDate") or "")[:10], "description": description,
+        }
+
+    def search(self, keyword, place="", radius=None):
+        """Openings for a title near a place (a city, or a whole state), most relevant first."""
+        listings = []
+        for page in range(1, self.MAX_PAGES + 1):
+            params = {"Keyword": keyword, "ResultsPerPage": self.PAGE_SIZE, "Page": page, "Fields": "Full",
+                      "WhoMayApply": "public", "DatePosted": self.DAYS}
+            if place:
+                params["LocationName"] = self.location_name(place)
+                if radius:
+                    params["Radius"] = int(radius)
+            result = (self._get(params).get("SearchResult") or {})
+            items = result.get("SearchResultItems") or []
+            listings.extend(self._listing(item) for item in items)
+            if len(items) < self.PAGE_SIZE:
+                break
+        return [listing for listing in listings if listing["guid"]]
+
+    def status(self, url):
+        return "Unknown"  # the API can't look up one announcement; never mark a real job closed by guessing
+
+
+JOB_SITES = [NationalLaborExchange, USAJobs]
 JOB_SITE_NAMES = frozenset(site.name for site in JOB_SITES)
 
 
