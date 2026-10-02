@@ -1,12 +1,20 @@
 """Judging one job opening: does it fit your titles, is it in the United States, and is it close enough?"""
 
 from bs4 import BeautifulSoup
+
 from jobfinder.search import shared
 from jobfinder.search.company_names import OFFICIAL_BOARD_CREDIBILITY, on_official_board
 from jobfinder.search.company_site import score_career_page
 from jobfinder.search.geo import distance_to_city_targets
 from jobfinder.search.shared import CAREER_CREDIBILITY_THRESHOLD, USA_ONLY, is_internship
-from jobfinder.search.usa_location import US_STATES, US_STATE_ABBREVIATIONS, analyze_usa_location, detect_work_arrangement, find_state_from_text, remote_state_restrictions
+from jobfinder.search.usa_location import (
+    US_STATES,
+    US_STATE_ABBREVIATIONS,
+    analyze_usa_location,
+    detect_work_arrangement,
+    find_state_from_text,
+    remote_state_restrictions,
+)
 from jobfinder.sources.employer_site import is_third_party
 from jobfinder.sources.job_listings import excludes_us
 

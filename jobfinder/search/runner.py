@@ -1,16 +1,17 @@
 """The search itself: reads your titles and places, searches, checks every lead and saves the ones that fit."""
 
-from datetime import datetime, timezone
-from urllib.parse import urljoin
 import argparse
+from datetime import datetime, timezone
 import json
 import re
-import requests
 import sys
 import threading
 import time
+from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup
+import requests
+
 from jobfinder.profiles.onet_data import spelling_fix
 from jobfinder.profiles.profile_tools import listing_skills
 from jobfinder.records.board_health import HEALTH_FILE as BOARD_HEALTH_FILE
@@ -24,23 +25,78 @@ from jobfinder.search import judging
 from jobfinder.search import relevance
 from jobfinder.search import shared
 from jobfinder.search import storage
-from jobfinder.search.company_names import OFFICIAL_BOARD_CREDIBILITY, company_board_posting, extract_company_name, tidy_company_name, verification_label
-from jobfinder.search.company_site import ATS_DOMAINS, is_directory_or_marketplace_result, is_student_employment_overview
-from jobfinder.search.fetching import get_domain, has_blocked_country_domain, is_blocked_domain, is_valid_url, prefetch_pages
+from jobfinder.search.company_names import (
+    OFFICIAL_BOARD_CREDIBILITY,
+    company_board_posting,
+    extract_company_name,
+    tidy_company_name,
+    verification_label,
+)
+from jobfinder.search.company_site import (
+    ATS_DOMAINS,
+    is_directory_or_marketplace_result,
+    is_student_employment_overview,
+)
+from jobfinder.search.fetching import (
+    get_domain,
+    has_blocked_country_domain,
+    is_blocked_domain,
+    is_valid_url,
+    prefetch_pages,
+)
 from jobfinder.search.geo import JOB_FINDER_VERSION, _ZIP_CODE
-from jobfinder.search.refresh import close_expired_listings_quietly, recheck_system_rejections_quietly, refresh_job_fit_quietly, update_existing_results
+from jobfinder.search.refresh import (
+    close_expired_listings_quietly,
+    recheck_system_rejections_quietly,
+    refresh_job_fit_quietly,
+    update_existing_results,
+)
 from jobfinder.search.relevance import apply_link_closed, expand_job_titles
 from jobfinder.search.searching import search_blocked_message, search_searxng
-from jobfinder.search.shared import BLOCKED_COMPANIES, BLOCKED_DOMAINS, EMPTY_QUERY_LIMIT, SEARCH_SKIPS_FILE, SITE_QUERY_PAGES, TIMEOUT, USA_ONLY, _board_health, _page_cache, _skip_decisions, debug_lead, debug_skip, is_internship, record_skip, related_family_titles, timed, timing_summary
+from jobfinder.search.shared import (
+    BLOCKED_COMPANIES,
+    BLOCKED_DOMAINS,
+    EMPTY_QUERY_LIMIT,
+    SEARCH_SKIPS_FILE,
+    SITE_QUERY_PAGES,
+    TIMEOUT,
+    USA_ONLY,
+    _board_health,
+    _page_cache,
+    _skip_decisions,
+    debug_lead,
+    debug_skip,
+    is_internship,
+    record_skip,
+    related_family_titles,
+    timed,
+    timing_summary,
+)
 from jobfinder.search.usa_location import US_STATES, remote_state_restrictions, selected_state_codes
 from jobfinder.search.web_captures import _row_details, import_captures, site_location_in_us
 from jobfinder.sources.ats_discovery import identify as identify_board, identify_unreadable, pretty_name as board_name
 from jobfinder.sources.ats_feeds import public_board_links
 from jobfinder.sources.ats_lookup import clear_cache as clear_ats_cache
-from jobfinder.sources.employer_jobs import SOURCE_TYPE as EMPLOYER_SOURCE, Http as EmployerHttp, Employer, config_key, load_employers, record_board_result, save_discovered
+from jobfinder.sources.employer_jobs import (
+    SOURCE_TYPE as EMPLOYER_SOURCE,
+    Http as EmployerHttp,
+    Employer,
+    config_key,
+    load_employers,
+    record_board_result,
+    save_discovered,
+)
 from jobfinder.sources.employer_site import clear_cache as clear_employer_cache, is_third_party
 from jobfinder.sources.job_feeds import FEEDS
-from jobfinder.sources.job_listings import canonical_url, extract_jobs, is_article_page, is_pdf_url, job_links, pagination_links, matching_title as matching_job_title
+from jobfinder.sources.job_listings import (
+    canonical_url,
+    extract_jobs,
+    is_article_page,
+    is_pdf_url,
+    job_links,
+    pagination_links,
+    matching_title as matching_job_title,
+)
 from jobfinder.sources.job_sites import JOB_SITES, SiteBlocked, search_places
 
 

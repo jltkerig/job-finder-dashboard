@@ -1,7 +1,8 @@
 """Asking the SearXNG search engine for pages, one query at a time."""
 
-import requests
 import time
+
+import requests
 
 from jobfinder.search import docker
 from jobfinder.search import shared

@@ -1,8 +1,10 @@
 """Refreshing results already saved: checking they are still open, re-checking rejected ones and updating Job Fit."""
 
 from datetime import date, datetime, timezone
-from pathlib import Path
 import json
+from pathlib import Path
+
+from mysql.connector import Error
 import requests
 
 from jobfinder import paths
@@ -17,19 +19,47 @@ from jobfinder.search import relevance
 from jobfinder.search import shared
 from jobfinder.search import storage
 from jobfinder.search import web_captures
-from jobfinder.search.company_names import OFFICIAL_BOARD_CREDIBILITY, company_board_posting, on_company_site, on_official_board, tidy_company_name, verification_label
+from jobfinder.search.company_names import (
+    OFFICIAL_BOARD_CREDIBILITY,
+    company_board_posting,
+    on_company_site,
+    on_official_board,
+    tidy_company_name,
+    verification_label,
+)
 from jobfinder.search.company_site import inspect_company_site, score_career_page
 from jobfinder.search.fetching import get_domain, is_valid_url, prefetch_for_update
 from jobfinder.search.geo import JOB_FINDER_VERSION, distance_to_city_targets
-from jobfinder.search.relevance import apply_link_closed, expand_job_titles, is_internship_row, is_irrelevant_lead, is_wrong_location_lead, load_city_targets, load_selected_states, load_user_titles, reject_irrelevant_row, stale_remote_limit
+from jobfinder.search.relevance import (
+    apply_link_closed,
+    expand_job_titles,
+    is_internship_row,
+    is_irrelevant_lead,
+    is_wrong_location_lead,
+    load_city_targets,
+    load_selected_states,
+    load_user_titles,
+    reject_irrelevant_row,
+    stale_remote_limit,
+)
 from jobfinder.search.shared import CAREER_CREDIBILITY_THRESHOLD, related_family_titles
-from jobfinder.search.usa_location import US_STATES, analyze_usa_location, detect_work_arrangement, merge_location_data, selected_state_codes
-from jobfinder.sources.employer_jobs import SOURCE_TYPE as EMPLOYER_SOURCE, Http as EmployerHttp, employer_for_url, load_employers
+from jobfinder.search.usa_location import (
+    US_STATES,
+    analyze_usa_location,
+    detect_work_arrangement,
+    merge_location_data,
+    selected_state_codes,
+)
+from jobfinder.sources.employer_jobs import (
+    SOURCE_TYPE as EMPLOYER_SOURCE,
+    Http as EmployerHttp,
+    employer_for_url,
+    load_employers,
+)
 from jobfinder.sources.employer_site import clear_cache as clear_employer_cache, is_third_party
 from jobfinder.sources.job_feeds import FEEDS, FEED_NAMES
 from jobfinder.sources.job_listings import canonical_url, extract_jobs, matching_title as matching_job_title
 from jobfinder.sources.job_sites import JOB_SITE_NAMES, job_site_for
-from mysql.connector import Error
 
 
 SEARCH_SCOPE_FILE = paths.SEARCH_SCOPE_FILE

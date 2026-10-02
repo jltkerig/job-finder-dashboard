@@ -1,13 +1,27 @@
 """Downloading pages politely: which domains are allowed, the wait between requests to one site, and a cache of pages already read."""
 
 from concurrent.futures import ThreadPoolExecutor
-from urllib.parse import urlparse
-import requests
 import time
+from urllib.parse import urlparse
+
+import requests
 
 from jobfinder.search import docker
 from jobfinder.search import shared
-from jobfinder.search.shared import BLOCKED_COUNTRY_DOMAINS, BLOCKED_DOMAINS, HEADERS, MAX_HTML_SIZE, PREFETCH_WORKERS, TIMEOUT, USA_ONLY, _host_lock, _host_next_request, _page_cache, _prefetched, timed
+from jobfinder.search.shared import (
+    BLOCKED_COUNTRY_DOMAINS,
+    BLOCKED_DOMAINS,
+    HEADERS,
+    MAX_HTML_SIZE,
+    PREFETCH_WORKERS,
+    TIMEOUT,
+    USA_ONLY,
+    _host_lock,
+    _host_next_request,
+    _page_cache,
+    _prefetched,
+    timed,
+)
 from jobfinder.sources.job_listings import canonical_url, is_pdf_url
 
 

@@ -4,6 +4,7 @@ import json
 import re
 
 from bs4 import BeautifulSoup
+
 from jobfinder.search.fetching import get_domain
 from jobfinder.sources.job_listings import arrangement_types
 from jobfinder.sources.remote_states import restriction_states

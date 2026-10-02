@@ -1,11 +1,19 @@
 """Starting and stopping Docker Desktop and the SearXNG search engine, and deciding when a search must stop."""
 
-import requests
 import subprocess
 import time
 
+import requests
+
 from jobfinder.search import shared
-from jobfinder.search.shared import BASE_DIR, SEARXNG_COMPOSE_FILE, SEARXNG_CONTAINER, SEARXNG_MAX_RUNTIME, START_DOCKER_AUTOMATICALLY, STOP_DOCKER_WHEN_FINISHED
+from jobfinder.search.shared import (
+    BASE_DIR,
+    SEARXNG_COMPOSE_FILE,
+    SEARXNG_CONTAINER,
+    SEARXNG_MAX_RUNTIME,
+    START_DOCKER_AUTOMATICALLY,
+    STOP_DOCKER_WHEN_FINISHED,
+)
 
 
 searxng_start_time = None

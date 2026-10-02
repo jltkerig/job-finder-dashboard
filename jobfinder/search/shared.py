@@ -1,16 +1,18 @@
 """Settings, constants and the state every part of the search shares. Other modules read the settings that tests change (REQUEST_DELAY, MAX_SEARCH_RESULTS, update_existing_mode ...) as config.NAME, so changing one here changes it everywhere."""
 
-from pathlib import Path
 import json
 import re
 import threading
 import time
 
+from dotenv import load_dotenv
+
 from jobfinder import paths
 from jobfinder.records.board_health import BoardHealth
 from jobfinder.records.search_skips import record_decision
 
-from dotenv import load_dotenv
+# The database login and other private settings live in .env (read once, here, for every module of the search).
+load_dotenv(paths.ENV_FILE)
 
 
 BASE_DIR = paths.ROOT
