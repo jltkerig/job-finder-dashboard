@@ -323,11 +323,11 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     // Suggestion chips under Skills: tap the ones you have (Save Profile keeps them). One group for skills the uploaded
     // résumé mentions, one for skills the jobs Job Finder found keep asking for.
-    function suggestionChips(box, heading, choices) {
+    function suggestionChips(box, heading, hint, choices) {
       box.replaceChildren();
       const open = choices.filter(choice => !skills.some(saved => saved.toLowerCase() === choice.skill.toLowerCase()));
       if (!open.length) return;
-      const title = document.createElement("small"); title.textContent = heading; box.append(title);
+      const title = document.createElement("h4"); title.textContent = heading; title.title = hint; box.append(title);
       for (const choice of open) {
         const button = document.createElement("button"); button.type = "button"; button.className = "bordered-button secondary-action";
         button.textContent = `+ ${choice.skill}${choice.note ? ` (${choice.note})` : ""}`;
@@ -343,12 +343,12 @@ document.addEventListener("DOMContentLoaded", () => {
     function showResumeSkills() {
       const box = $("#resume-skill-suggestions"); if (!box) return;
       let found = []; try { found = JSON.parse(box.dataset.skills || "[]"); } catch {}
-      suggestionChips(box, `Skills found in your résumé (${box.dataset.source || "uploaded résumé"}). Add the ones you have, then Save Profile:`,
+      suggestionChips(box, "Suggestions from Resume:", `Skills found in your résumé (${box.dataset.source || "uploaded résumé"}). Add the ones you have, then Save Profile.`,
         found.map(skill => ({ skill })));
       const demand = $("#demand-skill-suggestions"); if (!demand) return;
       let asked = []; try { asked = JSON.parse(demand.dataset.skills || "[]"); } catch {}
       const fromResume = new Set(found.map(skill => skill.toLowerCase()));
-      suggestionChips(demand, "Often asked for in the jobs Job Finder found for you (add only what you have):",
+      suggestionChips(demand, "Suggestions:", "Often asked for in the jobs Job Finder found for you (the number is how many). Add only what you have, then Save Profile.",
         asked.filter(item => !fromResume.has(String(item.skill).toLowerCase()))
           .map(item => ({ skill: item.skill, note: `${item.count} job${item.count === 1 ? "" : "s"}` })));
     }
@@ -389,6 +389,16 @@ document.addEventListener("DOMContentLoaded", () => {
       }); historyField.value = JSON.stringify(history);
     }
     $("#add-work-history").addEventListener("click", () => { history.push({role:"",company:"",dates:"",description:""}); renderHistory(); historyList.lastElementChild.open = true; });
+    // No work history saved yet: fill the form in from the uploaded résumé. Nothing is saved until Save Profile.
+    const historyNote = $("#work-history-note");
+    if (historyNote && !history.length) {
+      let fromResume = []; try { fromResume = JSON.parse(historyNote.dataset.history || "[]"); } catch {}
+      if (Array.isArray(fromResume) && fromResume.length) {
+        history = fromResume.map(job => ({ role: job.role || "", company: job.company || "", dates: job.dates || "", description: job.description || "" }));
+        historyNote.textContent = `Filled in from your résumé (${historyNote.dataset.source || "uploaded résumé"}): check each job, remove any you don't want, then Save Profile.`;
+        historyNote.hidden = false;
+      }
+    }
     renderSkills(); renderHistory();
     $("#home-location").addEventListener("input", () => { const value = $("#home-location").value.trim(); $("#profile-state").value = value.includes(",") ? value.split(",").pop().trim() : ""; });
     const resumeFile = $("#resume-file"), resumeDialog = $("#resume-review"), resumeContent = $("#resume-review-content");

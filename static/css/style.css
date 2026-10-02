@@ -1506,3 +1506,5 @@ body[data-page="search"] .results-toolbar .column-chooser-inline .column-option 
   line-height: 1.25;
 }
 .skill-chip-list > button.primary-action { font-weight: 600; }
+
+.skill-chip-list > h4 { flex-basis: 100%; margin: 4px 0 0; }
