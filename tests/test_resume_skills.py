@@ -6,7 +6,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
-from profile_tools import detect_skills, parse_work_history, resume_skill_suggestions, resume_suggestions, skill_demand, uploaded_resume
+from jobfinder.profiles.profile_tools import detect_skills, parse_work_history, resume_skill_suggestions, resume_suggestions, skill_demand, uploaded_resume
 
 RESUME = """Jane Doe
 Web Designer with HTML, CSS and JavaScript. Built WordPress sites with Bootstrap and Adobe InDesign layouts."""

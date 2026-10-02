@@ -6,8 +6,8 @@ from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
-import employer_site
-from employer_site import can_guess_domain, host_matches_company, is_third_party, resolve_employer_site
+from jobfinder.sources import employer_site
+from jobfinder.sources.employer_site import can_guess_domain, host_matches_company, is_third_party, resolve_employer_site
 
 POSTING = 'https://www.jobleads.com/us/job/ux-driven-web-designer-front-end-specialist--towson--e9c63'
 LISTING_HTML = '<html><body><h1>UX-Driven Web Designer</h1><p>YOUCANIC is hiring.</p></body></html>'

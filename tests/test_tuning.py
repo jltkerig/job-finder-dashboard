@@ -8,10 +8,10 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
-import board_health
+from jobfinder.records import board_health
 import dashboard
 import job_finder as finder
-from board_health import BoardHealth, classify_error, read_health
+from jobfinder.records.board_health import BoardHealth, classify_error, read_health
 
 GOOD_FORM = {'searxng_timeout_minutes': '45', 'max_search_results': '10', 'max_search_pages': '20', 'request_delay_seconds': '1',
              'search_query_delay_seconds': '2.5', 'website_timeout_seconds': '15', 'parallel_page_fetches': '6',

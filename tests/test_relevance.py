@@ -5,7 +5,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
 import job_finder as finder
-from db_schema import ensure_unique_source_index
+from jobfinder.db_schema import ensure_unique_source_index
 
 TITLES = ['web designer', 'Website Designer', 'graphic design']
 PIO = 'Public Information Officer II - GovernmentJobs.com'

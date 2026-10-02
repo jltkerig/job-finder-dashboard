@@ -11,9 +11,10 @@ import re
 from functools import lru_cache
 from pathlib import Path
 
-from places import NEIGHBORS, STATE_NAMES
+from jobfinder import paths
+from jobfinder.profiles.places import NEIGHBORS, STATE_NAMES
 
-DATA = Path(__file__).resolve().parent / "data"
+DATA = paths.DATA_DIR
 ROAD_FACTOR = 1.3
 # (road miles up to, average mph at 6 a.m.): slow streets near home, then arterials, then highways.
 SPEEDS = ((3, 20), (10, 30), (25, 42), (60, 52), (10**9, 58))

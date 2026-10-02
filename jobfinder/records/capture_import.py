@@ -14,7 +14,7 @@ from datetime import date, timedelta
 from html import escape
 from pathlib import Path
 
-from job_listings import canonical_url
+from jobfinder.sources.job_listings import canonical_url
 
 # Extension site key -> (source_type saved in companies, domain)
 SITES = {

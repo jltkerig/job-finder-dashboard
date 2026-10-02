@@ -10,6 +10,9 @@ feed_cache/
 *.log
 # Resumes and cover letters from Resume Builder (personal)
 user-builds/
+# Your own files and the logs (see jobfinder/paths.py); updates never touch them
+user-data/
+logs/
 search_scope.json
 watched_employers.before-*.json
 *.bak

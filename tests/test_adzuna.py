@@ -6,8 +6,8 @@ from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
-import job_sites
-from job_sites import Adzuna, SiteBlocked, job_site_for
+from jobfinder.sources import job_sites
+from jobfinder.sources.job_sites import Adzuna, SiteBlocked, job_site_for
 
 ITEM = {"id": "4400112233", "title": "Graphic Designer", "company": {"display_name": "Acme Print"},
         "location": {"display_name": "Bel Air, Harford County", "area": ["US", "Maryland", "Harford County", "Bel Air"]},

@@ -7,7 +7,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import job_finder as finder
-from job_listings import excludes_us
+from jobfinder.sources.job_listings import excludes_us
 from test_search_flow import posting, run_search
 
 

@@ -48,19 +48,19 @@ class PrimaryJobTitle(unittest.TestCase):
 
 class TitleTypeAhead(unittest.TestCase):
     def test_matches_start_with_what_was_typed(self):
-        from onet_data import title_matches
+        from jobfinder.profiles.onet_data import title_matches
         matches = title_matches("web des")
         self.assertEqual(matches[0], "Web Designer")
         self.assertTrue(all("web" in m.lower() for m in matches))
 
     def test_plural_occupation_names_are_dropped(self):
-        from onet_data import title_matches
+        from jobfinder.profiles.onet_data import title_matches
         matches = title_matches("graphic designer")
         self.assertIn("Graphic Designer", matches)
         self.assertNotIn("Graphic Designers", matches)
 
     def test_too_short_or_unknown_gives_nothing(self):
-        from onet_data import title_matches
+        from jobfinder.profiles.onet_data import title_matches
         self.assertEqual(title_matches("w"), [])
         self.assertEqual(title_matches("xyzq"), [])
 

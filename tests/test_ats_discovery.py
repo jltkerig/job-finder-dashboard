@@ -8,8 +8,8 @@ from types import SimpleNamespace
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from ats_discovery import identify, identify_unreadable, pretty_name
-from employer_jobs import Employer, config_key, load_employers, save_discovered
+from jobfinder.sources.ats_discovery import identify, identify_unreadable, pretty_name
+from jobfinder.sources.employer_jobs import Employer, config_key, load_employers, save_discovered
 from test_employer_jobs import Response
 from test_search_flow import FakeEmployer, employer_opening, run_search
 

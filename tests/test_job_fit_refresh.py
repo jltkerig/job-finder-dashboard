@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
 import dashboard
 import job_finder
-from profile_tools import fit_score, refresh_listing_skills
+from jobfinder.profiles.profile_tools import fit_score, refresh_listing_skills
 
 ROOT = Path(__file__).resolve().parents[1]
 

@@ -13,8 +13,8 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
-import employer_jobs
-from employer_jobs import Employer
+from jobfinder.sources import employer_jobs
+from jobfinder.sources.employer_jobs import Employer
 
 FIXTURE = json.loads((Path(__file__).resolve().parent / 'fixtures' / 'real_pages.json').read_text(encoding='utf-8'))
 TITLES = {'Under Armour': ['Digital Designer'], 'Sinclair': ['Graphic Designer'], 'CVS Health': ['Senior Content Designer']}

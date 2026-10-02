@@ -15,11 +15,12 @@ from urllib.parse import urlparse
 import requests
 from bs4 import BeautifulSoup
 
-import remote_ok
-from job_listings import matching_title
+from jobfinder import paths
+from jobfinder.sources import remote_ok
+from jobfinder.sources.job_listings import matching_title
 
 USER_AGENT = "PersonalJobFinder/1.1 (local job search)"
-CACHE_DIR = Path(__file__).resolve().parent / "feed_cache"
+CACHE_DIR = paths.FEED_CACHE_DIR
 
 # Four categories = four requests per day at most, inside Remotive's advice of about 4 a day.
 REMOTIVE_CATEGORIES = ("design", "software-development", "marketing", "writing")

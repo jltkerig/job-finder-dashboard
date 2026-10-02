@@ -6,8 +6,8 @@ from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
-import job_sites
-from job_sites import SiteBlocked, USAJobs, job_site_for
+from jobfinder.sources import job_sites
+from jobfinder.sources.job_sites import SiteBlocked, USAJobs, job_site_for
 
 ITEM = {"MatchedObjectId": "810000001", "MatchedObjectDescriptor": {
     "PositionID": "DE-12345678-24-ABC", "PositionTitle": "Visual Information Specialist (Graphic Design)",

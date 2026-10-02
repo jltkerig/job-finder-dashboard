@@ -8,7 +8,9 @@ from collections import defaultdict
 from functools import lru_cache
 from pathlib import Path
 
-DATA_DIR = Path(__file__).resolve().parent / "data" / "onet-31.0"
+from jobfinder import paths
+
+DATA_DIR = paths.ONET_DIR
 
 
 def _rows(filename):
