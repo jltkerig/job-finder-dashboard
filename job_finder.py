@@ -3792,6 +3792,55 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
     # typed around each of your places. Their openings go through the same title, location and U.S. checks.
     site_saved_total = 0
     site_cap = max(1, MAX_SEARCH_RESULTS // 3)
+    same_job_index = None
+
+    def saved_job_row(url):
+        with database.cursor(dictionary=True) as cursor:
+            cursor.execute("""SELECT id, name, career_job_title, work_arrangement, city, state, source_url, source_type,
+                                     listing_details, is_rejected FROM companies WHERE source_url = %s LIMIT 1""", (url,))
+            return cursor.fetchone()
+
+    def index_saved_job(row):
+        details = _row_details(row)
+        place = details.get("location") or ", ".join(part for part in (row.get("city"), row.get("state")) if part)
+        key = match_key(row.get("name"), row.get("career_job_title"), place, row.get("work_arrangement"))
+        if key:
+            same_job_index.setdefault(key, row)
+
+    def same_saved_job(company, title, location, arrangement, url):
+        """The job already saved from another place, when this opening is the same real job (same company and title
+        in the same city, or both remote). None when it is new, or when the saved rows can't be read."""
+        nonlocal same_job_index
+        try:
+            if same_job_index is None:
+                same_job_index = {}
+                with database.cursor(dictionary=True) as cursor:
+                    cursor.execute("""SELECT id, name, career_job_title, work_arrangement, city, state, source_url,
+                                             source_type, listing_details, is_rejected FROM companies""")
+                    for row in cursor.fetchall():
+                        index_saved_job(row)
+        except Exception:
+            same_job_index = {}
+            return None
+        key = match_key(company, title, location, arrangement)
+        row = same_job_index.get(key) if key else None
+        return row if row and canonical_url(row.get("source_url")) != canonical_url(url) else None
+
+    def refresh_same_job(row, site, listing):
+        """This search found a job we already have (saved from another site): mark it open and freshly checked, link
+        this listing as another place it's posted, and fill in what the saved one lacks. Nothing else is changed."""
+        details = _row_details(row)
+        add_also_on(details, site.name, listing["url"])
+        for field, value in (("posted", listing.get("posted")), ("location", listing.get("location")),
+                             ("description", str(listing.get("description") or "")[:20000])):
+            if value and not details.get(field):
+                details[field] = value
+        now = datetime.now(timezone.utc)
+        with database.cursor() as cursor:
+            cursor.execute("""UPDATE companies SET listing_details = %s, job_open_status = 'Open', last_checked = %s,
+                              result_updated_at = %s WHERE id = %s""", (json.dumps(details), now, now, row["id"]))
+        database.commit()
+        row["listing_details"] = json.dumps(details)
 
     def check_site_listing(site, listing):
         """Filter and save one job-site opening; returns True when it was newly saved."""
@@ -3829,6 +3878,22 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
         if outcome["skip"]:
             record_skip(outcome["skip"], job_url, title)
             return False
+        same = same_saved_job(company, title, listing["location"], outcome["arrangement"], job_url)
+        if same:
+            if same.get("is_rejected"):
+                record_skip("Previously rejected", job_url, title)
+                return False
+            try:
+                refresh_same_job(same, site, listing)
+            except Exception as error:
+                print(f"Could not update job #{same['id']}: {error}", flush=True)
+                return False
+            print(f"Already saved as job #{same['id']} ({same.get('source_type') or 'saved'}): updated it and linked this "
+                  f"{site.name} listing — {title}", flush=True)
+            debug_lead(action="already saved (updated)", source=site.name, title=title, company=company, url=job_url,
+                       location=listing["location"], matched_title=None)
+            existing_companies += 1
+            return False
         matched_title = next((wanted for wanted in job_titles if matching_job_title(title, [wanted])), job_titles[0])
         details = {"posted": listing["posted"], "location": listing["location"], "matched_title": matched_title,
                    "evidence": [f"{site.name} listing", "title matches search"], "external_id": listing["guid"],
@@ -3849,6 +3914,13 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
             companies_saved += 1
             site_saved_total += 1
             print(f"Saved job {companies_saved}/{MAX_SEARCH_RESULTS}: {job_url}")
+            try:
+                if same_job_index is not None:
+                    new_row = saved_job_row(job_url)
+                    if new_row:
+                        index_saved_job(new_row)  # a later site in this same search can then link to it
+            except Exception:
+                pass
         else:
             existing_companies += 1
         return inserted

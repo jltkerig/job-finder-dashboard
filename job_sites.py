@@ -15,6 +15,7 @@ import html as html_lib
 import os
 import re
 import time
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 import requests
 
@@ -265,6 +266,14 @@ class Adzuna:
         return response.json()
 
     @staticmethod
+    def stable_url(url):
+        """The listing link without `se`, a code that changes with every search: the same ad must give the same link,
+        or each search would save it again as a new job. (The link's `v` code is the same every time for an ad.)"""
+        parsed = urlparse(str(url or ""))
+        query = urlencode([(key, value) for key, value in parse_qsl(parsed.query) if key != "se"])
+        return urlunparse(parsed._replace(query=query))
+
+    @staticmethod
     def location_name(place):
         """"Baltimore, MD" -> "Baltimore, Maryland" (a state alone stays as it is)."""
         city, _, state = str(place).partition(",")
@@ -292,7 +301,7 @@ class Adzuna:
         return {
             "guid": str(item.get("id") or "").strip(), "title": html_lib.unescape(str(item.get("title") or "")).strip(),
             "company": str((item.get("company") or {}).get("display_name") or "").strip(),
-            "url": str(item.get("redirect_url") or "").strip(),
+            "url": self.stable_url(str(item.get("redirect_url") or "").strip()),
             "location": "United States (Remote)" if remote else shown, "city": "" if remote else city,
             "state": "" if remote else state, "country": "United States", "lat": lat, "lon": lon, "miles": None,
             "posted": str(item.get("created") or "")[:10], "description": "\n\n".join(part for part in parts if part),

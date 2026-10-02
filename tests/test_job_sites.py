@@ -151,5 +151,79 @@ class JobSiteSearch(unittest.TestCase):
                            extra={"JOB_SITES": (FakeSite, SecondSite)})
         self.assertEqual(saved, {f"https://usnlx.com/{GUID}/job/", f"https://usnlx.com/{'D' * 32}/job/"})
 
+class SavedRowsDatabase:
+    """Enough of a database for the search to look up saved jobs and record an update to one."""
+
+    def __init__(self, rows):
+        self.rows, self.updates, self.committed = rows, [], 0
+
+    def close(self):
+        pass
+
+    def commit(self):
+        self.committed += 1
+
+    def cursor(self, dictionary=False):
+        outer = self
+
+        class Cursor:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+            def execute(self, sql, params=None):
+                self.sql, self.params = sql, params
+                if sql.lstrip().upper().startswith("UPDATE"):
+                    outer.updates.append((sql, params))
+
+            def fetchall(self):
+                return list(outer.rows)
+
+            def fetchone(self):
+                return None
+
+        return Cursor()
+
+
+class SameJobFromAnotherSource(unittest.TestCase):
+    def search(self, rows, **row_changes):
+        import json
+        saved_row = {"id": 41, "name": "Three Saints Bay", "career_job_title": "Graphic Designer / Multimedia Specialist",
+                     "work_arrangement": None, "city": "Aberdeen", "state": "Maryland",
+                     "source_url": "https://www.linkedin.com/jobs/view/123", "source_type": "LinkedIn",
+                     "listing_details": json.dumps({"location": "Aberdeen, MD"}), "is_rejected": 0, **row_changes}
+        database = SavedRowsDatabase([saved_row] if rows else [])
+        saved = run_search({}, "https://example.com/none", "Web Designer, Graphic Designer", cities_json='[{"city": "Bel Air, MD", "radius": 20}]',
+                           city_targets=[{"city": "Bel Air, MD", "radius": 20, "lat": 39.53, "lon": -76.35}],
+                           distance=lambda db, html, fallback, state, targets, allow_footer=False: (
+                               ("Seattle" not in fallback), fallback.split(",")[0], 39.5, -76.16, 7.7),
+                           extra={"JOB_SITES": (FakeSite,), "connect_database": lambda: database})
+        return saved, database
+
+    def test_a_job_we_already_have_from_another_site_is_updated_and_linked_not_saved_again(self):
+        import json
+        saved, database = self.search(True)
+        self.assertEqual(saved, set())  # no second copy of the job
+        [(sql, params)] = database.updates
+        self.assertIn("job_open_status = 'Open'", sql)
+        self.assertEqual(params[-1], 41)
+        details = json.loads(params[0])
+        self.assertEqual(details["also_on"][0]["site"], "National Labor Exchange")
+        self.assertTrue(details["also_on"][0]["url"].startswith("https://usnlx.com/"))
+        self.assertTrue(details["posted"])  # filled in: the saved job had no date
+        self.assertEqual(details["location"], "Aberdeen, MD")  # what it already had is kept
+
+    def test_a_job_you_rejected_is_not_brought_back_by_another_site(self):
+        saved, database = self.search(True, is_rejected=1)
+        self.assertEqual(saved, set())
+        self.assertEqual(database.updates, [])
+
+    def test_a_new_job_is_still_saved(self):
+        saved, database = self.search(False)
+        self.assertEqual(saved, {f"https://usnlx.com/{GUID}/job/"})
+        self.assertEqual(database.updates, [])
+
 if __name__ == "__main__":
     unittest.main()
