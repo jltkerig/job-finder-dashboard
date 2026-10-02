@@ -600,6 +600,30 @@ document.addEventListener("DOMContentLoaded", () => {
     });
     input.addEventListener("blur", () => setTimeout(() => { items = []; render(); }, 120));
   }
+  // Job titles typed into a box are written in proper capitalization when you leave it (the same rules as the server's
+  // proper_title): every word capitalized except small joining words, acronyms kept in capitals. Searching ignores case.
+  const TITLE_SMALL = new Set(["a", "an", "and", "as", "at", "but", "by", "for", "in", "of", "on", "or", "the", "to", "with"]);
+  const TITLE_UPPER = new Set(["ux", "ui", "qa", "it", "seo", "sem", "cms", "html", "css", "php", "sql", "api", "hr", "crm", "erp", "pr", "ai", "ml", "vp", "ceo", "cfo", "cto", "coo", "aws", "ii", "iii", "iv", "3d", "2d", "ar", "vr", "b2b", "b2c", "ehr", "emr", "cad", "gis", "rn", "lpn", "cdl", "hvac", "usa", "us", "uk", "net", "sap", "etl", "bi", "pc", "av", "tv"]);
+  const TITLE_SPECIAL = { wordpress: "WordPress", javascript: "JavaScript", typescript: "TypeScript", linkedin: "LinkedIn", devops: "DevOps", powerpoint: "PowerPoint", ios: "iOS", macos: "macOS", youtube: "YouTube", github: "GitHub", nodejs: "Node.js" };
+  function properWord(word) {
+    const lower = word.toLowerCase();
+    if (TITLE_SPECIAL[lower]) return TITLE_SPECIAL[lower];
+    if (TITLE_UPPER.has(lower)) return lower.toUpperCase();
+    if (/[A-Z]/.test(word.slice(1)) && /[a-z]/.test(word)) return word;
+    return lower.charAt(0).toUpperCase() + lower.slice(1);
+  }
+  function properTitle(text) {
+    const words = String(text || "").replace(/\s+/g, " ").trim().split(" ").filter(Boolean);
+    return words.map((word, n) => word.split(/([\/-])/).map((part) => {
+      if (part === "/" || part === "-") return part;
+      const small = TITLE_SMALL.has(part.toLowerCase()) && n > 0 && n < words.length - 1 && word === part;
+      return small ? part.toLowerCase() : properWord(part);
+    }).join("")).join(" ");
+  }
+  $$("input[data-title-suggest]").forEach((input) => input.addEventListener("change", () => {
+    const parts = input.dataset.titleSuggest === "single" ? [input.value] : input.value.split(",");
+    input.value = parts.map(properTitle).filter(Boolean).join(", ");
+  }));
   $$("input[data-title-suggest]").forEach(attachTitleSuggest);
 
   // Collapsible panels marked data-remember start closed and keep the user's choice.

@@ -40,7 +40,7 @@ load_dotenv(BASE_DIR / ".env")
 
 app = Flask(__name__)
 
-APP_VERSION = "1.1.147"
+APP_VERSION = "1.1.148"
 
 app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY") or secrets.token_hex(32)
 app.config["SESSION_COOKIE_HTTPONLY"] = True
@@ -477,6 +477,7 @@ def tidy_expired_closed_jobs():
 
 
 def record_search_history(job_title, state, cities=None):
+    job_title = ", ".join(proper_title(part) for part in str(job_title or "").split(",") if part.strip())
     ensure_job_tracking_columns()
     connection = None
     cursor = None
@@ -759,6 +760,9 @@ def get_user_profile():
         profile["skills"] = [row["skill"] for row in cursor.fetchall()]
         cursor.execute("SELECT company, role, dates, description FROM user_profile_work_history WHERE profile_id = 1 ORDER BY id")
         profile["work_history"] = cursor.fetchall()
+        # Titles are always shown properly capitalized; searching ignores case, so this never changes what is found.
+        profile["primary_job_title"] = proper_title(profile.get("primary_job_title") or "")
+        profile["job_titles"] = list(dict.fromkeys(proper_title(title) for title in profile["job_titles"]))
         return profile
     except Error as error:
         print()
@@ -1754,7 +1758,7 @@ def save_profile():
     job_titles = []
 
     for part in re.split(r"[,\n]+", raw_job_titles):
-        title = part.strip()[:255]
+        title = proper_title(part.strip()[:255])
         if title and title.lower() not in {item.lower() for item in job_titles}:
             job_titles.append(title)
 
@@ -1773,7 +1777,7 @@ def save_profile():
     if home_zip and len(home_zip) != 5:
         home_zip = ""  # a half-typed ZIP is dropped rather than saved
     # The primary title has its own box; it is always searched too, so it leads the title list.
-    primary = request.form.get("primary_job_title", "").strip()[:255]
+    primary = proper_title(request.form.get("primary_job_title", "").strip()[:255])
     if primary:
         job_titles = [primary] + [title for title in job_titles if title.casefold() != primary.casefold()]
     previous_skills = {str(skill).casefold() for skill in get_user_profile().get("skills", [])}
@@ -1796,7 +1800,7 @@ def save_profile():
 @app.route("/profile/save-title", methods=["POST"])
 def save_profile_title():
     data = request.get_json(silent=True) or {}
-    title = str(data.get("title", "")).strip()[:255]
+    title = proper_title(str(data.get("title", "")).strip()[:255])
     if not title:
         return api_error("E3301", "Enter a job title.")
     profile = get_user_profile()
