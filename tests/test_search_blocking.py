@@ -9,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import job_finder as finder
+from jobfinder.search import searching
 from jobfinder.search import docker
 from jobfinder.search import shared
 from test_search_flow import run_search
@@ -22,7 +23,7 @@ class BlockedEngines(unittest.TestCase):
         return saved, debug[0]['runs'][-1]
 
     def test_search_stops_early_and_says_why_when_every_query_is_empty(self):
-        finder.last_search_health['unresponsive'] = ['duckduckgo: CAPTCHA', 'brave: timeout']
+        searching.last_search_health['unresponsive'] = ['duckduckgo: CAPTCHA', 'brave: timeout']
         saved, run = self.search(lambda *args: [], 3)
         self.assertEqual(saved, set())
         self.assertEqual(len(run['queries']), 3)
@@ -52,21 +53,21 @@ class Pacing(unittest.TestCase):
                 patch.object(finder.time, 'monotonic', lambda: clock[0]), \
                 patch.object(finder.time, 'sleep', lambda seconds: sleeps.append(round(seconds, 2))), \
                 patch.object(shared, 'QUERY_DELAY', 3):
-            return finder.search_searxng('web designer jobs')
+            return searching.search_searxng('web designer jobs')
 
     def test_requests_are_spaced_out(self):
         sleeps, clock = [], [100.0]
-        with patch.object(finder, '_last_search_time', 0.0):
+        with patch.object(searching, '_last_search_time', 0.0):
             self.call(clock, sleeps)      # nothing to wait for
             clock[0] = 101.0
             self.call(clock, sleeps)      # only 1 second has passed, so wait 2 more
         self.assertEqual(sleeps, [2.0])
 
     def test_engines_that_did_not_answer_are_remembered(self):
-        with patch.object(finder, '_last_search_time', 0.0):
+        with patch.object(searching, '_last_search_time', 0.0):
             self.call([500.0], [], unresponsive=[('duckduckgo', 'CAPTCHA'), ('brave', 'timeout')])
-        self.assertEqual(finder.last_search_health['unresponsive'], ['duckduckgo: CAPTCHA', 'brave: timeout'])
-        self.assertIn('duckduckgo: CAPTCHA, brave: timeout', finder.search_blocked_message(8))
+        self.assertEqual(searching.last_search_health['unresponsive'], ['duckduckgo: CAPTCHA', 'brave: timeout'])
+        self.assertIn('duckduckgo: CAPTCHA, brave: timeout', searching.search_blocked_message(8))
 
 
 if __name__ == '__main__':

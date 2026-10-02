@@ -1,3 +1,5 @@
+from jobfinder.search import company_site
+from jobfinder.search import usa_location
 """Regression tests for things a job page can say that look like evidence but are not."""
 import json
 import sys
@@ -6,7 +8,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
-import job_finder as finder
+import job_finder as finder
+from jobfinder.search import company_names
 from bs4 import BeautifulSoup
 from jobfinder.sources.employer_site import _names_match
 from jobfinder.sources.job_listings import NON_JOB_PATH, excludes_us, extract_jobs, matching_title
@@ -27,7 +30,7 @@ class RemoteAndOnsiteWording(unittest.TestCase):
         self.assertEqual(arrangement('Web Designer', 'This is not a remote position. Onsite in Austin.'), 'Onsite')
         self.assertEqual(arrangement('Web Designer', 'No remote work available for this role.'), 'Onsite')
         self.assertEqual(arrangement('Web Designer', 'This is a non-remote role.'), 'Onsite')
-        self.assertEqual(finder.detect_work_arrangement('Web Designer (Not Remote)'), 'Onsite')
+        self.assertEqual(usa_location.detect_work_arrangement('Web Designer (Not Remote)'), 'Onsite')
 
     def test_1_remote_perks_are_not_remote_jobs(self):
         self.assertEqual(arrangement('Web Designer', 'We offer remote work stipends. The role is in office in Austin.'), 'Onsite')
@@ -40,9 +43,9 @@ class RemoteAndOnsiteWording(unittest.TestCase):
         self.assertEqual(arrangement('Web Designer', 'Two days remote each week, hybrid schedule.'), 'Hybrid')
 
     def test_2_remote_as_a_subject_is_not_a_location(self):
-        self.assertIsNone(finder.detect_work_arrangement('Remote Sensing Web Designer'))
+        self.assertIsNone(usa_location.detect_work_arrangement('Remote Sensing Web Designer'))
         self.assertIsNone(arrangement('Remote Monitoring Web Designer', 'Build dashboards.'))
-        self.assertEqual(finder.detect_work_arrangement('Remote Web Designer'), 'Remote')
+        self.assertEqual(usa_location.detect_work_arrangement('Remote Web Designer'), 'Remote')
 
     def test_14_an_in_person_interview_does_not_make_a_job_onsite(self):
         self.assertIsNone(arrangement('Web Designer', 'Finalists attend an in-person interview.'))
@@ -52,7 +55,7 @@ class RemoteAndOnsiteWording(unittest.TestCase):
 
 class LocationEvidence(unittest.TestCase):
     def place(self, html, extra=''):
-        result = finder.analyze_usa_location(html, extra_text=extra)
+        result = usa_location.analyze_usa_location(html, extra_text=extra)
         return result['state'], result['score']
 
     def test_3_boilerplate_and_names_do_not_set_the_state(self):
@@ -167,7 +170,7 @@ class EmployerNameCheck(unittest.TestCase):
 
 class CompanyNames(unittest.TestCase):
     def name(self, title, search_title=''):
-        return finder.extract_company_name(BeautifulSoup(f'<title>{title}</title>', 'html.parser'), search_title, 'acme.com')
+        return company_names.extract_company_name(BeautifulSoup(f'<title>{title}</title>', 'html.parser'), search_title, 'acme.com')
 
     def test_11_a_job_title_is_not_the_company(self):
         self.assertEqual(self.name('Senior Web Designer | Acme'), 'Acme')
@@ -181,13 +184,13 @@ class CompanyNames(unittest.TestCase):
 
 class NotAJobFilters(unittest.TestCase):
     def test_12_job_titles_with_reviews_or_find_a_are_not_directories(self):
-        self.assertFalse(finder.is_directory_or_marketplace_result('example.com', 'Product Reviews Content Designer'))
-        self.assertFalse(finder.is_directory_or_marketplace_result('example.com', 'Find a Career in Design'))
+        self.assertFalse(company_site.is_directory_or_marketplace_result('example.com', 'Product Reviews Content Designer'))
+        self.assertFalse(company_site.is_directory_or_marketplace_result('example.com', 'Find a Career in Design'))
 
     def test_12_real_directories_are_still_caught(self):
         for title in ('Best Web Design Agencies in Maryland', 'Top 10 Web Designers', 'Find a Web Designer near you',
                       'Web Design Reviews and Ratings', 'Compare Providers'):
-            self.assertTrue(finder.is_directory_or_marketplace_result('example.com', title), title)
+            self.assertTrue(company_site.is_directory_or_marketplace_result('example.com', title), title)
 
     def test_13_a_services_folder_inside_careers_holds_real_jobs(self):
         self.assertFalse(NON_JOB_PATH.search('/careers/services/web-designer'))

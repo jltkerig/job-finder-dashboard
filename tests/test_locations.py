@@ -1,3 +1,4 @@
+from jobfinder.search import usa_location
 import json
 import sys
 import unittest
@@ -6,7 +7,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import job_finder as finder
+import job_finder as finder
+from jobfinder.search import company_names
 from jobfinder.sources.job_listings import excludes_us
 from test_search_flow import posting, run_search
 
@@ -49,10 +51,10 @@ class StateFromThePage(unittest.TestCase):
     def test_a_country_dropdown_does_not_set_the_state(self):
         html = ('<p>Remote role open across the U.S.</p><select><option>Turkey</option><option>Georgia</option>'
                 '<option>Vietnam</option></select>')
-        self.assertIsNone(finder.analyze_usa_location(html)['state'])
+        self.assertIsNone(usa_location.analyze_usa_location(html)['state'])
 
     def test_a_state_written_in_the_page_text_still_counts(self):
-        self.assertEqual(finder.analyze_usa_location('<p>Our office: Atlanta, Georgia</p>')['state'], 'GA')
+        self.assertEqual(usa_location.analyze_usa_location('<p>Our office: Atlanta, Georgia</p>')['state'], 'GA')
 
     def test_the_listings_own_location_wins_over_the_page(self):
         URL = 'https://example.com/jobs/web-designer'
@@ -77,7 +79,7 @@ class OutsideTheUsLeads(unittest.TestCase):
 
 class RemoteRestrictions(unittest.TestCase):
     def states(self, text, job_state=None):
-        return sorted(finder.remote_state_restrictions(text, job_state))
+        return sorted(usa_location.remote_state_restrictions(text, job_state))
 
     def test_named_states_are_found(self):
         self.assertEqual(self.states('Candidates must reside in Texas or Florida.'), ['FL', 'TX'])
@@ -95,7 +97,7 @@ class RemoteRestrictions(unittest.TestCase):
         self.assertEqual(self.states('Applicants must live in the US'), [])
 
     def test_selected_states_come_from_every_place_the_user_picked(self):
-        self.assertEqual(finder.selected_state_codes('MD, DE', [{'city': 'Baltimore, MD'}, {'city': 'Virginia'}], set()),
+        self.assertEqual(usa_location.selected_state_codes('MD, DE', [{'city': 'Baltimore, MD'}, {'city': 'Virginia'}], set()),
                          {'MD', 'DE', 'VA'})
 
 
@@ -143,9 +145,9 @@ class FooterAddresses(unittest.TestCase):
 
     def test_a_subdomain_of_the_verified_company_site_counts_as_its_own_site(self):
         details = {'employer_site': {'domain': 'gwu.edu'}}
-        self.assertTrue(finder.on_company_site('https://corcoran.gwu.edu/web-designer', 'Corcoran School of the Arts & Design', details))
-        self.assertFalse(finder.on_company_site('https://graphic-design.thecreativeloft.com/job/1', 'Corcoran School of the Arts & Design', details))
-        self.assertTrue(finder.on_company_site('https://www.acmedesign.com/jobs/1', 'Acme Design', {}))
+        self.assertTrue(company_names.on_company_site('https://corcoran.gwu.edu/web-designer', 'Corcoran School of the Arts & Design', details))
+        self.assertFalse(company_names.on_company_site('https://graphic-design.thecreativeloft.com/job/1', 'Corcoran School of the Arts & Design', details))
+        self.assertTrue(company_names.on_company_site('https://www.acmedesign.com/jobs/1', 'Acme Design', {}))
 
 
 class PlaceChoice(unittest.TestCase):
