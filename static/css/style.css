@@ -1601,3 +1601,10 @@ body[data-page="search"] .results-toolbar .compact-rows-toggle { min-height:42px
 #search-settings form .switch-row + .field-help { margin-left: 28px; }
 #search-settings form .primary-action { display: block; margin: 28px 0 0; }
 #search-settings > .field-help { margin-top: 18px; }
+
+/* Search: no loose gap under the city box; the chips sit close under it, and an empty list takes no room */
+.city-search-field .city-list-below { margin: 10px 0 0; gap: 8px; }
+.city-search-field .city-list-below:empty { display: none; }
+.city-search-field .city-chip { margin: 0; }
+.city-search-field .city-add-row { margin-bottom: 0; }
+.city-search-field > .field-help { margin: 10px 0 0; }
