@@ -47,3 +47,15 @@ class ExtensionUpdates(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ForeignHostTests(unittest.TestCase):
+    def test_requests_for_another_name_are_refused(self):
+        client = dashboard.app.test_client()
+        self.assertEqual(client.get("/extension/fit-profile", base_url="http://evil.example:5000").status_code, 400)
+        self.assertEqual(client.get("/extension/distances", base_url="http://127.0.0.1.evil.example").status_code, 400)
+
+    def test_this_computer_is_answered(self):
+        client = dashboard.app.test_client()
+        for base in ("http://127.0.0.1:5000", "http://localhost:5000"):
+            self.assertNotEqual(client.get("/extension/updates.json", base_url=base).status_code, 400)
