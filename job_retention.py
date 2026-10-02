@@ -5,7 +5,7 @@ job_open_status, sync_closed_dates() stamps it after each update, import and das
 Saved jobs (kept, or marked Saved / Applied / Talking With Recruiter / Interview) are never deleted.
 """
 
-CLOSED_KEEP_DAYS = 30
+CLOSED_KEEP_DAYS = 7  # a closed job is also hidden from the results at once; saved ones are never deleted
 SAVED_STATUSES = ("Saved", "Applied", "Talking With Recruiter", "Interview")
 
 

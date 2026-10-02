@@ -10,3 +10,4 @@ feed_cache/
 *.log
 # Resumes and cover letters from Resume Builder (personal)
 user-builds/
+search_scope.json

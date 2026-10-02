@@ -69,7 +69,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   $$(".details-action").forEach((button) => button.addEventListener("click", () => {
     const target = document.getElementById(button.dataset.detailsTarget); if (!target) return;
-    const opening = target.hidden; target.hidden = !opening; button.textContent = opening ? "Hide Details" : "View Details";
+    const opening = target.hidden; target.hidden = !opening; const compact = document.getElementById("results-table")?.classList.contains("compact-rows"); button.textContent = compact ? (opening ? "Hide" : "Details") : (opening ? "Hide Details" : "View Details");
   }));
 
   $$(".history-cities").forEach((el) => { try { const items = JSON.parse(el.dataset.cities || "[]"); el.textContent = items.map((x) => `${x.city} · ${x.radius ?? x.radius_miles ?? 50} miles`).join(" • "); } catch { el.textContent = ""; } });

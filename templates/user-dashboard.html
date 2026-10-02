@@ -21,6 +21,7 @@
           <div>
             <h2>User Profile
             </h2>
+            {% if fit_updated is not none %}<p class="fit-updated" role="status">Skills saved. Job Fit is up to date{% if fit_updated %}: {{ fit_updated }} saved listing{{ 's' if fit_updated != 1 }} now list{{ '' if fit_updated != 1 else 's' }} newly recognized skills{% endif %}. A Search page that is already open shows the new percentages after you reload it.</p>{% endif %}
             <p>These job titles and locations are shared with the Search page.
             </p>
           </div>
@@ -60,13 +61,13 @@
             <p class="field-help">Choose any types and locations you want. These help tailor your search without hiding jobs with missing details.
             </p>
             <fieldset class="preference-group">
-              <legend>Work type
+              <legend>Work Type
               </legend>
               <div class="profile-preferences">{% for preference in ["Part-time", "Full-time", "Contract", "Freelance / Gig"] %}<label><input type="checkbox" name="work_preferences" value="{{ preference }}" {% if preference in profile.work_preferences %}checked{% endif %} />{{ preference }}</label>{% endfor %}
               </div>
             </fieldset>
             <fieldset class="preference-group">
-              <legend>Work location
+              <legend>Work Location
               </legend>
               <div class="profile-preferences">{% for preference in ["Remote", "Hybrid", "Onsite"] %}<label><input type="checkbox" name="work_preferences" value="{{ preference }}" {% if preference in profile.work_preferences %}checked{% endif %} />{{ preference }}</label>{% endfor %}
               </div>
@@ -112,7 +113,7 @@
           </section>
           <datalist id="city-state-options">
           </datalist>
-          <div class="profile-save-actions"><button class="bordered-button primary-action" type="submit">Save Profile</button><span class="unsaved-note" id="unsaved-note" role="status" hidden>Unsaved changes. Click Save Profile to keep them.</span><button class="bordered-button secondary-action" id="upload-resume" type="button">Upload Résumé</button><input id="resume-file" type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden />
+          <div class="profile-save-actions"><button class="bordered-button primary-action" type="submit">Save Profile</button><div class="unsaved-note" id="unsaved-note" role="status" hidden><span>Unsaved changes. Click Save Profile to keep them.</span><button class="bordered-button primary-action" type="submit" form="profile-form">Save Profile</button></div><button class="bordered-button secondary-action" id="upload-resume" type="button">Upload Résumé</button><input id="resume-file" type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden />
           </div>
         </form>
       </section>
@@ -191,7 +192,7 @@
       </article>{% endfor %}
     </div>{% else %}
     <div class="empty-dashboard">
-      <h3>{% if filters.title or filters.state or filters.status %}No saved jobs match these filters{% else %}No saved jobs yet{% endif %}
+      <h3>{% if filters.title or filters.state or filters.status %}No Saved Jobs Match These Filters{% else %}No Saved Jobs Yet{% endif %}
       </h3>
       <p>{% if filters.title or filters.state or filters.status %}Try clearing or changing the filters above.{% else %}Use the green Keep button on Search results to add jobs here.{% endif %}
       </p><a class="bordered-button button-link" href="/">Search for Jobs</a>
@@ -203,9 +204,9 @@
       </summary>{% if search_history %}
       <div class="history-list">{% for search in search_history %}
         <div class="history-item">
-          <div class="history-main"><strong>{{ search.job_title }}</strong><span>{{ search.state }}</span>{% if search.cities_json %}<small class="history-cities" data-cities='{{ search.cities_json or "[]" }}'></small>{% endif %}<small>{{ search.searched_at.strftime('%b %d, %Y %I:%M %p') if search.searched_at else '' }}</small>
+          <div class="history-main"><strong class="history-title" title="{{ search.job_title }}">{{ search.main_title }}</strong>{% if search.other_titles %}<small class="history-titles">{{ search.other_titles|join(" • ") }}</small>{% endif %}<span>{{ search.state }}</span>{% if search.cities_json %}<small class="history-cities" data-cities='{{ search.cities_json or "[]" }}'></small>{% endif %}<small>{{ search.searched_at.strftime('%b %d, %Y %I:%M %p') if search.searched_at else '' }}</small>
           </div>
-          <div class="history-actions"><button class="bordered-button save-history-title" type="button" data-job-title="{{ search.job_title }}" {% if search.job_title|lower in profile.job_titles|map('lower')|list %}disabled{% endif %}>{{ 'Saved' if search.job_title|lower in profile.job_titles|map('lower')|list else 'Save Job Title' }}</button><button class="bordered-button search-again-button" type="button" data-job-title="{{ search.job_title }}" data-state="{{ search.state }}" data-cities='{{ search.cities_json or "[]" }}'>Search Again</button>
+          <div class="history-actions"><button class="bordered-button save-history-title" type="button" data-job-title="{{ search.main_title }}" {% if search.main_title|lower in profile.job_titles|map('lower')|list %}disabled{% endif %}>{{ 'Saved' if search.main_title|lower in profile.job_titles|map('lower')|list else 'Save Job Title' }}</button><button class="bordered-button search-again-button" type="button" data-job-title="{{ search.job_title }}" data-state="{{ search.state }}" data-cities='{{ search.cities_json or "[]" }}'>Search Again</button>
           </div>
         </div>{% endfor %}
       </div>{% else %}
@@ -215,7 +216,7 @@
   </section>
 </main>
 <dialog id="resume-review" class="review-dialog">
-  <h2>Review résumé suggestions
+  <h2>Review Résumé Suggestions
   </h2>
   <p>Would you like to autofill your profile from the résumé you uploaded? Review and choose each section before applying it. Existing information stays in place.
   </p>
@@ -225,7 +226,7 @@
   </div>
 </dialog>
 <dialog id="avatar-crop" class="review-dialog">
-  <h2>Crop profile photo
+  <h2>Crop Profile Photo
   </h2>
   <div class="crop-preview">
     <canvas id="avatar-canvas" width="320" height="320">

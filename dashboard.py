@@ -19,7 +19,8 @@ from dotenv import load_dotenv
 from flask import Flask, abort, jsonify, redirect, render_template, request, send_from_directory, session
 from mysql.connector import Error
 from profile_tools import (AMBIGUOUS_SKILLS, SKILL_ALIASES, fit_score, normalize_skills, resume_skill_suggestions,
-                           parse_work_history, resume_suggestions, skill_demand, uploaded_resume)
+                           parse_work_history, refresh_listing_skills, resume_suggestions, skill_demand,
+                           uploaded_resume)
 from onet_data import occupation_skill_suggestions, related_title_suggestions, spelling_fix, title_matches
 from places import city_matches
 from travel import describe as describe_trip
@@ -30,7 +31,7 @@ from job_sites import JOB_SITE_NAMES
 from board_health import STATUSES as HEALTH_STATUSES, read_health
 from search_skips import TTL_HOURS, latest_decisions
 from capture_import import CAPTURE_SOURCES, capture_dirs, move_pending, pending_files
-from job_retention import tidy_closed_jobs
+from job_retention import CLOSED_KEEP_DAYS, SAVED_STATUSES, tidy_closed_jobs
 
 BASE_DIR = Path(__file__).resolve().parent
 # Where the Resume Builder keeps the résumé you uploaded there (its text is read to suggest skills).
@@ -39,7 +40,7 @@ load_dotenv(BASE_DIR / ".env")
 
 app = Flask(__name__)
 
-APP_VERSION = "1.1.138"
+APP_VERSION = "1.1.141"
 
 app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY") or secrets.token_hex(32)
 app.config["SESSION_COOKIE_HTTPONLY"] = True
@@ -412,6 +413,8 @@ def ensure_job_tracking_columns():
         """)
         # What the listing looked like before rejection, so Restore can put it back.
         cursor.execute("ALTER TABLE companies ADD COLUMN IF NOT EXISTS pre_reject_kept TINYINT(1) NULL")
+        # Who rejected it: 'user' (the Reject button) or 'system' (Job Finder's own filters). Older rows are left empty, so they count as the user's.
+        cursor.execute("ALTER TABLE companies ADD COLUMN IF NOT EXISTS rejected_by VARCHAR(10) NULL")
         cursor.execute("ALTER TABLE companies ADD COLUMN IF NOT EXISTS pre_reject_status VARCHAR(30) NULL")
         cursor.execute("""ALTER TABLE companies ADD COLUMN IF NOT EXISTS city VARCHAR(150) NULL""")
         cursor.execute("""ALTER TABLE companies ADD COLUMN IF NOT EXISTS latitude DECIMAL(10,7) NULL""")
@@ -451,7 +454,7 @@ def ensure_job_tracking_columns():
 
 
 def tidy_expired_closed_jobs():
-    """At startup: delete jobs closed for more than 30 days, keeping saved ones (see job_retention.py)."""
+    """At startup: delete jobs closed for more than a week, keeping saved ones (see job_retention.py)."""
     connection = None
     try:
         connection = mysql.connector.connect(
@@ -463,7 +466,7 @@ def tidy_expired_closed_jobs():
         )
         deleted = tidy_closed_jobs(connection)
         if deleted:
-            print(f"Deleted {deleted} job(s) closed for more than 30 days (saved jobs are kept).")
+            print(f"Deleted {deleted} job(s) closed for more than {CLOSED_KEEP_DAYS} days (saved jobs are kept).")
     except Error as error:
         print()
         print("Could not tidy closed jobs.")
@@ -482,10 +485,22 @@ def record_search_history(job_title, state, cities=None):
             host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD, database=DB_NAME
         )
         cursor = connection.cursor()
+        cities_text = json.dumps(cities or [])
+        # The same search again (same titles, state and cities) just moves the earlier entry back to the top, so it also
+        # stays the "latest search" that job_finder.py reads. Nothing is added.
         cursor.execute(
-            "INSERT INTO search_history (job_title, state, cities_json) VALUES (%s, %s, %s)",
-            (job_title, state, json.dumps(cities or [])),
+            "SELECT id FROM search_history WHERE LOWER(TRIM(job_title)) = %s AND state = %s AND COALESCE(cities_json, '[]') = %s "
+            "ORDER BY searched_at DESC LIMIT 1",
+            (str(job_title).strip().lower(), state, cities_text),
         )
+        earlier = cursor.fetchone()
+        if earlier:
+            cursor.execute("UPDATE search_history SET searched_at = CURRENT_TIMESTAMP WHERE id = %s", (earlier[0],))
+        else:
+            cursor.execute(
+                "INSERT INTO search_history (job_title, state, cities_json) VALUES (%s, %s, %s)",
+                (job_title, state, cities_text),
+            )
         connection.commit()
     except Error as error:
         print("Could not record search history.")
@@ -495,6 +510,28 @@ def record_search_history(job_title, state, cities=None):
             cursor.close()
         if connection is not None and connection.is_connected():
             connection.close()
+
+
+def split_search_titles(job_title):
+    """(main title, other titles) from a search's stored comma-separated title list."""
+    parts = [part.strip() for part in str(job_title or "").split(",") if part.strip()]
+    return (parts[0] if parts else ""), parts[1:]
+
+
+def collapse_search_history(rows, limit=10):
+    """Newest first, one entry for each distinct search (same titles, state and cities), main/other titles split."""
+    seen, result = set(), []
+    for row in rows:
+        key = (str(row.get("job_title") or "").strip().lower(), str(row.get("state") or "").strip().lower(),
+               str(row.get("cities_json") or "[]").strip())
+        if key in seen:
+            continue
+        seen.add(key)
+        row["main_title"], row["other_titles"] = split_search_titles(row.get("job_title"))
+        result.append(row)
+        if len(result) >= limit:
+            break
+    return result
 
 
 def get_search_history(limit=10):
@@ -513,9 +550,9 @@ def get_search_history(limit=10):
             ORDER BY searched_at DESC
             LIMIT %s
             """,
-            (limit,),
+            (max(limit * 10, 100),),
         )
-        return cursor.fetchall()
+        return collapse_search_history(cursor.fetchall(), limit)
     except Error as error:
         print("Could not read search history.")
         print(error)
@@ -523,6 +560,20 @@ def get_search_history(limit=10):
     finally:
         if cursor is not None:
             cursor.close()
+        if connection is not None and connection.is_connected():
+            connection.close()
+
+
+def refresh_job_fit():
+    """Re-read stored listings for skills the current skills list recognizes. Returns how many listings changed."""
+    connection = None
+    try:
+        connection = mysql.connector.connect(host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD, database=DB_NAME)
+        return refresh_listing_skills(connection)
+    except Error as error:
+        print(f"Could not refresh Job Fit: {error}")
+        return 0
+    finally:
         if connection is not None and connection.is_connected():
             connection.close()
 
@@ -1110,6 +1161,9 @@ def get_companies():
         rows = cursor.fetchall()
         blocked_domains = set(get_blocked_domains())
         blocked_names = {name.casefold() for name in get_blocked_companies()}
+        # A job found to be closed disappears from the results (and is deleted after CLOSED_KEEP_DAYS); saved ones stay.
+        rows = [row for row in rows if not (row.get("job_open_status") == "Closed" and not row.get("is_kept")
+                                           and row.get("application_status") not in SAVED_STATUSES)]
         visible_rows = [row for row in rows if (row.get("name") or "").casefold() not in blocked_names
                 and (row.get("is_kept") or not any(
                     NON_JOB_PATH.search(urlparse(row.get(key) or "").path)
@@ -1454,6 +1508,7 @@ def user_dashboard():
         resume_source=resume_skills[0], resume_skills=resume_skills[1],
         demanded_skills=demanded_skills,
         resume_history=resume_history,
+        fit_updated=request.args.get("fit_updated", type=int),
         filters={"status": status_filter, "state": state_filter, "title": title_filter, "sort": sort_by},
     )
 
@@ -1595,7 +1650,7 @@ def reject_listing(company_id):
             SET pre_reject_kept = CASE WHEN is_rejected = 0 THEN is_kept ELSE pre_reject_kept END,
                 pre_reject_status = CASE WHEN is_rejected = 0 THEN application_status ELSE pre_reject_status END,
                 is_rejected = 1, is_kept = 0, application_status = 'Rejected',
-                rejected_at = CURRENT_TIMESTAMP, rejection_reason = %s
+                rejected_at = CURRENT_TIMESTAMP, rejection_reason = %s, rejected_by = 'user'
             WHERE id = %s
             """,
             (reason, company_id),
@@ -1643,7 +1698,7 @@ def restore_rejected(company_id):
             UPDATE companies
             SET is_rejected = 0, is_kept = COALESCE(pre_reject_kept, 0),
                 application_status = COALESCE(pre_reject_status, 'None'),
-                rejected_at = NULL, rejection_reason = NULL,
+                rejected_at = NULL, rejection_reason = NULL, rejected_by = NULL,
                 pre_reject_kept = NULL, pre_reject_status = NULL
             WHERE id = %s
             """,
@@ -1721,6 +1776,7 @@ def save_profile():
     primary = request.form.get("primary_job_title", "").strip()[:255]
     if primary:
         job_titles = [primary] + [title for title in job_titles if title.casefold() != primary.casefold()]
+    previous_skills = {str(skill).casefold() for skill in get_user_profile().get("skills", [])}
     avatar = request.form.get("avatar_data", "")
     if avatar and (not re.fullmatch(r"data:image/jpeg;base64,[A-Za-z0-9+/=]+", avatar) or len(avatar) > 550000):
         abort(400)
@@ -1730,6 +1786,10 @@ def save_profile():
                       avatar_data=avatar if "avatar_data" in request.form else None,
                       work_preferences=[value for value in request.form.getlist("work_preferences")
                                         if value in {"Part-time", "Full-time", "Contract", "Freelance / Gig", "Remote", "Hybrid", "Onsite"}])
+    # Changed skills: the percentages on the pages follow at once (they are worked out on each load); listings saved
+    # earlier are re-read so they also list skills the current skills list recognizes.
+    if {str(skill).casefold() for skill in read_list("skills_json")} != previous_skills:
+        return redirect(f"/dashboard?fit_updated={refresh_job_fit()}")
     return redirect("/dashboard")
 
 

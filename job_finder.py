@@ -8,7 +8,7 @@ import subprocess
 import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from urllib.parse import urljoin, urlparse
@@ -18,7 +18,7 @@ import requests
 from bs4 import BeautifulSoup
 from mysql.connector import Error
 from dotenv import load_dotenv
-from profile_tools import listing_skills
+from profile_tools import listing_skills, refresh_listing_skills
 from employer_jobs import (SOURCE_TYPE as EMPLOYER_SOURCE, Http as EmployerHttp, Employer, config_key, employer_for_url,
                            load_employers, record_board_result, save_discovered)
 from ats_discovery import identify as identify_board, identify_unreadable, pretty_name as board_name
@@ -37,7 +37,8 @@ from ats_lookup import clear_cache as clear_ats_cache, find_ats_posting
 from capture_import import (CAPTURE_MARK, CAPTURE_SOURCES, IMPORT_ERRORS, SITES as CAPTURE_SITES, add_also_on,
                             capture_dirs, files_to_import, mark_imported, match_key, merge_details,
                             page_html as capture_page_html, read_jobs, remove_old_folders, unreadable_files)
-from job_retention import tidy_closed_jobs
+from travel import miles_between
+from job_retention import CLOSED_KEEP_DAYS, tidy_closed_jobs
 from job_sites import JOB_SITES, JOB_SITE_NAMES, SiteBlocked, job_site_for, search_places
 
 # =========================================================
@@ -673,6 +674,7 @@ def ensure_database_schema(connection):
             "is_rejected": "TINYINT(1) NOT NULL DEFAULT 0 AFTER is_kept",
             "rejection_reason": "VARCHAR(40) NULL AFTER is_rejected",
             "rejected_at": "TIMESTAMP NULL DEFAULT NULL AFTER rejection_reason",
+            "rejected_by": "VARCHAR(10) NULL AFTER rejected_at",
             "pre_reject_kept": "TINYINT(1) NULL AFTER rejected_at",
             "pre_reject_status": "VARCHAR(30) NULL AFTER pre_reject_kept",
         }
@@ -2250,7 +2252,7 @@ def reject_irrelevant_row(database, company_id, reason="wrong_role"):
             UPDATE companies
             SET pre_reject_kept = is_kept, pre_reject_status = application_status,
                 is_rejected = 1, is_kept = 0, application_status = 'Rejected',
-                rejected_at = CURRENT_TIMESTAMP, rejection_reason = %s
+                rejected_at = CURRENT_TIMESTAMP, rejection_reason = %s, rejected_by = 'system'
             WHERE id = %s AND is_kept = 0 AND is_rejected = 0
             """,
             (reason, company_id),
@@ -2312,6 +2314,149 @@ def find_employer_site(name, job_title, job_url, page_html, titles, location_hin
 # =========================================================
 
 
+SEARCH_SCOPE_FILE = BASE_DIR / "search_scope.json"
+RESTORABLE_REASONS = ("wrong_role", "wrong_location")
+
+
+def current_search_scope(database):
+    """What the profile asks for now (titles, cities with radius, state) in a comparable form, or None if unreadable."""
+    titles, cities, state, problem = load_profile_filters(database)
+    if problem:
+        return None
+    return {
+        "titles": sorted({title.strip().casefold() for title in titles if title.strip()}),
+        "cities": sorted(f"{str(item.get('city') or '').strip().casefold()}|{item.get('radius') or ''}" for item in cities),
+        "state": str(state or "").strip().casefold(),
+    }
+
+
+def location_matches_scope(row, city_targets, statewide, selected_states):
+    """Would this saved listing's place pass the location filter with the profile as it is now?"""
+    code = US_STATES.get(str(row.get("state") or "").strip().casefold())
+    if code and code in statewide:
+        return True
+    try:
+        point = (float(row["latitude"]), float(row["longitude"]))
+    except (KeyError, TypeError, ValueError):
+        point = None
+    if city_targets:
+        return bool(point) and any(miles_between(point, (target["lat"], target["lon"])) <= target["radius"]
+                                   for target in city_targets)
+    return bool(code) and code in selected_states
+
+
+def restore_rejected_row(database, company_id):
+    """Put a listing the system rejected back in the results, as the Restore button does."""
+    with database.cursor() as cursor:
+        cursor.execute(
+            """UPDATE companies
+               SET is_rejected = 0, is_kept = COALESCE(pre_reject_kept, 0),
+                   application_status = COALESCE(pre_reject_status, 'None'),
+                   rejected_at = NULL, rejection_reason = NULL, rejected_by = NULL,
+                   pre_reject_kept = NULL, pre_reject_status = NULL
+               WHERE id = %s AND is_rejected = 1 AND rejected_by = 'system'""", (company_id,))
+    database.commit()
+
+
+def recheck_system_rejections(database, scope_file=None):
+    """When the profile's titles or places changed since the last check, look again at the listings Job Finder itself
+    rejected for the wrong title or the wrong place, and restore those that now fit. A listing the person rejected is
+    never touched (rejected_by is 'user', or empty for older rows). Returns how many were restored."""
+    scope_file = Path(scope_file or SEARCH_SCOPE_FILE)
+    scope = current_search_scope(database)
+    if scope is None:
+        return 0
+    try:
+        earlier = json.loads(scope_file.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        earlier = None
+    try:
+        scope_file.write_text(json.dumps(scope), encoding="utf-8")
+    except OSError:
+        pass
+    if earlier is None or earlier == scope:
+        return 0
+    titles, cities, state, _ = load_profile_filters(database)
+    wanted = expand_job_titles(titles) if titles else []
+    wanted += [title for title in related_family_titles(titles) if title.casefold() not in {w.casefold() for w in wanted}]
+    statewide = {US_STATES[str(item["city"]).strip().casefold()] for item in cities
+                 if str(item["city"]).strip().casefold() in US_STATES}
+    selected_states = selected_state_codes(state, cities, statewide)
+    city_targets = prepare_city_targets(database, state, cities)
+    with database.cursor(dictionary=True) as cursor:
+        placeholders = ", ".join(["%s"] * len(RESTORABLE_REASONS))
+        cursor.execute(
+            f"""SELECT id, career_job_title, state, latitude, longitude, rejection_reason FROM companies
+                WHERE is_rejected = 1 AND rejected_by = 'system' AND rejection_reason IN ({placeholders})""",
+            RESTORABLE_REASONS)
+        rows = cursor.fetchall()
+    restored = 0
+    for row in rows:
+        if row["rejection_reason"] == "wrong_role":
+            fits = bool(wanted) and matching_job_title(row.get("career_job_title") or "", wanted)
+        else:
+            fits = location_matches_scope(row, city_targets, statewide, selected_states)
+        if fits:
+            restore_rejected_row(database, row["id"])
+            restored += 1
+    return restored
+
+
+def recheck_system_rejections_quietly(database):
+    """Runs at the start of a search or Refresh; never stops it."""
+    try:
+        restored = recheck_system_rejections(database)
+    except Exception:
+        return
+    if restored:
+        print(f"Search changed: {restored} listing(s) rejected earlier now fit and were restored.", flush=True)
+
+
+def close_expired_listings(database, today=None):
+    """Mark Closed the open listings whose own closing date (kept when the page was captured) has passed.
+    Returns how many were closed."""
+    today = today or date.today()
+    with database.cursor() as cursor:
+        cursor.execute("""SELECT id, listing_details FROM companies
+                          WHERE job_open_status <> 'Closed' AND listing_details LIKE %s""", ('%"closes"%',))
+        rows = cursor.fetchall()
+    expired = []
+    for company_id, raw in rows:
+        try:
+            closes = date.fromisoformat(str((json.loads(raw or "{}") or {}).get("closes") or "")[:10])
+        except (TypeError, ValueError, AttributeError):
+            continue
+        if closes < today:
+            expired.append(company_id)
+    if expired:
+        now = datetime.now(timezone.utc)
+        with database.cursor() as cursor:
+            for company_id in expired:
+                cursor.execute("""UPDATE companies SET job_open_status = 'Closed', last_checked = %s, result_updated_at = %s
+                                  WHERE id = %s""", (now, now, company_id))
+        database.commit()
+    return len(expired)
+
+
+def close_expired_listings_quietly(database):
+    try:
+        closed = close_expired_listings(database)
+    except Exception:
+        return
+    if closed:
+        print(f"Closed: {closed} listing(s) passed their closing date.", flush=True)
+
+
+def refresh_job_fit_quietly(database):
+    """Listings saved earlier pick up skills the current skills list recognizes, so Job Fit uses them. Never stops a run."""
+    try:
+        changed = refresh_listing_skills(database)
+    except Exception:
+        return
+    if changed:
+        print(f"Job Fit: {changed} saved listing(s) now list newly recognized skills.", flush=True)
+
+
 def update_existing_results(company_ids=None):
     """Recheck existing rows without starting Docker or the search engine."""
     global update_existing_mode, _last_failure_status, _debug_run
@@ -2329,6 +2474,9 @@ def update_existing_results(company_ids=None):
     if not ensure_database_schema(database):
         database.close()
         return
+    refresh_job_fit_quietly(database)
+    recheck_system_rejections_quietly(database)
+    close_expired_listings_quietly(database)
     cursor = None
     try:
         cursor = database.cursor(dictionary=True)
@@ -2781,7 +2929,7 @@ def update_existing_results(company_ids=None):
     try:
         expired = tidy_closed_jobs(database)
         if expired:
-            print(f"Deleted {expired} job(s) closed for more than 30 days (saved jobs are kept).")
+            print(f"Deleted {expired} job(s) closed for more than {CLOSED_KEEP_DAYS} days (saved jobs are kept).")
     except Error as error:
         print(f"Could not tidy closed jobs: {error}")
     database.close()
@@ -3006,7 +3154,7 @@ class CaptureImport:
             "captured_by": CAPTURE_MARK, "site": source_type, "external_id": str(job.get("job_id") or ""),
             "capture_level": job.get("level") or "seen", "page_kind": job.get("page_kind") or "other",
             "location": location, "salary": job.get("salary") or "", "posted": job.get("posted") or "",
-            "description": str(job.get("description") or "")[:20000], "matched_title": matched_title,
+            "description": str(job.get("description") or "")[:20000], "closes": str(job.get("closes") or "")[:10], "matched_title": matched_title,
             "location_unknown": not location, "remote_limited_to": sorted(outcome["remote_limited_to"]),
             "evidence": [f"Seen on {source_type}", "you applied" if applied else "matching title"],
         }
@@ -3104,7 +3252,7 @@ def import_captures():
         try:
             expired = tidy_closed_jobs(database)
             if expired:
-                print(f"Deleted {expired} job(s) closed for more than 30 days (saved jobs are kept).")
+                print(f"Deleted {expired} job(s) closed for more than {CLOSED_KEEP_DAYS} days (saved jobs are kept).")
         except Error as error:
             print(f"[{IMPORT_ERRORS['tidy']}] Could not tidy closed jobs: {error}")
     finally:
@@ -3493,6 +3641,9 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
     if not ensure_database_schema(database):
         database.close()
         return
+    refresh_job_fit_quietly(database)
+    recheck_system_rejections_quietly(database)
+    close_expired_listings_quietly(database)
 
     rejected_urls = rejected_posting_urls(database)
 

@@ -17,7 +17,7 @@
   <div class="company-section">
     <details class="settings-panel history-collapse" id="search-health" data-remember="jobFinder.boardHealthOpen">
   <summary>
-        <h2>Board health
+        <h2>Board Health
         </h2><span class="summary-chevron" aria-hidden="true"></span>
       </summary>
   {% if health %}
@@ -25,7 +25,7 @@
       </p>
   <p class="field-help">"Blocked" means the site refused Job Finder (it does not try to get around that). "Down" means it did not answer or returned an error; it is tried again on the next search.
       </p>
-  <div style="overflow-x:auto">
+  <div class="board-health-table" style="overflow-x:auto">
         <table class="score-rules">
           <thead>
             <tr><th>Source</th><th>Type</th><th>Status</th><th>Title matches</th><th>Saved</th><th>Notes</th>
@@ -48,7 +48,7 @@
     </details>
     <details class="settings-panel history-collapse" id="search-settings" data-remember="jobFinder.searchSettingsOpen"{% if saved or error %} data-open-now{% endif %}>
   <summary>
-        <h2>Search settings
+        <h2>Search Settings
         </h2><span class="summary-chevron" aria-hidden="true"></span>
       </summary>
   {% if saved %}
