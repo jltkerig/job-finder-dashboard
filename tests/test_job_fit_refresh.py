@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
+from owners import search_source
 import dashboard
 import job_finder
 from jobfinder.profiles.profile_tools import fit_score, refresh_listing_skills
@@ -110,7 +111,7 @@ class WhenTheSkillsChange(unittest.TestCase):
         self.assertIn("Job Fit is up to date", html)
 
     def test_every_search_and_refresh_starts_with_a_quiet_re_read(self):
-        source = (ROOT / "job_finder.py").read_text(encoding="utf-8")
+        source = search_source()
         self.assertEqual(source.count("    refresh_job_fit_quietly(database)\n"), 2)
 
     def test_the_quiet_re_read_never_stops_a_run(self):

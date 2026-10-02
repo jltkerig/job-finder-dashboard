@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
+from owners import search_source
 import job_finder
 from jobfinder.records import job_retention
 
@@ -143,7 +144,7 @@ class WhoRejected(unittest.TestCase):
         self.assertIn("rejection_reason = %s, rejected_by = 'user'", source)
         self.assertIn("rejected_at = NULL, rejection_reason = NULL, rejected_by = NULL", source)
         self.assertIn("ADD COLUMN IF NOT EXISTS rejected_by VARCHAR(10) NULL", source)
-        self.assertIn('"rejected_by": "VARCHAR(10) NULL AFTER rejected_at"', (ROOT / "job_finder.py").read_text(encoding="utf-8"))
+        self.assertIn('"rejected_by": "VARCHAR(10) NULL AFTER rejected_at"', search_source())
 
 
 class ClosedJobs(unittest.TestCase):
@@ -173,7 +174,7 @@ class ClosedJobs(unittest.TestCase):
         self.assertIn('row.get("application_status") not in SAVED_STATUSES', source)
 
     def test_every_search_and_refresh_starts_by_re_checking_and_closing(self):
-        source = (ROOT / "job_finder.py").read_text(encoding="utf-8")
+        source = search_source()
         self.assertEqual(source.count("    recheck_system_rejections_quietly(database)\n"), 2)
         self.assertEqual(source.count("    close_expired_listings_quietly(database)\n"), 2)
 
