@@ -3854,6 +3854,7 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
         return inserted
 
     def search_job_sites():
+        nonlocal site_saved_total
         places = search_places(state, cities, US_STATES)
         for site_class in JOB_SITES:
             if not settings.get("job_sites", {}).get(site_class.name, True):
@@ -3866,6 +3867,7 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
                 _board_health.note(site.name, "Job site", "off", detail=site.setup_hint)
                 continue
             found = saved = 0
+            site_saved_total = 0  # each job site gets its own share of the search, so one can't use it all up
             print(f"Searching {site.name} for your titles near {', '.join(place for place, _ in places) or 'anywhere'}...")
             try:
                 for title in selected_titles:
