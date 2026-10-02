@@ -12,9 +12,8 @@
   </div>
 </header>
 <main>
-  <section class="company-section settings-panel rejected-section" id="rejected-listings">
-    <h2>Rejected Listings
-    </h2>
+  <details class="company-section settings-panel rejected-section history-collapse" id="rejected-listings" data-remember="jobFinder.rejectedListingsOpen">
+    <summary><h2>Rejected Listings</h2><span class="summary-chevron" aria-hidden="true"></span></summary>
     <p class="section-intro">Listings you manually reject are kept here for review. Rejecting a listing does not automatically block its domain.
     </p>{% if companies %}
     <div class="settings-search"><label for="rejected-search">Find a rejected listing</label><input id="rejected-search" type="search" placeholder="Company, job title, or domain" autocomplete="off" />
@@ -51,10 +50,9 @@
       <p>Listings you reject will appear here.
       </p><a class="bordered-button button-link" href="/">Go to Search</a>
     </div>{% endif %}
-  </section>
-  <section class="settings-panel" id="search-skips">
-    <h2>Search Skips
-    </h2>
+  </details>
+  <details class="settings-panel history-collapse" id="search-skips" data-remember="jobFinder.searchSkipsOpen">
+    <summary><h2>Search Skips</h2><span class="summary-chevron" aria-hidden="true"></span></summary>
     <p>Pages checked by Job Finder that did not qualify. Clear non-job pages are checked again after a short wait; temporary errors are retried on the next search. A page that later qualifies moves into Search results.
     </p>{% if search_skips %}
     <div class="settings-search"><label for="search-skip-search">Find a skipped page</label><input id="search-skip-search" type="search" placeholder="Search title, reason, or any part of the URL" autocomplete="off" />
@@ -71,10 +69,9 @@
     </nav>{% else %}
     <p>No skipped pages have been recorded yet.
     </p>{% endif %}
-  </section>
-  <section class="settings-panel" id="blocked-domains">
-    <h2>Blocked Domains
-    </h2>
+  </details>
+  <details class="settings-panel history-collapse" id="blocked-domains" data-remember="jobFinder.blockedDomainsOpen"{% if domain_notice %} data-open-now{% endif %}>
+    <summary><h2>Blocked Domains</h2><span class="summary-chevron" aria-hidden="true"></span></summary>
     <p>Domains on this list are excluded from future searches. Removing a domain allows future results from it; previously rejected listings stay rejected.
     </p>{% if domain_notice == 'invalid' %}
     <p class="form-error" role="alert">Enter a domain such as example.com.
@@ -97,10 +94,9 @@
     </nav>{% else %}
     <p>No domains are blocked.
     </p>{% endif %}
-  </section>
-  <section class="settings-panel" id="blocked-companies">
-    <h2>Blocked Companies
-    </h2>
+  </details>
+  <details class="settings-panel history-collapse" id="blocked-companies" data-remember="jobFinder.blockedCompaniesOpen"{% if company_notice %} data-open-now{% endif %}>
+    <summary><h2>Blocked Companies</h2><span class="summary-chevron" aria-hidden="true"></span></summary>
     <p>Company names here are skipped in future searches. Blocking a company does not remove listings already found.
     </p>{% if company_notice == 'invalid' %}
     <p class="form-error" role="alert">Enter a company name.
@@ -123,7 +119,7 @@
     </nav>{% else %}
     <p>No companies are blocked.
     </p>{% endif %}
-  </section>
+  </details>
 </main>
 <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true">
 </div>

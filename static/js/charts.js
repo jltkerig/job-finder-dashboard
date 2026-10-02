@@ -610,6 +610,10 @@ document.addEventListener("DOMContentLoaded", () => {
     panel.addEventListener("toggle", () => { try { localStorage.setItem(key, panel.open ? "1" : "0"); } catch {} });
   });
 
+  // A link that ends in a panel's id (e.g. /rejected-listings#blocked-domains after blocking one) opens that panel.
+  const linked = location.hash.length > 1 ? document.getElementById(decodeURIComponent(location.hash.slice(1))) : null;
+  if (linked && linked.matches("details[data-remember]")) linked.open = true;
+
   // Unsaved profile changes (job titles, work preferences, work history, skills, locations, name...): a note beside
   // Save Profile, and the browser asks before the page is left. Compared against the form as it stood once the page
   // finished setting itself up (including anything filled in from the résumé), so only the user's own edits count.
