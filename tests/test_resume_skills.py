@@ -6,7 +6,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
-from profile_tools import resume_skill_suggestions, uploaded_resume
+from profile_tools import detect_skills, resume_skill_suggestions, skill_demand, uploaded_resume
 
 RESUME = """Jane Doe
 Web Designer with HTML, CSS and JavaScript. Built WordPress sites with Bootstrap and Adobe InDesign layouts."""
@@ -48,6 +48,34 @@ class ResumeSkills(unittest.TestCase):
         root = Path(__file__).resolve().parents[1]
         self.assertIn('id="resume-skill-suggestions"', (root / "templates" / "user-dashboard.html").read_text(encoding="utf-8"))
         self.assertIn("function showResumeSkills", (root / "static" / "js" / "charts.js").read_text(encoding="utf-8"))
+
+
+class MoreSuggestions(unittest.TestCase):
+    def test_the_wider_skill_list_picks_up_what_a_designer_resume_says(self):
+        text = ("Built landing pages and emails; supported A/B testing and SMS marketing. Product photography, image editing "
+                "and photo manipulation. Graphic design and web design for marketing campaigns. Frontend Web Developer.")
+        found = detect_skills(text)
+        for expected in ("Landing Pages", "A/B Testing", "SMS Marketing", "Photography", "Photo Editing", "Graphic Design",
+                         "Web Design", "Web Development"):
+            self.assertIn(expected, found)
+
+    def test_a_bare_qa_is_still_not_a_skill(self):
+        self.assertNotIn("QA Testing", detect_skills("Email QA in Litmus."))
+        self.assertIn("QA Testing", detect_skills("Hands-on QA testing of campaigns."))
+
+    def test_skills_the_listings_keep_asking_for_are_ranked_by_how_many_name_them(self):
+        lists = ['["Figma", "SEO", "HTML"]', '["Figma", "Accessibility"]', '["figma", "SEO"]', "not json", None, '[]']
+        self.assertEqual(skill_demand(lists, ["HTML"]), [("Figma", 3), ("SEO", 2), ("Accessibility", 1)])
+
+    def test_demand_leaves_out_saved_skills_in_any_case_and_respects_the_limit(self):
+        lists = ['["Figma", "SEO", "Git"]'] * 2
+        self.assertEqual(skill_demand(lists, ["figma"]), [("Git", 2), ("SEO", 2)])
+        self.assertEqual(len(skill_demand(lists, [], limit=1)), 1)
+        self.assertEqual(skill_demand([], []), [])
+
+    def test_the_page_has_a_place_for_the_job_demand_chips(self):
+        root = Path(__file__).resolve().parents[1]
+        self.assertIn('id="demand-skill-suggestions"', (root / "templates" / "user-dashboard.html").read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":
