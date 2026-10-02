@@ -21,6 +21,7 @@ from mysql.connector import Error
 from profile_tools import AMBIGUOUS_SKILLS, SKILL_ALIASES, fit_score, normalize_skills, resume_suggestions
 from onet_data import occupation_skill_suggestions, related_title_suggestions, title_matches
 from places import city_matches
+from travel import describe as describe_trip
 from job_listings import NON_JOB_PATH, is_pdf_url
 from db_schema import ensure_unique_source_index
 from job_feeds import FEED_NAMES
@@ -35,7 +36,7 @@ load_dotenv(BASE_DIR / ".env")
 
 app = Flask(__name__)
 
-APP_VERSION = "1.1.116"
+APP_VERSION = "1.1.117"
 
 app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY") or secrets.token_hex(32)
 app.config["SESSION_COOKIE_HTTPONLY"] = True
@@ -588,6 +589,7 @@ def ensure_profile_tables():
         """)
         for column, definition in (
             ("home_location", "VARCHAR(150) NOT NULL DEFAULT ''"),
+            ("home_zip", "VARCHAR(10) NOT NULL DEFAULT ''"),
             ("primary_job_title", "VARCHAR(255) NOT NULL DEFAULT ''"),
             ("avatar_data", "MEDIUMTEXT NULL"),
             ("work_preferences", "TEXT NULL"),
@@ -626,7 +628,7 @@ def get_user_profile():
         "first_name": "",
         "last_name": "",
         "state": "",
-        "home_location": "", "primary_job_title": "", "avatar_data": "", "skills": [], "work_history": [], "work_preferences": [],
+        "home_location": "", "home_zip": "", "primary_job_title": "", "avatar_data": "", "skills": [], "work_history": [], "work_preferences": [],
         "job_titles": [],
         "cities": [],
     }
@@ -641,7 +643,7 @@ def get_user_profile():
         )
         cursor = connection.cursor(dictionary=True)
         cursor.execute("""
-            SELECT first_name, last_name, state, home_location, primary_job_title, avatar_data, work_preferences
+            SELECT first_name, last_name, state, home_location, home_zip, primary_job_title, avatar_data, work_preferences
             FROM user_profile
             WHERE id = 1
         """)
@@ -684,7 +686,7 @@ def get_user_profile():
             connection.close()
 
 
-def save_user_profile(first_name, last_name, state, job_titles, cities=None, *, home_location=None,
+def save_user_profile(first_name, last_name, state, job_titles, cities=None, *, home_location=None, home_zip=None,
                       primary_job_title=None, skills=None, work_history=None, avatar_data=None, work_preferences=None):
     ensure_profile_tables()
     connection = None
@@ -706,6 +708,8 @@ def save_user_profile(first_name, last_name, state, job_titles, cities=None, *, 
         """, (first_name, last_name, state))
         if home_location is not None:
             cursor.execute("UPDATE user_profile SET home_location = %s WHERE id = 1", (home_location[:150],))
+        if home_zip is not None:
+            cursor.execute("UPDATE user_profile SET home_zip = %s WHERE id = 1", (home_zip,))
         if primary_job_title is not None:
             cursor.execute("UPDATE user_profile SET primary_job_title = %s WHERE id = 1", (primary_job_title[:255],))
         if avatar_data is not None:
@@ -999,6 +1003,19 @@ def get_kept_companies(status_filter="", state_filter="", title_filter="", sort_
             connection.close()
 
 
+def add_drive_times(companies, home_zip, home_state=""):
+    """company["drive"] = {"miles", "minutes", "text"} from the home ZIP, estimated on this computer (travel.py)."""
+    for company in companies:
+        point = None
+        try:
+            if company.get("latitude") is not None and company.get("longitude") is not None:
+                point = (float(company["latitude"]), float(company["longitude"]))
+        except (TypeError, ValueError):
+            point = None
+        place = ", ".join(part for part in (company.get("city"), company.get("state")) if part)
+        company["drive"] = describe_trip(home_zip, point, place, home_state) if home_zip else None
+
+
 def add_job_fit(companies, skills):
     for company in companies:
         try:
@@ -1279,6 +1296,19 @@ def extension_fit_profile():
     })
 
 
+@app.route("/extension/distances")
+def extension_distances():
+    """Estimated distance and 6 a.m. drive time from the home ZIP to each place (places separated by |), for the
+    LinkedIn markers. Same estimate as the Dashboard (travel.py); nothing is looked up online. No CORS header,
+    so only the extension can read it."""
+    profile = get_user_profile()
+    home_zip, home_state = profile.get("home_zip") or "", profile.get("state") or ""
+    places = [place.strip()[:120] for place in (request.args.get("places") or "").split("|") if place.strip()][:100]
+    return jsonify({"home_zip": home_zip,
+                    "places": {place: describe_trip(home_zip, None, place, home_state) if home_zip else None
+                               for place in places}})
+
+
 @app.route("/extension/<name>")
 def extension_file(name):
     if not EXTENSION_FILE.match(name):
@@ -1342,6 +1372,7 @@ def user_dashboard():
     companies = get_kept_companies(status_filter, state_filter, title_filter, sort_by)
     profile = get_user_profile()
     add_job_fit(companies, profile.get("skills", []))
+    add_drive_times(companies, profile.get("home_zip"), profile.get("state") or "")
     return render_template(
         "user-dashboard.html",
         companies=companies,
@@ -1609,6 +1640,9 @@ def save_profile():
         except (TypeError, ValueError):
             return []
     home_location = request.form.get("home_location", "").strip()[:150]
+    home_zip = re.sub(r"\D", "", request.form.get("home_zip", ""))[:5]
+    if home_zip and len(home_zip) != 5:
+        home_zip = ""  # a half-typed ZIP is dropped rather than saved
     # The primary title has its own box; it is always searched too, so it leads the title list.
     primary = request.form.get("primary_job_title", "").strip()[:255]
     if primary:
@@ -1617,7 +1651,7 @@ def save_profile():
     if avatar and (not re.fullmatch(r"data:image/jpeg;base64,[A-Za-z0-9+/=]+", avatar) or len(avatar) > 550000):
         abort(400)
     save_user_profile(first_name, last_name, state, job_titles, cities,
-                      home_location=home_location, primary_job_title=primary,
+                      home_location=home_location, home_zip=home_zip, primary_job_title=primary,
                       skills=read_list("skills_json"), work_history=read_list("work_history_json"),
                       avatar_data=avatar if "avatar_data" in request.form else None,
                       work_preferences=[value for value in request.form.getlist("work_preferences")

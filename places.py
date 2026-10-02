@@ -37,7 +37,7 @@ def _places():
     for line in DATA_FILE.read_text(encoding="utf-8").splitlines():
         if not line or line.startswith("#"):
             continue
-        name, state, population = line.split("\t")
+        name, state, population = line.split("\t")[:3]  # latitude and longitude follow (used by travel.py)
         rows.append((_key(name), name, state, int(population)))
     return rows  # already biggest first
 
