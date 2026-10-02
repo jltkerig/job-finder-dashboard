@@ -187,6 +187,43 @@ from jobfinder.search.company_site import (  # noqa: F401  (also used by callers
     is_student_employment_overview,
     score_career_page,
 )
+from jobfinder.search.geo import (  # noqa: F401  (also used by callers that import these from here)
+    JOB_FINDER_VERSION,
+    NOMINATIM_URL,
+    _PLACE_KIND_RANK,
+    _REGION_ALIASES,
+    _REGION_WORDS,
+    _ZIP_CODE,
+    _failed_geocode_queries,
+    _last_nominatim_request,
+    _normalize_geocode_query,
+    _place_name,
+    _read_app_version,
+    clean_region_name,
+    distance_to_city_targets,
+    extract_job_city,
+    geocode_location,
+    geocode_queries,
+    haversine_miles,
+    pick_place,
+    place_matches,
+)
+from jobfinder.search import geo
+from jobfinder.search.relevance import (  # noqa: F401  (also used by callers that import these from here)
+    apply_link_closed,
+    expand_job_titles,
+    fetch_text,
+    is_excluded_employer_host,
+    is_internship_row,
+    is_irrelevant_lead,
+    is_wrong_location_lead,
+    load_city_targets,
+    load_selected_states,
+    load_user_titles,
+    reject_irrelevant_row,
+    stale_remote_limit,
+)
+from jobfinder.search import relevance
 
 # =========================================================
 # FILES
@@ -208,197 +245,6 @@ from jobfinder.search.company_site import (  # noqa: F401  (also used by callers
 # =========================================================
 
 web_search_started = False
-
-
-# =========================================================
-# TITLE RELEVANCE AND EMPLOYER SITES
-# =========================================================
-
-
-def expand_job_titles(titles):
-    """The typed titles plus up to two related O*NET titles for each."""
-    expanded = list(titles)
-    seen = {title.casefold() for title in titles}
-    for title in titles:
-        role = title.casefold().split()[-1]
-        added = 0
-        for suggestion in related_title_suggestions(title, limit=12):
-            if role in suggestion.casefold().split() and suggestion.casefold() not in seen:
-                expanded.append(suggestion)
-                seen.add(suggestion.casefold())
-                added += 1
-                if added == 2:
-                    break
-    return expanded
-
-
-def load_user_titles(database):
-    """Job titles from the saved profile plus the most recent search, or [] if unknown."""
-    titles = []
-    cursor = None
-    try:
-        cursor = database.cursor()
-        cursor.execute("SELECT job_title FROM user_profile_job_titles WHERE profile_id = 1")
-        titles.extend(row[0] for row in cursor.fetchall())
-        cursor.execute("SELECT job_title FROM search_history ORDER BY searched_at DESC LIMIT 1")
-        latest = cursor.fetchone()
-        if latest and latest[0]:
-            titles.extend(part.strip() for part in latest[0].split(","))
-    except Error:
-        pass
-    finally:
-        if cursor is not None:
-            cursor.close()
-    unique = {}
-    for title in titles:
-        if title and title.strip():
-            unique.setdefault(title.strip().casefold(), title.strip())
-    return list(unique.values())
-
-
-def load_city_targets(database):
-    """(city radius targets, state text) from the most recent search, so Refresh can fill in missing distances."""
-    cursor = None
-    try:
-        cursor = database.cursor()
-        cursor.execute("SELECT state, cities_json FROM search_history ORDER BY searched_at DESC LIMIT 1")
-        latest = cursor.fetchone()
-    except Error:
-        return [], ""
-    finally:
-        if cursor is not None:
-            cursor.close()
-    if not latest:
-        return [], ""
-    try:
-        cities = json.loads(latest[1] or "[]")
-    except ValueError:
-        cities = []
-    return prepare_city_targets(database, latest[0] or "", cities), latest[0] or ""
-
-
-def load_selected_states(database):
-    """State codes from the most recent search (state box plus the states of its cities), or an empty set."""
-    cursor = None
-    try:
-        cursor = database.cursor()
-        cursor.execute("SELECT state, cities_json FROM search_history ORDER BY searched_at DESC LIMIT 1")
-        latest = cursor.fetchone()
-        if not latest:
-            return set()
-        try:
-            cities = json.loads(latest[1] or "[]")
-        except ValueError:
-            cities = []
-        return selected_state_codes(latest[0] or "", cities, set())
-    except Error:
-        return set()
-    finally:
-        if cursor is not None:
-            cursor.close()
-
-
-def stale_remote_limit(company, details, selected_states, http):
-    """States a saved remote job is limited to when none of them is selected, else None.
-
-    Older rows were saved before "Work At Home-<State>" locations were read; a Workday posting can be rechecked.
-    """
-    if (company.get("is_kept") or company.get("work_arrangement") != "Remote" or "remote_limited_to" in details
-            or not selected_states or company.get("source_type") in FEED_NAMES):
-        return None
-    config = identify_board(company.get("source_url") or "")
-    if not config or config.get("system") != "workday":
-        return None
-    try:
-        limits = Employer(dict(config, name=company.get("name") or "Employer")).remote_limits(company["source_url"], http)
-    except (requests.RequestException, ValueError, KeyError, TypeError):
-        return None
-    return limits if limits and not (limits & selected_states) else None
-
-
-def is_internship_row(company, details):
-    """An unsaved row that is an internship or co-op (saved rows are never touched)."""
-    return bool(not company.get("is_kept") and is_internship(company.get("career_job_title"), details.get("schedule")))
-
-
-def is_irrelevant_lead(company, details, wanted):
-    """An unsaved lead from before titles were checked whose title matches none of the user's."""
-    title = (company.get("career_job_title") or "").strip()
-    return bool(wanted and title and not company.get("is_kept") and not details.get("matched_title")
-                and company.get("source_type") not in FEED_NAMES
-                and not matching_job_title(title, wanted))
-
-
-def is_wrong_location_lead(company, details):
-    """An unsaved lead whose listing location is outside the United States (when the search is U.S.-only)."""
-    return bool(USA_ONLY and not company.get("is_kept") and company.get("source_type") not in FEED_NAMES
-                and details.get("location") and excludes_us(details.get("location"), ""))
-
-
-def reject_irrelevant_row(database, company_id, reason="wrong_role"):
-    """Move the row to Rejected Listings for review; Restore puts it back as it was."""
-    cursor = database.cursor()
-    try:
-        cursor.execute(
-            """
-            UPDATE companies
-            SET pre_reject_kept = is_kept, pre_reject_status = application_status,
-                is_rejected = 1, is_kept = 0, application_status = 'Rejected',
-                rejected_at = CURRENT_TIMESTAMP, rejection_reason = %s, rejected_by = 'system'
-            WHERE id = %s AND is_kept = 0 AND is_rejected = 0
-            """,
-            (reason, company_id),
-        )
-        database.commit()
-        return cursor.rowcount == 1
-    finally:
-        cursor.close()
-
-
-def is_excluded_employer_host(host):
-    """Sites that can never be an employer's own website."""
-    return (is_blocked_domain(host) or has_blocked_country_domain(host)
-            or any(host == blocked or host.endswith("." + blocked)
-                   for blocked in SOCIAL_DOMAINS | ATS_DOMAINS | DIRECTORY_MARKETPLACE_DOMAINS))
-
-
-def apply_link_closed(page_url, page_html):
-    """Follow a job-board listing's Apply button; return why it is closed, or None if it looks open."""
-    def get(url):
-        wait_for_host(url)
-        try:
-            return requests.get(url, headers=HEADERS, timeout=TIMEOUT, allow_redirects=False)
-        except requests.RequestException:
-            return None
-    return listing_closed(page_url, page_html, get)
-
-
-def fetch_text(url, max_bytes=6_000_000):
-    """Any text file (sitemap.xml, robots.txt) as an object with .url and .text, or None; read politely and size-capped."""
-    if not is_valid_url(url):
-        return None
-    try:
-        wait_for_host(url)
-        response = requests.get(url, headers=HEADERS, timeout=TIMEOUT, stream=True)
-        if not response.ok:
-            return None
-        content = b""
-        for chunk in response.iter_content(chunk_size=65536):
-            content += chunk
-            if len(content) > max_bytes:
-                break
-        response.close()
-        return SimpleNamespace(url=response.url, text=content.decode("utf-8", errors="replace"))
-    except requests.RequestException:
-        return None
-
-
-def find_employer_site(name, job_title, job_url, page_html, titles, location_hint="", allow_search=True, notes=None):
-    return resolve_employer_site(
-        name, job_title, job_url, page_html, titles, fetch=fetching.safe_request,
-        search=search_searxng if allow_search else None, score_page=score_career_page,
-        is_excluded=is_excluded_employer_host, location_hint=location_hint,
-        allow_search=allow_search, notes=notes, fetch_raw=fetch_text)
 
 
 # =========================================================
@@ -474,7 +320,7 @@ def recheck_system_rejections(database, scope_file=None):
     statewide = {US_STATES[str(item["city"]).strip().casefold()] for item in cities
                  if str(item["city"]).strip().casefold() in US_STATES}
     selected_states = selected_state_codes(state, cities, statewide)
-    city_targets = prepare_city_targets(database, state, cities)
+    city_targets = geo.prepare_city_targets(database, state, cities)
     with database.cursor(dictionary=True) as cursor:
         placeholders = ", ".join(["%s"] * len(RESTORABLE_REASONS))
         cursor.execute(
@@ -820,7 +666,7 @@ def update_existing_results(company_ids=None):
                 apply_closed = apply_link_closed(source_url, source_data.get("landing_html", ""))
             # A listing found through a job board should link to the employer's own careers page.
             if not details.get("employer_site") and is_third_party(source_url, company.get("name") or ""):
-                employer = find_employer_site(
+                employer = relevance.find_employer_site(
                     company.get("name") or "", search_title, source_url, source_data.get("landing_html", ""),
                     wanted_titles or [search_title], location_hint=str(details.get("location") or ""),
                     allow_search=False, notes=employer_notes)
@@ -1087,7 +933,7 @@ class CaptureImport:
         self.statewide = {US_STATES[str(item["city"]).strip().casefold()] for item in cities
                           if str(item["city"]).strip().casefold() in US_STATES}
         self.selected_states = selected_state_codes(self.state, cities, self.statewide)
-        self.city_targets = prepare_city_targets(database, self.state, cities)
+        self.city_targets = geo.prepare_city_targets(database, self.state, cities)
         self.rejected = storage.rejected_posting_urls(database)
         self.by_url = {}
         self.by_key = {}
@@ -1145,7 +991,7 @@ class CaptureImport:
             details["employer_checked"] = True
             print(f"Looking for {company}'s own website...", flush=True)
             notes = []
-            employer = find_employer_site(company, title, url, "", self.wanted or [title], location_hint=location,
+            employer = relevance.find_employer_site(company, title, url, "", self.wanted or [title], location_hint=location,
                                           allow_search=False, notes=notes)
             if employer:
                 details["employer_site"] = {
@@ -1359,300 +1205,6 @@ def import_captures():
 
 
 # =========================================================
-# CITY / DISTANCE FILTERING
-# =========================================================
-
-NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
-
-
-def _read_app_version():
-    """APP_VERSION lives in dashboard.py, where start.ps1 and update.ps1 also read it."""
-    try:
-        source = (BASE_DIR / "dashboard.py").read_text(encoding="utf-8")
-    except OSError:
-        return "unknown"
-    match = re.search(r'^APP_VERSION\s*=\s*["\']([0-9]+\.[0-9]+\.[0-9]+)["\']', source, re.M)
-    return match.group(1) if match else "unknown"
-
-
-JOB_FINDER_VERSION = _read_app_version()
-_last_nominatim_request = 0.0
-_failed_geocode_queries = set()
-
-
-def _normalize_geocode_query(value):
-    # The suffix retires cached answers saved before places were ranked by kind (see pick_place).
-    return re.sub(r"\s+", " ", (value or "").strip()).lower()[:240] + " [v2]"
-
-
-# How much a kind of place looks like the town or city a person means (lower is better).
-_PLACE_KIND_RANK = {"city": 0, "town": 0, "administrative": 0, "municipality": 1, "borough": 1, "suburb": 2,
-                    "census_designated_place": 2, "village": 3, "hamlet": 4, "statistical": 5, "neighbourhood": 5}
-
-
-def pick_place(results):
-    """The best match among several: a real city or town beats a village or statistical area of the same name.
-
-    Nominatim ranked a tiny "Bel Air" in Allegany County above Bel Air in Harford County, 100 miles away.
-    """
-    return min(results, key=lambda item: (_PLACE_KIND_RANK.get(item.get("type"), 4), -float(item.get("importance") or 0)))
-
-
-def _place_name(value):
-    value = re.sub(r"\bst\.? ", "saint ", str(value or "").strip().casefold())
-    value = re.sub(r"\bmt\.? ", "mount ", value)
-    return re.sub(r"\bft\.? ", "fort ", value)
-
-
-def place_matches(query, display_name):
-    """True when the map result is the place that was asked for, not a road or a similar name elsewhere."""
-    city = _place_name((query or "").split(",")[0])
-    first = _place_name((display_name or "").split(",")[0])
-    if not city or not first:
-        return False
-    suffixes = ("city", "town", "village", "township", "borough", "county", "cdp")
-    return (first == city or first in {f"{city} {suffix}" for suffix in suffixes}
-            or first in {f"city of {city}", f"town of {city}", f"village of {city}"})
-
-
-def geocode_location(database, query, require_place_match=False):
-    """Geocode once with public Nominatim, then reuse the MySQL cache.
-
-    require_place_match rejects results that are not the named place, such as a road
-    called "New London Road" when the query was "London".
-    """
-    global _last_nominatim_request
-    key = _normalize_geocode_query(query)
-    if not key:
-        return None
-    if key in _failed_geocode_queries:
-        return None
-
-    cursor = database.cursor(dictionary=True)
-    try:
-        cursor.execute("SELECT latitude, longitude, display_name FROM geocode_cache WHERE query_text = %s", (key,))
-        cached = cursor.fetchone()
-        if cached:
-            if require_place_match and not place_matches(query, cached.get("display_name")):
-                return None
-            return {"lat": float(cached["latitude"]), "lon": float(cached["longitude"]), "display_name": cached.get("display_name")}
-    finally:
-        cursor.close()
-
-    elapsed = time.monotonic() - _last_nominatim_request
-    if elapsed < 1.05:
-        time.sleep(1.05 - elapsed)
-
-    try:
-        response = requests.get(
-            NOMINATIM_URL,
-            params={"q": query, "format": "jsonv2", "limit": 5, "countrycodes": "us"},
-            headers={"User-Agent": f"JobFinder/{JOB_FINDER_VERSION} (https://github.com/jltkerig/job-finder-dashboard)"},
-            timeout=15,
-        )
-        _last_nominatim_request = time.monotonic()
-        response.raise_for_status()
-        results = response.json()
-        if not results:
-            _failed_geocode_queries.add(key)
-            return None
-        result = pick_place(results)
-        lat, lon = float(result["lat"]), float(result["lon"])
-        display_name = result.get("display_name", "")[:1000]
-        cursor = database.cursor()
-        try:
-            cursor.execute(
-                "INSERT INTO geocode_cache (query_text, latitude, longitude, display_name) VALUES (%s, %s, %s, %s) ON DUPLICATE KEY UPDATE latitude=VALUES(latitude), longitude=VALUES(longitude), display_name=VALUES(display_name)",
-                (key, lat, lon, display_name),
-            )
-            database.commit()
-        finally:
-            cursor.close()
-        if require_place_match and not place_matches(query, display_name):
-            print(f"Geocode for {query} rejected: it resolved to {display_name[:60]}, not that place.")
-            return None
-        return {"lat": lat, "lon": lon, "display_name": display_name}
-    except (requests.RequestException, ValueError, KeyError) as error:
-        _failed_geocode_queries.add(key)
-        print(f"Geocoding skipped for {query}: {error}")
-        return None
-
-
-def haversine_miles(lat1, lon1, lat2, lon2):
-    radius = 3958.7613
-    phi1, phi2 = math.radians(lat1), math.radians(lat2)
-    dphi = math.radians(lat2 - lat1)
-    dlambda = math.radians(lon2 - lon1)
-    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
-    return radius * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-
-
-def extract_job_city(html, fallback_text="", allow_footer=False):
-    soup = BeautifulSoup(html or "", "html.parser")
-    json_objects = []
-    for tag in soup.find_all("script", attrs={"type": "application/ld+json"}):
-        try:
-            data = json.loads(tag.string or tag.get_text() or "null")
-        except (json.JSONDecodeError, TypeError):
-            continue
-        json_objects.append(data)
-
-    def iter_objects(value):
-        if isinstance(value, dict):
-            yield value
-            for child in value.values():
-                yield from iter_objects(child)
-        elif isinstance(value, list):
-            for child in value:
-                yield from iter_objects(child)
-
-    # Prefer JobPosting.jobLocation over unrelated company/legal addresses.
-    for data in json_objects:
-        for obj in iter_objects(data):
-            obj_type = obj.get("@type")
-            types = obj_type if isinstance(obj_type, list) else [obj_type]
-            if "JobPosting" not in types:
-                continue
-            locations = obj.get("jobLocation") or obj.get("applicantLocationRequirements")
-            for location in iter_objects(locations):
-                address = location.get("address") if isinstance(location, dict) else None
-                if isinstance(address, dict):
-                    locality = str(address.get("addressLocality", "")).strip()
-                    region = str(address.get("addressRegion", "")).strip()
-                    if locality:
-                        return locality, region
-
-    # Fall back to structured addresses only if no JobPosting location exists.
-    for data in json_objects:
-        for obj in iter_objects(data):
-            address = obj.get("address") if isinstance(obj, dict) else None
-            if isinstance(address, dict):
-                locality = str(address.get("addressLocality", "")).strip()
-                region = str(address.get("addressRegion", "")).strip()
-                if locality:
-                    return locality, region
-
-    # No structured address: look for "City, ST" in the listing's location first, then the page body.
-    # A ZIP code or "Location:" wording before the city beats a name like "Contact Jane Doe, MD".
-    # The whole page, footer included, is kept for the last-resort address lookup below (the next call strips it).
-    full_text = soup.get_text(" ", strip=True) if allow_footer else ""
-    body = page_body_text(soup)
-    # "Washington, D.C. 20006" is the District's usual spelling; read it as "DC".
-    body = re.sub(r"\bD\.\s?C\.?(?=\s*\d{5}\b|\s|$)", "DC", body)
-    leading_noise = {"contact", "email", "call", "address", "location", "located", "office", "offices", "visit", "our",
-                     "at", "in", "based", "dr", "mr", "ms", "mrs", "team", "meet", "join", "apply", "posted",
-                     "nw", "ne", "sw", "se", "north", "south", "east", "west"}
-    candidates = []
-    for source, text in ((0, str(fallback_text or "")), (1, body)):
-        for match in re.finditer(r"\b([A-Z][A-Za-z'.]+(?:[ -][A-Z][A-Za-z'.]+){0,2}),\s*([A-Z]{2})\b(\s+\d{5})?", text):
-            if match.group(2) not in US_STATE_ABBREVIATIONS and match.group(2) != "DC":
-                continue
-            words = match.group(1).split(" ")
-            while words and words[0].casefold().rstrip(".") in leading_noise:
-                words.pop(0)
-            if not words:
-                continue
-            rank = (source, 0 if match.group(3) else 1, 0 if has_location_cue(text[:match.start()]) else 1, match.start())
-            candidates.append((rank, " ".join(words), match.group(2)))
-    if candidates:
-        _, city, region = min(candidates)
-        return city, region
-    # On the employer's own site, the street address in the footer is where the office is: use the last
-    # "City, ST 12345" on the page. (On a job board the footer is the board's address, so this is not used.)
-    if allow_footer:
-        full_text = re.sub(r"\bD\.\s?C\.?(?=\s*\d{5}\b)", "DC", full_text)
-        addresses = [match for match in re.finditer(
-            r"\b([A-Z][A-Za-z'.]+(?:[ -][A-Z][A-Za-z'.]+){0,2}),\s*([A-Z]{2})\s+\d{5}\b", full_text)
-            if match.group(2) in US_STATE_ABBREVIATIONS or match.group(2) == "DC"]
-        if addresses:
-            last = addresses[-1]
-            words = last.group(1).split(" ")
-            while words and words[0].casefold().rstrip(".") in leading_noise:
-                words.pop(0)
-            if words:
-                return " ".join(words), last.group(2)
-    return None, None
-
-
-_ZIP_CODE = re.compile(r"\d{5}(?:-\d{4})?")
-_REGION_WORDS = re.compile(r"\b(?:greater|metropolitan|metro|area|region|metroplex)\b", re.I)
-# Regions people use in place of a city, mapped to the city that anchors them.
-_REGION_ALIASES = {"dmv": "Washington, DC", "dc metro": "Washington, DC", "washington dc": "Washington, DC",
-                   "national capital": "Washington, DC", "tri-state": None, "delmarva": None}
-
-
-def clean_region_name(place):
-    """"Greater Baltimore Area" -> "Baltimore"; "DMV" -> "Washington, DC". Other places come back unchanged."""
-    text = re.sub(r"\s+", " ", str(place or "")).strip()
-    key = _REGION_WORDS.sub(" ", text).strip(" ,-").casefold()
-    key = re.sub(r"\s+", " ", key)
-    if key in _REGION_ALIASES:
-        return _REGION_ALIASES[key] or text
-    if _REGION_WORDS.search(text) and key:
-        return re.sub(r"\s+", " ", _REGION_WORDS.sub(" ", text)).strip(" ,-")
-    return text
-
-
-def geocode_queries(city, state_text):
-    """What to ask the geocoder for a typed location: a ZIP code, "City, ST", or a county/city with each searched state."""
-    city = str(city or "").strip()
-    if _ZIP_CODE.fullmatch(city):
-        return [f"{city[:5]}, United States"]
-    if "," in city:
-        return [city]
-    states = [part.strip() for part in re.split(r"[,/;]", state_text or "") if part.strip()]
-    return [f"{city}, {state_name}" for state_name in states] or [city]
-
-
-def prepare_city_targets(database, state, cities):
-    targets = []
-    allowed = {5, 10, 15, 20, 30, 50}
-    for item in cities or []:
-        city = str(item.get("city", "")).strip()
-        try:
-            radius = int(item.get("radius", 50))
-        except (TypeError, ValueError):
-            radius = 50
-        if not city or radius not in allowed:
-            continue
-        if city.casefold() in US_STATES:
-            continue  # A state name is a statewide target, not a city-radius center.
-        point = None
-        for query in geocode_queries(city, state):
-            point = geocode_location(database, query)
-            if point:
-                break
-        if point:
-            targets.append({"city": city, "radius": radius, **point})
-            print(f"City radius: {city} — {radius} miles")
-    return targets
-
-
-def distance_to_city_targets(database, html, fallback_text, state, targets, allow_footer=False):
-    if not targets:
-        return True, None, None, None, None
-    city, detected_state = extract_job_city(html, fallback_text, allow_footer=allow_footer)
-    if not city:
-        return False, None, None, None, None
-    city = clean_region_name(city)
-    if "," in city:
-        # A region alias can carry its own state ("Washington, DC").
-        city, _, alias_state = city.partition(",")
-        detected_state = alias_state.strip() or detected_state
-    query_state = detected_state or state
-    point = geocode_location(database, f"{city}, {query_state}", require_place_match=True)
-    if not point:
-        return False, city, None, None, None
-    best_distance = None
-    for target in targets:
-        distance = haversine_miles(point["lat"], point["lon"], target["lat"], target["lon"])
-        if best_distance is None or distance < best_distance:
-            best_distance = distance
-        if distance <= target["radius"]:
-            return True, city, point["lat"], point["lon"], round(distance, 2)
-    return False, city, point["lat"], point["lon"], round(best_distance, 2) if best_distance is not None else None
-
-# =========================================================
 # MAIN
 # =========================================================
 
@@ -1790,7 +1342,7 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
                         for item in cities if isinstance(item, dict)
                         and str(item.get("city", "")).strip().casefold() in US_STATES}
     selected_states = selected_state_codes(state, cities, statewide_states)
-    city_targets = prepare_city_targets(database, state, cities)
+    city_targets = geo.prepare_city_targets(database, state, cities)
     requested_cities = [item for item in cities if isinstance(item, dict)
                         and str(item.get("city", "")).strip()
                         and str(item.get("city", "")).strip().casefold() not in US_STATES]
@@ -2451,7 +2003,7 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
                         employer_notes = []
                         employer = None
                         if is_third_party(job_url, name):
-                            employer = find_employer_site(
+                            employer = relevance.find_employer_site(
                                 name, opening["title"], job_url, page.text, job_titles,
                                 location_hint=opening["location"] or f"{city or ''} {state_name or ''}".strip(),
                                 notes=employer_notes)

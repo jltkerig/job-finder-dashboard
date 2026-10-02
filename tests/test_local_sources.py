@@ -9,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import job_finder as finder
+from jobfinder.search import relevance
 from jobfinder.search import company_names
 from jobfinder.search import shared
 from jobfinder.sources.ats_discovery import identify
@@ -99,8 +100,8 @@ class Internships(unittest.TestCase):
         self.assertIn('Internship', skips)
 
     def test_saved_rows_are_never_rejected_as_internships(self):
-        self.assertTrue(finder.is_internship_row({'is_kept': 0, 'career_job_title': 'Design Intern'}, {}))
-        self.assertFalse(finder.is_internship_row({'is_kept': 1, 'career_job_title': 'Design Intern'}, {}))
+        self.assertTrue(relevance.is_internship_row({'is_kept': 0, 'career_job_title': 'Design Intern'}, {}))
+        self.assertFalse(relevance.is_internship_row({'is_kept': 1, 'career_job_title': 'Design Intern'}, {}))
 
 
 class CompanyBoards(unittest.TestCase):
