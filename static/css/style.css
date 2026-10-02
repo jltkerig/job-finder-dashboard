@@ -1245,17 +1245,18 @@ body[data-page="rejected"] .saved-job-card .saved-job-topline h3.long-job-title 
   body[data-page="search"] #results-table thead th { font-size:.74rem; line-height:1.2; }
   body[data-page="search"] #results-table th:nth-child(1),
   body[data-page="search"] #results-table .result-row td:nth-child(1) { width:82px; min-width:82px; max-width:82px; }
-  body[data-page="search"] #results-table th:nth-child(2) { width:130px; }
-  body[data-page="search"] #results-table th:nth-child(3) { width:158px; }
+  body[data-page="search"] #results-table th:nth-child(2) { width:120px; }
+  body[data-page="search"] #results-table th:nth-child(3) { width:150px; }
   body[data-page="search"] #results-table th:nth-child(4) { width:72px; }
-  body[data-page="search"] #results-table th:nth-child(5) { width:125px; }
-  body[data-page="search"] #results-table th:nth-child(6) { width:98px; }
-  body[data-page="search"] #results-table th:nth-child(7) { width:117px; }
+  body[data-page="search"] #results-table th:nth-child(5) { width:115px; }
+  body[data-page="search"] #results-table th:nth-child(6) { width:90px; }
+  body[data-page="search"] #results-table th:nth-child(7) { width:105px; }
   body[data-page="search"] #results-table th:nth-child(8) { width:74px; }
-  body[data-page="search"] #results-table th:nth-child(9) { width:95px; }
+  body[data-page="search"] #results-table th:nth-child(9) { width:88px; }
   body[data-page="search"] #results-table th:nth-child(10) { width:69px; }
   body[data-page="search"] #results-table th:nth-child(11) { width:75px; }
-  body[data-page="search"] #results-table th:nth-child(12) { width:260px; }
+  body[data-page="search"] #results-table th:nth-child(12) { width:90px; }
+  body[data-page="search"] #results-table th:nth-child(13) { width:250px; }
   body[data-page="search"] #results-table th:nth-child(6),
   body[data-page="search"] #results-table th:nth-child(9),
   body[data-page="search"] #results-table .result-row td:nth-child(6),
@@ -1488,3 +1489,7 @@ body[data-page="search"] .results-toolbar .column-chooser-inline .column-option 
 @media (min-width: 761px) {
 	.profile-layout { grid-template-columns: 284px minmax(0, 1fr); }
 }
+
+
+.found-cell small { display:block; color:#59636e; font-size:.78rem; }
+.found-cell .found-age { font-weight:600; }
