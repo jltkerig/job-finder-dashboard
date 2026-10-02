@@ -1,5 +1,7 @@
 """Local resume suggestions and conservative, explainable skill matching."""
+import json
 import re
+from pathlib import Path
 from bs4 import BeautifulSoup
 
 SKILL_ALIASES = {
@@ -62,6 +64,30 @@ def detect_skills(text):
                 found.append(skill)
                 break
     return found
+
+
+def uploaded_resume(folder):
+    """(file name, text) of the résumé uploaded in the Resume Builder, or ("", "") when there isn't one. The Resume
+    Builder saves the text it read from the upload next to the file (data/current-resume/text.txt); this only reads."""
+    folder = Path(folder)
+    try:
+        text = (folder / "text.txt").read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return "", ""
+    try:
+        name = str(json.loads((folder / "info.json").read_text(encoding="utf-8")).get("original_name") or "")
+    except (OSError, ValueError, AttributeError):
+        name = ""
+    return (name[:120] or "your résumé"), text
+
+
+def resume_skill_suggestions(folder, saved_skills):
+    """(file name, skills named in the uploaded résumé that the profile doesn't list yet)."""
+    name, text = uploaded_resume(folder)
+    if not text.strip():
+        return "", []
+    saved = {str(skill).casefold() for skill in saved_skills or []}
+    return name, [skill for skill in detect_skills(text) if skill.casefold() not in saved]
 
 
 def normalize_skills(values):

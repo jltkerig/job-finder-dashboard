@@ -87,6 +87,8 @@
             </p>
             <div id="profile-skill-list" class="skill-chip-list">
             </div>
+            <div id="resume-skill-suggestions" class="skill-chip-list" aria-live="polite" data-source="{{ resume_source or '' }}" data-skills='{{ (resume_skills or [])|tojson }}'>
+            </div>
             <div id="related-skill-suggestions" class="skill-chip-list" aria-live="polite">
             </div>
             <div class="skill-add-row"><input id="new-skill" type="text" list="skill-options" placeholder="Add a skill" aria-label="Add a skill" />
