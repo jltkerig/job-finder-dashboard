@@ -389,7 +389,7 @@ document.addEventListener("DOMContentLoaded", () => {
       typedTimer = setTimeout(async () => { const found = await loadRelated(term); if ($("#new-skill").value.trim() === term) { typedMatches = found; showSkillSuggestions(); } }, 250);
     });
     // Work history: one card per job (title, company, dates and the first point visible), opened to edit.
-    const WORK_SIZES = { description: 3000, dates: 100, street: 200, city: 100, state: 50, zip: 20, phone: 40, website: 255, supervisor_email: 255 };
+    const WORK_SIZES = { description: 3000, dates: 100, street: 200, city: 100, state: 50, zip: 20, phone: 40, website: 255, supervisor_email: 255, supervisor_phone: 40 };
     const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     const monthLabel = value => { const m = /^(\d{4})-(\d{2})$/.exec(value || ""); return m ? `${MONTHS[Number(m[2]) - 1] || m[2]} ${m[1]}` : (value || ""); };
     const datesLabel = text => {
@@ -451,7 +451,7 @@ document.addEventListener("DOMContentLoaded", () => {
           ["ZIP", "zip", "e.g. 21000"], ["Phone", "phone", "e.g. 555-555-0100"], ["Website", "website", "e.g. example.com", true]]));
         fields.append(group("Supervisor", "Optional. Some applications ask who you reported to.", [
           ["Name", "supervisor_name", "e.g. Sam Lee"], ["Title", "supervisor_title", "e.g. Senior Manager of Design"],
-          ["Email", "supervisor_email", "e.g. name@company.com", true]]));
+          ["Email", "supervisor_email", "e.g. name@company.com"], ["Phone", "supervisor_phone", "Their own number, if you have it"]]));
         const actions = el("div", "work-actions");
         const remove = el("button", "bordered-button destructive-action", "Remove Job"); remove.type = "button";
         remove.addEventListener("click", () => { history.splice(index, 1); renderHistory(); });
