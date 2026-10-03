@@ -97,6 +97,7 @@ def user_dashboard():
         companies=companies,
         profile=profile,
         resume_builder_url=RESUME_BUILDER_URL,
+        education_degrees=schema.EDUCATION_DEGREES,
         counts=get_dashboard_counts(),
         search_history=get_search_history(),
         skill_suggestions=profile_skill_suggestions(profile),

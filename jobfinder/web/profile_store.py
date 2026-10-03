@@ -8,7 +8,7 @@ from mysql.connector import Error
 from jobfinder import db
 from jobfinder.profiles.onet_data import occupation_skill_suggestions, proper_title, related_title_suggestions
 from jobfinder.profiles.profile_tools import SKILL_ALIASES, normalize_skills, refresh_listing_skills, skill_demand, related_skills
-from jobfinder.web.schema import WORK_DETAIL_COLUMNS, ensure_profile_tables
+from jobfinder.web.schema import EDUCATION_DEGREES, EDUCATION_FIELDS, WORK_DETAIL_COLUMNS, ensure_profile_tables
 
 RELATED_JOB_TITLES = {
     "web designer": ["UI Designer", "UX/UI Designer", "Digital Designer", "Website Designer", "Visual Designer", "WordPress Designer"],
@@ -112,7 +112,7 @@ def get_user_profile():
         "first_name": "",
         "last_name": "",
         "state": "",
-        "home_location": "", "home_zip": "", "primary_job_title": "", "avatar_data": "", "skills": [], "work_history": [], "work_preferences": [],
+        "home_location": "", "home_zip": "", "primary_job_title": "", "avatar_data": "", "skills": [], "work_history": [], "education": [], "work_preferences": [],
         "job_titles": [],
         "cities": [],
     }
@@ -152,6 +152,8 @@ def get_user_profile():
         detail_columns = ", ".join(column for column, _ in WORK_DETAIL_COLUMNS)
         cursor.execute(f"SELECT company, role, dates, description, {detail_columns} FROM user_profile_work_history WHERE profile_id = 1 ORDER BY id")
         profile["work_history"] = [{key: (value or "") for key, value in row.items()} for row in cursor.fetchall()]
+        cursor.execute(f"SELECT {', '.join(name for name, _ in EDUCATION_FIELDS)} FROM user_profile_education WHERE profile_id = 1 ORDER BY id")
+        profile["education"] = [{key: (value or "") for key, value in row.items()} for row in cursor.fetchall()]
         # Titles are always shown properly capitalized; searching ignores case, so this never changes what is found.
         profile["primary_job_title"] = proper_title(profile.get("primary_job_title") or "")
         profile["job_titles"] = list(dict.fromkeys(proper_title(title) for title in profile["job_titles"]))
@@ -168,8 +170,24 @@ def get_user_profile():
             connection.close()
 
 
+def clean_education(entries):
+    """Each school as {school, degree, major, minor, start_date, end_date, gpa}; entries without a school are dropped, and
+    a degree that isn't one of the drop-down's choices becomes "Other"."""
+    cleaned = []
+    for item in (entries or [])[:20]:
+        if not isinstance(item, dict):
+            continue
+        row = {name: str(item.get(name, "") or "").strip()[:size] for name, size in EDUCATION_FIELDS}
+        if row["degree"] and row["degree"] not in EDUCATION_DEGREES:
+            row["degree"] = "Other"
+        if row["school"]:
+            cleaned.append(row)
+    return cleaned
+
+
 def save_user_profile(first_name, last_name, state, job_titles, cities=None, *, home_location=None, home_zip=None,
-                      primary_job_title=None, skills=None, work_history=None, avatar_data=None, work_preferences=None):
+                      primary_job_title=None, skills=None, work_history=None, avatar_data=None, work_preferences=None,
+                      education=None):
     ensure_profile_tables()
     connection = None
     cursor = None
@@ -234,6 +252,12 @@ def save_user_profile(first_name, last_name, state, job_titles, cities=None, *, 
                         (profile_id, company, role, dates, description, {columns})
                         VALUES (1, %s, %s, %s, %s{", %s" * len(WORK_DETAIL_COLUMNS)})""",
                         (company, role, dates, description, *details))
+        if education is not None:
+            cursor.execute("DELETE FROM user_profile_education WHERE profile_id = 1")
+            for item in clean_education(education):
+                columns = ", ".join(name for name, _ in EDUCATION_FIELDS)
+                cursor.execute(f"INSERT INTO user_profile_education (profile_id, {columns}) VALUES (1{', %s' * len(EDUCATION_FIELDS)})",
+                               [item[name] for name, _ in EDUCATION_FIELDS])
 
         connection.commit()
         return True

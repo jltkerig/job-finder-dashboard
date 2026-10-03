@@ -218,6 +218,12 @@ WORK_DETAIL_COLUMNS = (("street", 200), ("city", 100), ("state", 50), ("zip", 20
                        ("supervisor_name", 150), ("supervisor_title", 150), ("supervisor_email", 255))
 
 
+# Education: the degree is one of these (the drop-down's choices), and each field's maximum length.
+EDUCATION_DEGREES = ["High School Diploma", "GED", "Certificate", "Associate's Degree", "Bachelor's Degree", "Master's Degree",
+                     "Doctorate", "Professional Degree", "Some College (No Degree)", "Other"]
+EDUCATION_FIELDS = (("school", 200), ("degree", 60), ("major", 150), ("minor", 150), ("start_date", 20), ("end_date", 20), ("gpa", 10))
+
+
 def ensure_profile_tables():
     if "profile" in _schema_ready:
         return
@@ -268,6 +274,12 @@ def ensure_profile_tables():
             id INT AUTO_INCREMENT PRIMARY KEY, profile_id TINYINT NOT NULL,
             company VARCHAR(150) NOT NULL DEFAULT '', role VARCHAR(150) NOT NULL DEFAULT '',
             dates VARCHAR(100) NOT NULL DEFAULT '', description TEXT NULL)""")
+        cursor.execute("""CREATE TABLE IF NOT EXISTS user_profile_education (
+            id INT AUTO_INCREMENT PRIMARY KEY, profile_id TINYINT NOT NULL,
+            school VARCHAR(200) NOT NULL DEFAULT '', degree VARCHAR(60) NOT NULL DEFAULT '',
+            major VARCHAR(150) NOT NULL DEFAULT '', minor VARCHAR(150) NOT NULL DEFAULT '',
+            start_date VARCHAR(20) NOT NULL DEFAULT '', end_date VARCHAR(20) NOT NULL DEFAULT '',
+            gpa VARCHAR(10) NOT NULL DEFAULT '')""")
         # Optional details some applications ask for: where the job was, its phone and website, and the supervisor.
         for column, size in WORK_DETAIL_COLUMNS:
             cursor.execute(f"ALTER TABLE user_profile_work_history ADD COLUMN IF NOT EXISTS {column} VARCHAR({size}) NOT NULL DEFAULT ''")
