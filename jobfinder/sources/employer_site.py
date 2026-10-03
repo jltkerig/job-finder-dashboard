@@ -1,6 +1,7 @@
 """Find an employer's own website and careers page from a job-board listing."""
 import json
 import re
+from types import SimpleNamespace
 from urllib.parse import urljoin, urlparse
 
 from bs4 import BeautifulSoup
@@ -232,18 +233,50 @@ def _find_site(company, posting_url, posting_html, *, fetch, search, is_excluded
     return None
 
 
-def _find_careers(home, *, fetch, score_page):
+# Hiring-system hosts. A careers link in a site's menu or footer may point to one of these instead of to the site itself
+# (careers-apexservicepartners.icims.com): that is the company's careers page.
+HIRING_HOSTS = ("icims.com", "myworkdayjobs.com", "greenhouse.io", "lever.co", "jobvite.com", "smartrecruiters.com", "ashbyhq.com",
+                "bamboohr.com", "workable.com", "recruitee.com", "applytojob.com", "jazz.hr", "taleo.net", "successfactors.com",
+                "successfactors.eu", "ultipro.com", "paylocity.com", "dayforcehcm.com", "paycomonline.net", "recruitingbypaycor.com",
+                "teamtailor.com", "breezy.hr", "phenompeople.com", "avature.net", "darwinbox.in", "darwinbox.com", "fountain.com",
+                "paradox.ai", "recruiterbox.com", "trakstar.com", "bullhornstaffing.com", "recruitcrm.io", "beamery.com",
+                "oraclecloud.com", "adp.com", "governmentjobs.com")
+
+
+def hiring_system_link(links, company):
+    """The first link that goes to a hiring system board belonging to this company, as a careers page. None if there is none.
+
+    Shared systems (jobs.lever.co/acme) must carry the company's name in the address; a company-specific host does too.
+    The address is returned without its query string, which carries tracking and screen-size noise."""
+    slug = name_slug(company)
+    for target in links:
+        parsed = urlparse(target)
+        host = (parsed.hostname or "").casefold()
+        if not any(host == system or host.endswith("." + system) for system in HIRING_HOSTS):
+            continue
+        address = re.sub(r"[^a-z0-9]", "", (host + parsed.path).casefold())
+        if slug and slug in address:
+            return f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+    return None
+
+
+def _find_careers(home, *, fetch, score_page, company=""):
     base_url = getattr(home, "url", "") or ""
     parsed = urlparse(base_url)
     origin = f"{parsed.scheme}://{parsed.netloc}/"
     host = bare_host(base_url)
     soup = BeautifulSoup(home.text or "", "html.parser")
-    linked = []
+    linked, offsite = [], []
     for link in soup.find_all("a", href=True):
         if CAREER_MARKER_RE.search(f"{link.get_text(' ', strip=True)} {link['href']}"):
             target = urljoin(base_url, link["href"]).split("#")[0]
             if target.startswith(("http://", "https://")) and same_site(bare_host(target), host) and not is_pdf_url(target):
                 linked.append(target)
+            elif target.startswith(("http://", "https://")):
+                offsite.append(target)
+    board = hiring_system_link(offsite, company) if offsite else None
+    if board:
+        return SimpleNamespace(url=board, text="")
     seen, ranked, fetches = set(), [], 0
     for target in linked[:3] + [urljoin(origin, path) for path in CAREER_PATHS]:
         key = canonical_url(target)
@@ -387,7 +420,7 @@ def resolve_employer_site(company, job_title, posting_url, posting_html, titles,
                            notes=notes)
         if found:
             home, method = found
-            careers = _find_careers(home, fetch=fetch, score_page=score_page)
+            careers = _find_careers(home, fetch=fetch, score_page=score_page, company=company)
             if careers:
                 careers_url = getattr(careers, "url", "")
                 site = {"domain": bare_host(getattr(home, "url", "")), "careers_url": careers_url, "method": method,
