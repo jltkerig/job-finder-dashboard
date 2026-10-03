@@ -1,3 +1,4 @@
+from jobfinder.web import profile_store
 import sys
 import unittest
 from pathlib import Path
@@ -19,7 +20,7 @@ class ProperTitles(unittest.TestCase):
 
     def test_every_suggestion_is_properly_capitalized(self):
         suggestions = title_matches("graphic des") + related_title_suggestions("web designer") + \
-            dashboard.related_job_title_suggestions("front end developer, ux designer")
+            profile_store.related_job_title_suggestions("front end developer, ux designer")
         self.assertTrue(suggestions)
         for title in suggestions:
             self.assertEqual(title, proper_title(title), title)

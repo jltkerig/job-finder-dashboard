@@ -1,3 +1,4 @@
+from jobfinder.web import profile_store
 import json
 import sys
 import unittest
@@ -96,16 +97,16 @@ class WhenTheSkillsChange(unittest.TestCase):
     def test_refresh_job_fit_reads_the_saved_listings(self):
         connection = FakeConnection([(1, json.dumps([]), details("Experience with WordPress."))])
         with patch.object(dashboard.mysql.connector, "connect", return_value=connection):
-            self.assertEqual(dashboard.refresh_job_fit(), 1)
+            self.assertEqual(profile_store.refresh_job_fit(), 1)
         self.assertEqual(json.loads(connection.updates[0][0]), ["WordPress"])
 
     def test_with_no_database_the_refresh_just_returns_zero(self):
-        self.assertEqual(dashboard.refresh_job_fit(), 0)  # the tests have no database
+        self.assertEqual(profile_store.refresh_job_fit(), 0)  # the tests have no database
 
     def test_saving_changed_skills_goes_back_to_the_dashboard_with_the_result(self):
         source = web_source()
         self.assertIn('redirect(f"/dashboard?fit_updated={refresh_job_fit()}")', source)
-        self.assertIn('previous_skills = {str(skill).casefold() for skill in get_user_profile().get("skills", [])}', source)
+        self.assertIn('previous_skills = {str(skill).casefold() for skill in profile_store.get_user_profile().get("skills", [])}', source)
         html = (ROOT / "templates" / "user-dashboard.html").read_text(encoding="utf-8")
         self.assertIn("{% if fit_updated is not none %}", html)
         self.assertIn("Job Fit is up to date", html)

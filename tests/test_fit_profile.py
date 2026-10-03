@@ -1,3 +1,4 @@
+from jobfinder.web import profile_store
 import sys
 import unittest
 from pathlib import Path
@@ -10,7 +11,7 @@ import dashboard
 
 class FitProfileForTheExtension(unittest.TestCase):
     def get(self, profile):
-        with patch.object(dashboard, "get_user_profile", return_value=profile):
+        with patch.object(profile_store, "get_user_profile", return_value=profile):
             response = dashboard.app.test_client().get("/extension/fit-profile")
         self.assertEqual(response.status_code, 200)
         self.assertNotIn("Access-Control-Allow-Origin", response.headers)  # web pages can't read it
