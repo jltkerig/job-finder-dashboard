@@ -1,3 +1,4 @@
+from jobfinder.web import blocklists
 from jobfinder.web import profile_store
 import sys
 import unittest
@@ -18,7 +19,7 @@ class FitProfileForTheExtension(unittest.TestCase):
         return response.get_json()
 
     def test_primary_title_first_without_repeats(self):
-        with patch.object(dashboard, "get_blocked_companies", return_value=["Bark"]):
+        with patch.object(blocklists, "get_blocked_companies", return_value=["Bark"]):
             data = self.get({"primary_job_title": "Web Designer", "job_titles": ["web designer", "Web Producer"],
                              "skills": ["HTML"], "work_preferences": ["Remote"]})
         self.assertEqual(data["blocked_companies"], ["Bark"])
