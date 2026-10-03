@@ -137,7 +137,38 @@
             </div></td>
       </tr>
       <tr id="details-{{ company.id }}" class="details-row" hidden><td colspan="13">
-            <div class="details-panel"><span><strong>Source:</strong> {{ company.source_type or 'SearXNG' }} · {{ 'Job board posting' if company.source_type in feed_names or company.source_type in capture_sources or company.source_type in ('USAJOBS',) else 'Direct job posting' if company.source_type == 'Employer careers' or (company.details.evidence and ('JobPosting data' in company.details.evidence or 'job detail page' in company.details.evidence)) else 'Possible lead' }}</span>{% if company.details.evidence %}<span><strong>Why this result:</strong> {{ company.details.evidence|join(" · ") }}{% if company.details.matched_title %} · matched {{ company.details.matched_title }}{% endif %}</span>{% endif %}{% if company.details.posted %}<span><strong>Posted:</strong> {{ company.details.posted }}</span>{% endif %}{% if employer_site %}<span><strong>Employer site:</strong> <a href="{{ employer_site.careers_url or ('https://' ~ employer_site.domain ~ '/') }}" target="_blank" rel="noopener noreferrer">{{ employer_site.domain }}</a> ({{ employer_site.method }}{% if not employer_site.careers_url %}; no careers page found there{% endif %})</span>{% endif %}{% if company.details.location %}<span><strong>Listing location:</strong> {{ company.details.location }}</span>{% endif %}{% if company.details.source and company.details.source != company.source_url %}<a href="{{ company.details.source }}" target="_blank" rel="noopener noreferrer">Discovery source</a>{% endif %}<span><strong>Found:</strong> {{ company.date_found|local_time('%b %d, %Y %I:%M %p') if company.date_found else 'Unknown' }}</span><span><strong>Last verified:</strong> {{ company.last_checked|local_time('%b %d, %Y %I:%M %p') if company.last_checked else 'Never' }}</span>{% if company.result_updated_at %}<span><strong>Updated:</strong> {{ company.result_updated_at|local_time('%b %d, %Y %I:%M %p') }}</span>{% endif %}<span><strong>Application status:</strong> {{ company.application_status if company.is_kept else 'None' }}</span><label class="reject-reason-label">If rejecting, why? <select class="reject-reason"><option value="other">Other reason</option><option value="wrong_role">Wrong role</option><option value="wrong_location">Wrong location</option><option value="not_a_job">Not a job</option><option value="duplicate">Duplicate</option></select></label>{% if company.source_url %}<a href="{{ company.source_url }}" target="_blank" rel="noopener noreferrer">Original source</a>{% endif %}{% if company.notes %}<span class="details-notes"><strong>Notes:</strong> {{ company.notes }}</span>{% endif %}{% if company.details.verification %}<span class="details-verification"><strong>Verification:</strong> {{ company.details.verification }}</span>{% endif %}<div class="details-blocks">{% if company.source_type not in feed_names %}<button class="bordered-button block-action destructive-action" type="button" data-company-id="{{ company.id }}" data-domain="{{ company.domain or '' }}" title="Hide this website and all future jobs from it.">Block Domain</button>{% endif %}<button class="bordered-button block-company-action destructive-action" type="button" data-company-id="{{ company.id }}" data-company-name="{{ company.name or '' }}" title="Exclude this company name from future searches.">Block Company</button></div>
+            <div class="details-panel">
+              <section class="details-section">
+                <h4>About This Listing</h4>
+                <dl class="details-grid">
+                  <div><dt>Source</dt><dd>{{ company.source_type or 'SearXNG' }}</dd></div>
+                  <div><dt>Type</dt><dd>{{ 'Job board posting' if company.source_type in feed_names or company.source_type in capture_sources or company.source_type in ('USAJOBS',) else 'Direct job posting' if company.source_type == 'Employer careers' or (company.details.evidence and ('JobPosting data' in company.details.evidence or 'job detail page' in company.details.evidence)) else 'Possible lead' }}</dd></div>
+                  {% if company.details.posted %}<div><dt>Posted</dt><dd>{{ company.details.posted }}</dd></div>{% endif %}
+                  {% if company.details.location %}<div><dt>Listing location</dt><dd>{{ company.details.location }}</dd></div>{% endif %}
+                  {% if employer_site %}<div><dt>Employer site</dt><dd><a href="{{ employer_site.careers_url or ('https://' ~ employer_site.domain ~ '/') }}" target="_blank" rel="noopener noreferrer">{{ employer_site.domain }}</a> <small>({{ employer_site.method }}{% if not employer_site.careers_url %}; no careers page found{% endif %})</small></dd></div>{% endif %}
+                  {% if company.details.verification %}<div><dt>Verification</dt><dd>{{ company.details.verification }}</dd></div>{% endif %}
+                  <div><dt>Application status</dt><dd>{{ company.application_status if company.is_kept else 'None' }}</dd></div>
+                </dl>
+              </section>
+              {% if company.details.evidence %}
+              <section class="details-section">
+                <h4>Why This Result</h4>
+                <ul class="details-reasons">{% for reason in company.details.evidence %}<li>{{ reason }}</li>{% endfor %}{% if company.details.matched_title %}<li>Matched {{ company.details.matched_title }}</li>{% endif %}</ul>
+              </section>
+              {% endif %}
+              <section class="details-section">
+                <h4>Dates</h4>
+                <dl class="details-grid">
+                  <div><dt>Found</dt><dd>{{ company.date_found|local_time('%b %d, %Y %I:%M %p') if company.date_found else 'Unknown' }}</dd></div>
+                  <div><dt>Last verified</dt><dd>{{ company.last_checked|local_time('%b %d, %Y %I:%M %p') if company.last_checked else 'Never' }}</dd></div>
+                  {% if company.result_updated_at %}<div><dt>Updated</dt><dd>{{ company.result_updated_at|local_time('%b %d, %Y %I:%M %p') }}</dd></div>{% endif %}
+                </dl>
+              </section>
+              {% if company.notes %}<section class="details-section details-notes"><h4>Notes</h4><p>{{ company.notes }}</p></section>{% endif %}
+              <div class="details-footer">
+                <div class="details-links">{% if company.source_url %}<a href="{{ company.source_url }}" target="_blank" rel="noopener noreferrer">Original source</a>{% endif %}{% if company.details.source and company.details.source != company.source_url %}<a href="{{ company.details.source }}" target="_blank" rel="noopener noreferrer">Discovery source</a>{% endif %}</div>
+                <div class="details-blocks"><label class="reject-reason-label">If rejecting, why? <select class="reject-reason"><option value="other">Other reason</option><option value="wrong_role">Wrong role</option><option value="wrong_location">Wrong location</option><option value="not_a_job">Not a job</option><option value="duplicate">Duplicate</option></select></label>{% if company.source_type not in feed_names %}<button class="bordered-button block-action destructive-action" type="button" data-company-id="{{ company.id }}" data-domain="{{ company.domain or '' }}" title="Hide this website and all future jobs from it.">Block Domain</button>{% endif %}<button class="bordered-button block-company-action destructive-action" type="button" data-company-id="{{ company.id }}" data-company-name="{{ company.name or '' }}" title="Exclude this company name from future searches.">Block Company</button></div>
+              </div>
             </div></td>
           </tr>
     {% endfor %}
