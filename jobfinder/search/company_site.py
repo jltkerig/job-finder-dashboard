@@ -15,7 +15,6 @@ from jobfinder.search.fetching import get_domain, has_blocked_country_domain, is
 from jobfinder.search.shared import HEADERS, MAX_DISCOVERY_PAGES, MAX_HTML_SIZE, TIMEOUT
 from jobfinder.search.usa_location import analyze_usa_location, merge_location_data
 
-
 CAREER_STRONG_TERMS = [
     "careers",
     "career opportunities",
@@ -29,7 +28,6 @@ CAREER_STRONG_TERMS = [
     "apply now",
 ]
 
-
 CAREER_WEAK_TERMS = [
     "career",
     "jobs",
@@ -37,7 +35,6 @@ CAREER_WEAK_TERMS = [
     "hiring",
     "opportunities",
 ]
-
 
 CAREER_NEGATIVE_TERMS = [
     "unemployment benefits",
@@ -47,7 +44,6 @@ CAREER_NEGATIVE_TERMS = [
     "workforce services",
     "job seeker services",
 ]
-
 
 ATS_DOMAINS = {
     "greenhouse.io",
@@ -62,7 +58,6 @@ ATS_DOMAINS = {
     "paylocity.com",
 }
 
-
 SUPPORT_PAGE_TERMS = {
     "contact": 4,
     "about": 3,
@@ -72,7 +67,6 @@ SUPPORT_PAGE_TERMS = {
     "imprint": 2,
 }
 
-
 SOCIAL_DOMAINS = {
     "facebook.com",
     "instagram.com",
@@ -81,7 +75,6 @@ SOCIAL_DOMAINS = {
     "x.com",
     "youtube.com",
 }
-
 
 DIRECTORY_MARKETPLACE_DOMAINS = {
     "bark.com",
@@ -96,7 +89,6 @@ DIRECTORY_MARKETPLACE_DOMAINS = {
     "agencyspotter.com",
 }
 
-
 # Titles of "find a designer" / "best agencies" pages. Always a directory.
 DIRECTORY_TITLE_PATTERNS = [re.compile(pattern, re.I) for pattern in (
     r"\bfind an? (?:\w+ ){0,2}(?:agency|agencies|designers?|developers?|companies|company|providers?|professionals?|freelancers?|experts?)\b",
@@ -105,7 +97,6 @@ DIRECTORY_TITLE_PATTERNS = [re.compile(pattern, re.I) for pattern in (
     r"\bcompare providers\b",
     r"\bget quotes\b",
 )]
-
 
 # "Reviews" only marks a directory when the title is not a job title ("Product Reviews Content Designer").
 DIRECTORY_WEAK_TITLE = re.compile(r"\breviews?\b", re.I)

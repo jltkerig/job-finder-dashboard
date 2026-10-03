@@ -11,7 +11,6 @@ import requests
 from jobfinder.search.shared import BASE_DIR
 from jobfinder.search.usa_location import US_STATES, US_STATE_ABBREVIATIONS, has_location_cue, page_body_text
 
-
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 
 
@@ -26,11 +25,7 @@ def _read_app_version():
 
 
 JOB_FINDER_VERSION = _read_app_version()
-
-
 _last_nominatim_request = 0.0
-
-
 _failed_geocode_queries = set()
 
 
@@ -229,10 +224,7 @@ def extract_job_city(html, fallback_text="", allow_footer=False):
 
 
 _ZIP_CODE = re.compile(r"\d{5}(?:-\d{4})?")
-
-
 _REGION_WORDS = re.compile(r"\b(?:greater|metropolitan|metro|area|region|metroplex)\b", re.I)
-
 
 # Regions people use in place of a city, mapped to the city that anchors them.
 _REGION_ALIASES = {"dmv": "Washington, DC", "dc metro": "Washington, DC", "washington dc": "Washington, DC",

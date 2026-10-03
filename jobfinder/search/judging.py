@@ -1,4 +1,6 @@
-"""Judging one job opening: does it fit your titles, is it in the United States, and is it close enough?"""
+"""Judging one job opening: does it fit your titles, is it in the United States, and is it close
+enough?
+"""
 
 from bs4 import BeautifulSoup
 

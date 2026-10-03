@@ -1,4 +1,6 @@
-"""The database side of the search: connecting, making sure the tables exist, and saving a company or posting."""
+"""The database side of the search: connecting, making sure the tables exist, and saving a company or
+posting.
+"""
 
 from datetime import datetime, timezone
 import json
@@ -10,19 +12,10 @@ from jobfinder import db
 from jobfinder.db_schema import ensure_unique_source_index
 from jobfinder.sources.job_listings import canonical_url
 
-
 DB_HOST = os.getenv("DB_HOST", "127.0.0.1")
-
-
 DB_PORT = int(os.getenv("DB_PORT", "3306"))
-
-
 DB_USER = os.getenv("DB_USER", "root")
-
-
 DB_PASSWORD = os.getenv("DB_PASSWORD", "")
-
-
 DB_NAME = os.getenv("DB_NAME", "job_finder")
 
 

@@ -9,7 +9,6 @@ from jobfinder.search.fetching import get_domain
 from jobfinder.sources.job_listings import arrangement_types
 from jobfinder.sources.remote_states import restriction_states
 
-
 US_STATES = {
     "alabama": "AL",
     "alaska": "AK",
@@ -63,14 +62,9 @@ US_STATES = {
     "wyoming": "WY",
 }
 
-
 US_STATE_ABBREVIATIONS = set(US_STATES.values())
-
-
 # Abbreviations that are also credentials or words ("Jane Doe, MD"), so whole-page text needs more than a comma.
 _AMBIGUOUS_ABBREVIATIONS = {"MD", "PA", "MA"}
-
-
 _LOCATION_CUE = re.compile(r"(?:location|located|office|address|based in|campus|headquarter\w*)\b[^.]{0,45}$", re.I)
 
 
@@ -120,16 +114,10 @@ _RESIDENCY_TRIGGER = re.compile(
     re.I,
 )
 
-
 _OUT_OF_STATE = re.compile(r"out[- ]of[- ]state|in[- ]state\s+(?:candidates|residents|only)", re.I)
-
-
 _STATE_NAMES = re.compile(r"\b(?:" + "|".join(re.escape(name) for name in sorted(US_STATES, key=len, reverse=True)) + r")\b", re.I)
-
-
 # Abbreviations that are also ordinary words (IN, OR, ME...) only count right after a comma or bracket.
 _WORD_LIKE_STATES = {"IN", "OR", "ME", "HI", "OK", "OH"}
-
 
 _STATE_ABBREVIATION = re.compile(
     r"[,(]\s*(" + "|".join(sorted(US_STATE_ABBREVIATIONS)) + r")\b"
@@ -229,10 +217,7 @@ def inspect_json_ld(soup):
 
 
 _PAGE_NOISE_ELEMENTS = ["select", "option", "datalist", "footer", "nav", "aside"]
-
-
 _PAGE_NOISE_NAMES = re.compile(r"related|similar|recommended|sidebar|cookie|consent|breadcrumb|newsletter|footer|more[-_ ]jobs|other[-_ ]jobs", re.I)
-
 
 # Wording that names a state without saying where the job is.
 _STATE_BOILERPLATE = re.compile(

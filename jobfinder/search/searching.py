@@ -8,10 +8,7 @@ from jobfinder.search import docker
 from jobfinder.search import shared
 from jobfinder.search.shared import SEARXNG_URL, USA_ONLY, timed
 
-
 _last_search_time = 0.0
-
-
 # Engines SearXNG said it could not use on its most recent search, e.g. ["duckduckgo: CAPTCHA"].
 last_search_health = {"unresponsive": []}
 

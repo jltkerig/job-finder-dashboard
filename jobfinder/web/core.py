@@ -1,4 +1,6 @@
-"""The Flask app and what every request goes through: security checks, error codes, compression and the date filters."""
+"""The Flask app and what every request goes through: security checks, error codes, compression and the
+date filters.
+"""
 
 from datetime import datetime, timezone
 import gzip
@@ -16,18 +18,10 @@ from jobfinder.web.webfiles import APPLICATION_STATUSES, COMPRESSIBLE, LOCAL_HOS
 
 load_dotenv(paths.ENV_FILE)  # the database login and the secret key live in .env; read before anything uses them
 
-
 app = Flask(__name__, template_folder=str(paths.ROOT / "templates"), static_folder=str(paths.ROOT / "static"))
-
-
 app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY") or secrets.token_hex(32)
-
-
 app.config["SESSION_COOKIE_HTTPONLY"] = True
-
-
 app.config["SESSION_COOKIE_SAMESITE"] = "Strict"
-
 
 ERROR_CODES = {
     "csrf": "E2201",

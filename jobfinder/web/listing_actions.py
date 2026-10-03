@@ -1,4 +1,6 @@
-"""What the buttons on a listing do: reject, restore, block a domain, keep, update notes and status, delete."""
+"""What the buttons on a listing do: reject, restore, block a domain, keep, update notes and status,
+delete.
+"""
 
 from flask import jsonify, redirect, request
 from mysql.connector import Error
