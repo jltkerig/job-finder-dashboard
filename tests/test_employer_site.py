@@ -136,3 +136,26 @@ class EmployerSite(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class CareersLinkInTheFooter(unittest.TestCase):
+    HOME = ('<html><body><nav><a href="/about">About</a></nav><footer><a href="https://careers-apexservicepartners.icims.com/jobs/search'
+            '?hashed=-625917716&mobile=false&width=1700">Careers</a> <a href="https://www.linkedin.com/company/apex">LinkedIn</a></footer></body></html>')
+
+    def find(self, company, html=None):
+        from types import SimpleNamespace
+        from jobfinder.sources.employer_site import _find_careers
+        home = SimpleNamespace(url="https://apexservicepartners.com/", text=html or self.HOME)
+        return _find_careers(home, fetch=lambda url: None, score_page=None, company=company)
+
+    def test_a_careers_link_to_the_companys_hiring_system_is_its_careers_page(self):
+        careers = self.find("Apex Service Partners")
+        self.assertEqual(careers.url, "https://careers-apexservicepartners.icims.com/jobs/search")  # without the tracking query
+
+    def test_a_hiring_board_of_another_company_is_not_taken(self):
+        self.assertIsNone(self.find("Acme Widgets"))
+
+    def test_shared_systems_need_the_companys_name_in_the_address(self):
+        html = '<footer><a href="https://jobs.lever.co/apexservicepartners/">Join us</a></footer>'
+        self.assertEqual(self.find("Apex Service Partners", html).url, "https://jobs.lever.co/apexservicepartners/")
+        self.assertIsNone(self.find("Acme Widgets", html))
