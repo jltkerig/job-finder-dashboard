@@ -1,3 +1,4 @@
+from jobfinder.web import profile_store
 import sys
 import unittest
 from pathlib import Path
@@ -15,7 +16,7 @@ class PrimaryJobTitle(unittest.TestCase):
         client = dashboard.app.test_client()
         with client.session_transaction() as session:
             session["csrf_token"] = "token"
-        with patch.object(dashboard, "save_user_profile") as save:
+        with patch.object(profile_store, "save_user_profile") as save:
             response = client.post("/save-profile", data={"csrf_token": "token", "primary_job_title": primary,
                                                           "job_titles": others})
         self.assertEqual(response.status_code, 302)

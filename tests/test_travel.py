@@ -1,3 +1,4 @@
+from jobfinder.web import profile_store
 import sys
 import unittest
 from pathlib import Path
@@ -47,12 +48,12 @@ class DistanceEstimate(unittest.TestCase):
         self.assertIsNone(jobs[0]["drive"])
 
     def test_the_extension_address_estimates_each_place(self):
-        with patch.object(dashboard, "get_user_profile", return_value={"home_zip": "21009", "state": "MD"}):
+        with patch.object(profile_store, "get_user_profile", return_value={"home_zip": "21009", "state": "MD"}):
             data = dashboard.app.test_client().get("/extension/distances?places=Bel%20Air,%20MD|Nowhereville,%20ZZ").get_json()
         self.assertEqual(data["home_zip"], "21009")
         self.assertIn("mi", data["places"]["Bel Air, MD"]["text"])
         self.assertIsNone(data["places"]["Nowhereville, ZZ"])
-        with patch.object(dashboard, "get_user_profile", return_value={"home_zip": "", "state": ""}):
+        with patch.object(profile_store, "get_user_profile", return_value={"home_zip": "", "state": ""}):
             data = dashboard.app.test_client().get("/extension/distances?places=Bel%20Air,%20MD").get_json()
         self.assertIsNone(data["places"]["Bel Air, MD"])
 
