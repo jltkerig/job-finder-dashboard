@@ -9,14 +9,9 @@ from jobfinder.sources.ats_lookup import find_ats_posting
 from jobfinder.sources.employer_jobs import SOURCE_TYPE as EMPLOYER_SOURCE, Http as EmployerHttp
 from jobfinder.sources.employer_site import is_third_party
 
-
 _ats_http = None
-
-
 # Legal-entity codes some applicant systems put in front of a company name ("003 Humana Inc.").
 _LEADING_CODE = re.compile(r"^\s*0\d{1,4}\s+(?=[A-Za-z])")  # zero-padded only: "84 Lumber" is a real name
-
-
 # A posting on a recognised applicant-system board (Workday, Greenhouse, ...) is the employer's own listing.
 OFFICIAL_BOARD_CREDIBILITY = 8
 

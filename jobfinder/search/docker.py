@@ -1,4 +1,6 @@
-"""Starting and stopping Docker Desktop and the SearXNG search engine, and deciding when a search must stop."""
+"""Starting and stopping Docker Desktop and the SearXNG search engine, and deciding when a search must
+stop.
+"""
 
 import subprocess
 import time
@@ -15,13 +17,8 @@ from jobfinder.search.shared import (
     STOP_DOCKER_WHEN_FINISHED,
 )
 
-
 searxng_start_time = None
-
-
 docker_started_by_program = False
-
-
 stop_announced = False
 
 

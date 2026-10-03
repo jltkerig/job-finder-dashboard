@@ -10,7 +10,6 @@ from jobfinder.profiles.onet_data import occupation_skill_suggestions, proper_ti
 from jobfinder.profiles.profile_tools import SKILL_ALIASES, normalize_skills, refresh_listing_skills, skill_demand
 from jobfinder.web.schema import ensure_profile_tables
 
-
 RELATED_JOB_TITLES = {
     "web designer": ["UI Designer", "UX/UI Designer", "Digital Designer", "Website Designer", "Visual Designer", "WordPress Designer"],
     "front end developer": ["Frontend Developer", "Web Developer", "UI Developer", "Junior Web Developer", "WordPress Developer", "Web Content Developer"],

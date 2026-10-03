@@ -1,4 +1,6 @@
-"""Refreshing results already saved: checking they are still open, re-checking rejected ones and updating Job Fit."""
+"""Refreshing results already saved: checking they are still open, re-checking rejected ones and
+updating Job Fit.
+"""
 
 from datetime import date, datetime, timezone
 import json
@@ -61,10 +63,7 @@ from jobfinder.sources.job_feeds import FEEDS, FEED_NAMES
 from jobfinder.sources.job_listings import canonical_url, extract_jobs, matching_title as matching_job_title
 from jobfinder.sources.job_sites import JOB_SITE_NAMES, job_site_for
 
-
 SEARCH_SCOPE_FILE = paths.SEARCH_SCOPE_FILE
-
-
 RESTORABLE_REASONS = ("wrong_role", "wrong_location")
 
 

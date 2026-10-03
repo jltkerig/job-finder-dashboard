@@ -1,4 +1,6 @@
-"""The pages themselves: Search, Dashboard, Settings (rejected listings, skips, block lists) and the credibility guide."""
+"""The pages themselves: Search, Dashboard, Settings (rejected listings, skips, block lists) and the
+credibility guide.
+"""
 
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo

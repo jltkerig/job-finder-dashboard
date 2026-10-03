@@ -1,4 +1,6 @@
-"""Blocked domains and companies: reading and changing the lists, and the Settings page forms that do it."""
+"""Blocked domains and companies: reading and changing the lists, and the Settings page forms that do
+it.
+"""
 
 from datetime import datetime
 import json

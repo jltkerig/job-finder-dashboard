@@ -12,7 +12,6 @@ from jobfinder.records.board_health import STATUSES as HEALTH_STATUSES, read_hea
 from jobfinder.web import webfiles
 from jobfinder.web.core import app, log_error_code
 
-
 # Search tuning options that live in settings.json: key -> (label, help, kind, minimum, maximum, default).
 TUNING_FIELDS = {
     "searxng_timeout_minutes": ("Search time limit (minutes)", "A search stops after this long.", int, 1, 240, 60),
@@ -24,7 +23,6 @@ TUNING_FIELDS = {
     "parallel_page_fetches": ("Pages downloaded at once", "More is faster but uses more of your connection.", int, 1, 12, 6),
     "stop_after_empty_queries": ("Stop after this many empty queries in a row", "Many empty queries usually mean the engines are refusing us.", int, 2, 30, 8),
 }
-
 
 TUNING_SWITCHES = {
     "usa_only": ("U.S. jobs only", "Skip jobs that are outside the United States or unverified.", True),

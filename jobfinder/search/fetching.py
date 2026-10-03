@@ -1,4 +1,6 @@
-"""Downloading pages politely: which domains are allowed, the wait between requests to one site, and a cache of pages already read."""
+"""Downloading pages politely: which domains are allowed, the wait between requests to one site, and a
+cache of pages already read.
+"""
 
 from concurrent.futures import ThreadPoolExecutor
 import time

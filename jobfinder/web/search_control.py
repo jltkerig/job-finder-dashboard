@@ -1,4 +1,6 @@
-"""Starting, refreshing, importing and stopping searches (the job_finder.py process) and reporting their progress."""
+"""Starting, refreshing, importing and stopping searches (the job_finder.py process) and reporting
+their progress.
+"""
 
 from datetime import datetime
 import json
@@ -19,22 +21,11 @@ from jobfinder.web.search_history import get_search_history, record_search_histo
 from jobfinder.web.tuning import read_tuning_settings
 from jobfinder.web.webfiles import BASE_DIR, GRACEFUL_STOP_SECONDS, JOB_FINDER_PATH
 
-
 scraper_process = None
-
-
 scraper_mode = None
-
-
 scraper_last_error = None
-
-
 scraper_lock = threading.Lock()
-
-
 scraper_started_at = None
-
-
 scraper_stopping = False
 
 

@@ -1,4 +1,6 @@
-"""The search itself: reads your titles and places, searches, checks every lead and saves the ones that fit."""
+"""The search itself: reads your titles and places, searches, checks every lead and saves the ones that
+fit.
+"""
 
 import argparse
 from datetime import datetime, timezone
@@ -98,7 +100,6 @@ from jobfinder.sources.job_listings import (
     matching_title as matching_job_title,
 )
 from jobfinder.sources.job_sites import JOB_SITES, SiteBlocked, search_places
-
 
 web_search_started = False
 

@@ -1,4 +1,6 @@
-"""Importing the jobs the Web Job Scraper extension saved from the pages you browsed (LinkedIn and others)."""
+"""Importing the jobs the Web Job Scraper extension saved from the pages you browsed (LinkedIn and
+others).
+"""
 
 from datetime import datetime, timezone
 import json
