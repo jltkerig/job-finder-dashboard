@@ -1,3 +1,4 @@
+from jobfinder.web import search_history
 from jobfinder.web import schema
 import sys
 import unittest
@@ -51,16 +52,16 @@ class FakeConnection:
 
 class RecentSearchDisplay(unittest.TestCase):
     def test_the_main_title_is_the_first_and_the_others_follow(self):
-        self.assertEqual(dashboard.split_search_titles("frontend web developer, graphic design ,web designer"),
+        self.assertEqual(search_history.split_search_titles("frontend web developer, graphic design ,web designer"),
                          ("frontend web developer", ["graphic design", "web designer"]))
-        self.assertEqual(dashboard.split_search_titles("Web Designer"), ("Web Designer", []))
-        self.assertEqual(dashboard.split_search_titles(""), ("", []))
+        self.assertEqual(search_history.split_search_titles("Web Designer"), ("Web Designer", []))
+        self.assertEqual(search_history.split_search_titles(""), ("", []))
 
     def test_repeated_searches_show_once_newest_first(self):
         rows = [row("web designer, graphic design", minute=30), row("Web Designer", minute=20),
                 row("web designer, graphic design", minute=10), row("web designer, graphic design", state="Delaware", minute=5),
                 row("WEB DESIGNER, GRAPHIC DESIGN", minute=1)]
-        shown = dashboard.collapse_search_history(rows, limit=10)
+        shown = search_history.collapse_search_history(rows, limit=10)
         self.assertEqual([(r["job_title"], r["state"], r["searched_at"].minute) for r in shown],
                          [("web designer, graphic design", "Maryland", 30), ("Web Designer", "Maryland", 20),
                           ("web designer, graphic design", "Delaware", 5)])
@@ -70,11 +71,11 @@ class RecentSearchDisplay(unittest.TestCase):
     def test_the_same_title_in_different_cities_is_a_different_search(self):
         a = row("web designer", cities='[{"city": "Bel Air, MD", "radius": 20}]')
         b = row("web designer", cities='[{"city": "Towson, MD", "radius": 20}]')
-        self.assertEqual(len(dashboard.collapse_search_history([a, b])), 2)
+        self.assertEqual(len(search_history.collapse_search_history([a, b])), 2)
 
     def test_only_the_limit_is_shown(self):
         rows = [row(f"title {n}") for n in range(30)]
-        self.assertEqual(len(dashboard.collapse_search_history(rows, limit=10)), 10)
+        self.assertEqual(len(search_history.collapse_search_history(rows, limit=10)), 10)
 
     def test_the_page_shows_the_main_title_large_and_the_others_small(self):
         html = (ROOT / "templates" / "user-dashboard.html").read_text(encoding="utf-8")
@@ -92,7 +93,7 @@ class RecordingASearch(unittest.TestCase):
         connection = FakeConnection(earlier_id)
         with patch.object(schema, "ensure_job_tracking_columns"), \
                 patch.object(dashboard.mysql.connector, "connect", return_value=connection):
-            dashboard.record_search_history("Web Designer, Graphic Design", "Maryland", [{"city": "Bel Air, MD", "radius": 20}])
+            search_history.record_search_history("Web Designer, Graphic Design", "Maryland", [{"city": "Bel Air, MD", "radius": 20}])
         return connection
 
     def test_a_new_search_is_recorded(self):
