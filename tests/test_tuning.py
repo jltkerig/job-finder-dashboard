@@ -13,6 +13,7 @@ from jobfinder.records import board_health
 import dashboard
 from jobfinder.search import docker
 from jobfinder.search import shared
+from jobfinder.web import webfiles
 from jobfinder.records.board_health import BoardHealth, classify_error, read_health
 
 GOOD_FORM = {'searxng_timeout_minutes': '45', 'max_search_results': '10', 'max_search_pages': '20', 'request_delay_seconds': '1',
@@ -40,7 +41,7 @@ class Settings(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             settings_file = Path(folder) / 'settings.json'
             settings_file.write_text(json.dumps({'searxng_timeout_minutes': 33, 'max_search_results': 10}), encoding='utf-8')
-            with patch.object(dashboard, 'SETTINGS_FILE', settings_file), \
+            with patch.object(webfiles, 'SETTINGS_FILE', settings_file), \
                     patch.object(dashboard, 'read_health', lambda: None):
                 client = dashboard.app.test_client()
                 page = client.get('/tuning')
