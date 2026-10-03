@@ -29,7 +29,7 @@ class DashboardWording(unittest.TestCase):
             html = read("templates", f"{page}.html")
             self.assertNotRegex(html, r">\s*Resume Builder\s*<", page)
             self.assertIn("Résumé Builder", html, page)
-        self.assertIn("Suggestions from Résumé:", read("static", "js", "charts.js"))
+        self.assertNotIn("Suggestions from Résumé", read("static", "js", "charts.js"))  # one combined list now
 
     def test_the_resume_builder_link_opens_in_the_same_tab(self):
         for page in PAGES:
@@ -67,7 +67,9 @@ class DashboardWording(unittest.TestCase):
         import re
         dash = read("templates", "user-dashboard.html")
         self.assertNotIn("Job Finder searches for every title here.", dash)
-        for label_id, text in (("primary-job-title", "The main job you want. Shown below your photo."), ("job-titles", "Separate titles with commas.")):
+        self.assertNotIn("Shown below your photo", dash)  # can be inferred
+        self.assertNotIn("Choose any types and locations you want", dash)
+        for label_id, text in (("job-titles", "Separate titles with commas."),):
             self.assertRegex(dash, r'<label for="' + label_id + r'">[^<]*</label>\s*<p class="field-help">' + re.escape(text))
         search = read("templates", "index.html")
         for label_id, text in (("job-title", "Separate multiple titles"), ("search-city-input", "Add a city for a radius search"), ("result-min-credibility", "Only individual openings")):

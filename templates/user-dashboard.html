@@ -40,9 +40,7 @@
           <section class="profile-subsection">
             <h3>Job Titles
             </h3>
-            <div class="form-field"><label for="primary-job-title">Primary Job Title</label>
-          <p class="field-help">The main job you want. Shown below your photo.
-              </p><input id="primary-job-title" name="primary_job_title" type="text" data-title-suggest="single" value="{{ profile.primary_job_title }}" placeholder="e.g. Web Designer" autocomplete="off" />
+            <div class="form-field"><label for="primary-job-title">Primary Job Title</label><input id="primary-job-title" name="primary_job_title" type="text" data-title-suggest="single" value="{{ profile.primary_job_title }}" placeholder="e.g. Web Designer" autocomplete="off" />
             </div>
             <div class="form-field"><label for="job-titles">Other Job Titles to Search For</label>
           <p class="field-help">Separate titles with commas.
@@ -56,8 +54,6 @@
           <section class="profile-subsection">
             <h3>Work Preferences
             </h3>
-            <p class="field-help">Choose any types and locations you want. These help tailor your search without hiding jobs with missing details.
-            </p>
             <fieldset class="preference-group">
               <legend>Work Type
               </legend>
@@ -84,19 +80,15 @@
           <section class="profile-subsection">
             <h3>Skills
             </h3>
-            <p class="field-help">Your saved skills help estimate Job Fit. Review skills suggested by a résumé or O*NET occupation data before saving. Occupation examples are not requirements for an individual job.
+            <p class="field-help">The skills you list here are compared with what each job asks for to work out its Job Fit. Add the ones you really have; suggestions come from your résumé, the jobs Job Finder found and the skills you already added, and appear as you type.
             </p>
             <div id="profile-skill-list" class="skill-chip-list">
-            </div>
-            <div id="resume-skill-suggestions" class="skill-chip-list" aria-live="polite" data-source="{{ resume_source or '' }}" data-skills='{{ (resume_skills or [])|tojson }}'>
-            </div>
-            <div id="demand-skill-suggestions" class="skill-chip-list" aria-live="polite" data-skills='{{ (demanded_skills or [])|tojson }}'>
-            </div>
-            <div id="related-skill-suggestions" class="skill-chip-list" aria-live="polite">
             </div>
             <div class="skill-add-row"><input id="new-skill" type="text" list="skill-options" placeholder="Add a skill" aria-label="Add a skill" />
               <datalist id="skill-options">{% for skill in skill_suggestions %}<option value="{{ skill }}"></option>{% endfor %}
               </datalist><button class="bordered-button secondary-action" id="add-skill" type="button">Add Skill</button>
+            </div>
+            <div id="skill-suggestions" class="skill-chip-list" aria-live="polite" data-resume='{{ (resume_skills or [])|tojson }}' data-demand='{{ (demanded_skills or [])|tojson }}' hidden>
             </div>
           </section>
           <section class="profile-subsection">

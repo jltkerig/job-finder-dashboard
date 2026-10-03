@@ -11,7 +11,7 @@ from jobfinder.profiles.places import city_matches
 from jobfinder.profiles.profile_tools import resume_suggestions
 from jobfinder.web import profile_store
 from jobfinder.web.core import api_error, app
-from jobfinder.web.profile_store import refresh_job_fit, related_job_title_suggestions
+from jobfinder.web.profile_store import refresh_job_fit, related_job_title_suggestions, related_skills_for
 from jobfinder.web.search_control import _home_state
 
 
@@ -124,3 +124,9 @@ def city_matches_route():
 def job_title_suggestions():
     titles = (request.args.get("titles") or "").strip()[:1000]
     return jsonify({"suggestions": related_job_title_suggestions(titles)})
+
+
+@app.route("/skill-related")
+def skill_related():
+    """Skills that go with the one being typed on the Dashboard ("HTML" -> CSS, Responsive Design ...)."""
+    return jsonify({"skills": related_skills_for((request.args.get("q") or "").strip()[:80])})

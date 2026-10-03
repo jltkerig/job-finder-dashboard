@@ -335,3 +335,70 @@ def resume_suggestions(text):
     parts = name.split()
     return {"first_name": parts[0] if parts else "", "last_name": " ".join(parts[1:]) if parts else "",
             "home_location": location, "skills": detect_skills(text), "work_history": history}
+
+
+# Skills that usually go together. A small curated list; the jobs Job Finder has found add to it (see related_skills).
+RELATED_SKILLS = {
+    "HTML": ["CSS", "JavaScript", "Responsive Design", "Accessibility", "SEO"],
+    "CSS": ["HTML", "Sass", "Bootstrap", "Responsive Design", "JavaScript"],
+    "JavaScript": ["TypeScript", "React", "jQuery", "HTML", "CSS", "Node.js"],
+    "TypeScript": ["JavaScript", "React", "Angular", "Node.js"],
+    "React": ["JavaScript", "TypeScript", "Redux", "HTML", "CSS"],
+    "jQuery": ["JavaScript", "HTML", "CSS", "Bootstrap"],
+    "Bootstrap": ["HTML", "CSS", "Responsive Design", "Sass"],
+    "Sass": ["CSS", "HTML", "Bootstrap"],
+    "PHP": ["MySQL", "WordPress", "JavaScript", "HTML"],
+    "WordPress": ["PHP", "HTML", "CSS", "SEO", "Content Management"],
+    "SQL": ["MySQL", "Python", "Data Analysis"],
+    "MySQL": ["SQL", "PHP", "Python"],
+    "Python": ["SQL", "Flask", "Data Analysis", "Git"],
+    "Git": ["GitHub", "Agile", "JavaScript"],
+    "Responsive Design": ["HTML", "CSS", "Bootstrap", "UX Design", "Accessibility"],
+    "Accessibility": ["HTML", "CSS", "UX Design", "Responsive Design"],
+    "SEO": ["Google Analytics", "Content Management", "HTML", "WordPress"],
+    "Web Design": ["UI Design", "UX Design", "Figma", "Adobe Photoshop", "HTML", "CSS"],
+    "UI Design": ["UX Design", "Figma", "Web Design", "Adobe XD"],
+    "UX Design": ["UI Design", "Figma", "Wireframing", "User Research", "Accessibility"],
+    "Figma": ["UI Design", "UX Design", "Adobe XD", "Sketch", "Prototyping"],
+    "Graphic Design": ["Adobe Photoshop", "Adobe Illustrator", "Adobe InDesign", "Branding", "Typography"],
+    "Adobe Photoshop": ["Adobe Illustrator", "Adobe InDesign", "Graphic Design", "Adobe Creative Cloud"],
+    "Adobe Illustrator": ["Adobe Photoshop", "Adobe InDesign", "Graphic Design", "Typography"],
+    "Adobe InDesign": ["Adobe Illustrator", "Adobe Photoshop", "Graphic Design", "Typography"],
+    "Email Marketing": ["Salesforce Marketing Cloud", "HTML", "CSS", "A/B Testing", "Litmus"],
+    "Salesforce Marketing Cloud": ["Email Marketing", "HTML", "SQL", "A/B Testing"],
+    "A/B Testing": ["Google Analytics", "Email Marketing", "Data Analysis"],
+    "Google Analytics": ["SEO", "Google Tag Manager", "A/B Testing", "Data Analysis"],
+    "Google Tag Manager": ["Google Analytics", "JavaScript", "SEO"],
+    "Content Management": ["WordPress", "SEO", "HTML", "Copywriting"],
+    "Landing Pages": ["HTML", "CSS", "A/B Testing", "Email Marketing", "Responsive Design"],
+    "Agile": ["Scrum", "Jira", "Git"],
+    "Docker": ["Git", "AWS", "Linux"],
+}
+
+
+def related_skills(term, listing_skill_lists=(), limit=8):
+    """Skills that go with the one being typed: the curated list first, then the skills named alongside it in the jobs found."""
+    names = normalize_skills([term])
+    if not names:
+        return []
+    name = names[0]
+    key = name.casefold()
+    result = [skill for known, skills in RELATED_SKILLS.items() if known.casefold() == key for skill in skills]
+    counts = {}
+    for raw in listing_skill_lists:
+        try:
+            skills = json.loads(raw) if isinstance(raw, (str, bytes)) else raw
+        except ValueError:
+            continue
+        skills = normalize_skills(skills if isinstance(skills, list) else [])
+        if any(s.casefold() == key for s in skills):
+            for other in skills:
+                if other.casefold() != key:
+                    counts[other] = counts.get(other, 0) + 1
+    result += [skill for skill, _ in sorted(counts.items(), key=lambda item: (-item[1], item[0].casefold()))]
+    seen, out = set(), []
+    for skill in result:
+        if skill.casefold() not in seen and skill.casefold() != key:
+            seen.add(skill.casefold())
+            out.append(skill)
+    return out[:limit]

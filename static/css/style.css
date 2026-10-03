@@ -1687,3 +1687,22 @@ input:not([type]):focus, input[type="text"]:focus, input[type="search"]:focus, i
 }
 input::placeholder, textarea::placeholder { color: #6b7280; opacity: 1; }
 input:not([type]), input[type="text"], input[type="search"], input[type="number"], input[type="email"], input[type="url"], input[type="password"], input[type="tel"], input[type="date"], input[type="datetime-local"], input[type="month"], input[type="time"], input[type="week"], select { height: 44px !important; }
+
+/* Dashboard: suggestions sit close under their box, with the same room below as above */
+.profile-subsection .title-chips { margin: 8px 0 14px; }
+#skill-suggestions { margin: 10px 0 14px; }
+#skill-suggestions[hidden] { display: none; }
+
+/* Search results, two-line rows: the whole row lights up, everything reads from the left, and Details fills the row */
+@media (min-width:761px) {
+  #results-table.compact-rows tbody tr.result-row { background:#fff; transition:background .12s ease; }
+  #results-table.compact-rows tbody tr.result-row:hover { background:#f2f3f5; }
+  #results-table.compact-rows tbody .result-row:hover td, #results-table.compact-rows .result-row td { background:transparent; }
+  body[data-page="search"] #results-table.compact-rows .result-row td[data-label] { text-align:left; justify-self:start; }
+  body[data-page="search"] #results-table.compact-rows .result-row td[data-label="Save"],
+  body[data-page="search"] #results-table.compact-rows .result-row td[data-label="Actions"] { justify-self:stretch; }
+  #results-table.compact-rows .found-cell .found-age::before { content:"\00b7"; margin:0 .35em; }
+  #results-table.compact-rows tr.details-row > td, #results-table.compact-rows tr.details-row > td:first-child {
+    display:block; width:100%; min-width:0; max-width:none; box-sizing:border-box; padding:14px 18px; background:#f8fafc; border-bottom:1px solid #e3e6ea; }
+  #results-table.compact-rows .details-panel { width:100%; gap:10px 28px; padding:0; }
+}
