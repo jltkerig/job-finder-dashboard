@@ -46,13 +46,28 @@ def extension_updates():
     return jsonify({"addons": {EXTENSION_ID: {"updates": updates}}})
 
 
+EXTENSION_READS = {"/extension/fit-profile", "/extension/distances"}
+
+
+@app.after_request
+def let_firefox_extensions_read(response):
+    """Firefox reports a "NetworkError" when the extension asks for these without its permission for this address
+    in force (not yet granted after an update, or turned off in about:addons): the request is then treated like any
+    other site's. So these two read-only answers allow an extension's own address. Ordinary web pages can't claim a
+    moz-extension:// origin, so they still get nothing back."""
+    origin = request.headers.get("Origin", "")
+    if request.path in EXTENSION_READS and origin.startswith("moz-extension://"):
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers.add("Vary", "Origin")
+    return response
+
+
 @app.route("/extension/fit-profile")
 def extension_fit_profile():
     """What Web Job Scraper needs to mark LinkedIn jobs that may fit: your titles, skills and work preferences,
     plus Job Finder's skill names and spellings so Job Fit is worked out the same way as on the Dashboard.
 
-    No CORS header on purpose: only the extension (which has permission for this address) can read it; an
-    ordinary web page asking for it gets nothing back.
+    Readable only by a Firefox extension (see let_firefox_extensions_read); an ordinary web page gets nothing back.
     """
     profile = profile_store.get_user_profile()
     titles = [spelling_fix(title) for title in
@@ -71,8 +86,8 @@ def extension_fit_profile():
 @app.route("/extension/distances")
 def extension_distances():
     """Estimated distance and 6 a.m. drive time from the home ZIP to each place (places separated by |), for the
-    LinkedIn markers. Same estimate as the Dashboard (travel.py); nothing is looked up online. No CORS header,
-    so only the extension can read it."""
+    LinkedIn markers. Same estimate as the Dashboard (travel.py); nothing is looked up online. Readable only by
+    a Firefox extension, like the fit profile."""
     profile = profile_store.get_user_profile()
     home_zip, home_state = profile.get("home_zip") or "", profile.get("state") or ""
     places = [place.strip()[:120] for place in (request.args.get("places") or "").split("|") if place.strip()][:100]

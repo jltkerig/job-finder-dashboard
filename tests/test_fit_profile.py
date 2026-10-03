@@ -18,6 +18,20 @@ class FitProfileForTheExtension(unittest.TestCase):
         self.assertNotIn("Access-Control-Allow-Origin", response.headers)  # web pages can't read it
         return response.get_json()
 
+    def test_the_extension_gets_its_own_exact_origin_back_and_web_pages_get_none(self):
+        client = dashboard.app.test_client()
+        origin = "moz-extension://4f1c2a9e-0b7d-4e55-9a31-2c8d6e7f1a00"
+        with patch.object(profile_store, "get_user_profile", return_value={"home_zip": ""}), \
+                patch.object(blocklists, "get_blocked_companies", return_value=[]):
+            for path in ("/extension/fit-profile", "/extension/distances?places=Towson, MD"):
+                response = client.get(path, headers={"Origin": origin})
+                self.assertEqual(response.headers.get("Access-Control-Allow-Origin"), origin)  # the same, not "*"
+                self.assertIn("Origin", response.headers.get("Vary", ""))
+                page = client.get(path, headers={"Origin": "https://www.linkedin.com"})
+                self.assertNotIn("Access-Control-Allow-Origin", page.headers)
+            other = client.get("/extension/updates.json", headers={"Origin": origin})
+            self.assertNotIn("Access-Control-Allow-Origin", other.headers)  # only the two reads
+
     def test_primary_title_first_without_repeats(self):
         with patch.object(blocklists, "get_blocked_companies", return_value=["Bark"]):
             data = self.get({"primary_job_title": "Web Designer", "job_titles": ["web designer", "Web Producer"],
