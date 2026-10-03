@@ -317,51 +317,65 @@ document.addEventListener("DOMContentLoaded", () => {
         const chip = document.createElement("span"); chip.className = "skill-chip";
         const label = document.createElement("span"); label.textContent = skill;
         const remove = document.createElement("button"); remove.type = "button"; remove.textContent = "×"; remove.setAttribute("aria-label", `Remove ${skill}`);
-        remove.addEventListener("click", () => { skills.splice(index, 1); renderSkills(); showRelatedSkills(); });
+        remove.addEventListener("click", () => { skills.splice(index, 1); renderSkills(); });
         chip.append(label, remove); skillsList.append(chip);
-      }); skillsField.value = JSON.stringify(skills); showResumeSkills();
+      }); skillsField.value = JSON.stringify(skills); showSkillSuggestions(); updateRelated();
     }
-    // Suggestion chips under Skills: tap the ones you have (Save Profile keeps them). One group for skills the uploaded
-    // résumé mentions, one for skills the jobs Job Finder found keep asking for.
-    function suggestionChips(box, heading, hint, choices) {
-      box.replaceChildren();
-      const open = choices.filter(choice => !skills.some(saved => saved.toLowerCase() === choice.skill.toLowerCase()));
+    // One list of suggested skills under the Add Skill box: skills your résumé mentions, skills the jobs Job Finder found keep
+    // asking for, skills that go with the ones you already added, and, as you type, skills that go with the word being typed
+    // ("HTML" brings up CSS, Responsive Design and so on). Click one to add it.
+    const suggestBox = $("#skill-suggestions");
+    const readList = (name) => { try { return JSON.parse(suggestBox?.dataset[name] || "[]"); } catch { return []; } };
+    const fromResume = readList("resume"), asked = readList("demand").map(item => item.skill || item);
+    const relatedCache = new Map(); // skill (lower case) -> skills that go with it
+    let typedMatches = [], typedTimer = null;
+    async function loadRelated(term) {
+      const key = term.toLowerCase();
+      if (relatedCache.has(key)) return relatedCache.get(key);
+      relatedCache.set(key, []);
+      try {
+        const response = await fetch(`/skill-related?q=${encodeURIComponent(term)}`, { cache: "no-store" });
+        relatedCache.set(key, (await response.json()).skills || []);
+      } catch { /* suggestions are a convenience; none is fine */ }
+      return relatedCache.get(key);
+    }
+    function showSkillSuggestions() {
+      if (!suggestBox) return;
+      suggestBox.replaceChildren();
+      const have = new Set(skills.map(skill => skill.toLowerCase()));
+      const typed = ($("#new-skill").value || "").trim().toLowerCase();
+      const related = skills.flatMap(skill => relatedCache.get(skill.toLowerCase()) || []);
+      const order = [...typedMatches, ...fromResume, ...asked, ...related];
+      const open = [...new Map(order.filter(skill => !have.has(skill.toLowerCase()) && skill.toLowerCase() !== typed)
+        .map(skill => [skill.toLowerCase(), skill])).values()].slice(0, 16);
+      suggestBox.hidden = !open.length;
       if (!open.length) return;
-      const title = document.createElement("h4"); title.textContent = heading; title.title = hint; box.append(title);
-      for (const choice of open) {
+      const title = document.createElement("h4"); title.textContent = "Suggested:"; suggestBox.append(title);
+      for (const skill of open) {
         const button = document.createElement("button"); button.type = "button"; button.className = "bordered-button secondary-action";
-        button.textContent = `+ ${choice.skill}${choice.note ? ` (${choice.note})` : ""}`;
-        button.addEventListener("click", () => { addSkill(choice.skill); showRelatedSkills(); });
-        box.append(button);
+        button.textContent = `+ ${skill}`;
+        button.addEventListener("click", () => addSkill(skill));
+        suggestBox.append(button);
       }
       if (open.length > 1) {
         const all = document.createElement("button"); all.type = "button"; all.className = "bordered-button primary-action"; all.textContent = "Add all";
-        all.addEventListener("click", () => { open.forEach(choice => addSkill(choice.skill)); showRelatedSkills(); });
-        box.append(all);
+        all.addEventListener("click", () => open.forEach(skill => addSkill(skill)));
+        suggestBox.append(all);
       }
     }
-    function showResumeSkills() {
-      const box = $("#resume-skill-suggestions"); if (!box) return;
-      let found = []; try { found = JSON.parse(box.dataset.skills || "[]"); } catch {}
-      suggestionChips(box, "Suggestions from Résumé:", `Skills found in your résumé (${box.dataset.source || "uploaded résumé"}). Add the ones you have, then Save Profile.`,
-        found.map(skill => ({ skill })));
-      const demand = $("#demand-skill-suggestions"); if (!demand) return;
-      let asked = []; try { asked = JSON.parse(demand.dataset.skills || "[]"); } catch {}
-      const fromResume = new Set(found.map(skill => skill.toLowerCase()));
-      suggestionChips(demand, "Suggestions:", "Often asked for in the jobs Job Finder found for you (the number is how many). Add only what you have, then Save Profile.",
-        asked.filter(item => !fromResume.has(String(item.skill).toLowerCase()))
-          .map(item => ({ skill: item.skill, note: `${item.count} job${item.count === 1 ? "" : "s"}` })));
+    async function updateRelated() {
+      await Promise.all(skills.slice(0, 12).map(skill => loadRelated(skill)));
+      showSkillSuggestions();
     }
     function addSkill(skill) { const value = (skill || "").trim().slice(0, 80); if (value && !skills.some(s => s.toLowerCase() === value.toLowerCase())) { skills.push(value); renderSkills(); } }
-    const relatedSkills = {HTML:["CSS","JavaScript","Responsive Design","Accessibility"],CSS:["Sass","Bootstrap","Responsive Design"],JavaScript:["TypeScript","React","jQuery"],"Web Design":["UI Design","UX Design","Figma"],WordPress:["PHP","SEO","Content Management"],"Email Marketing":["Salesforce Marketing Cloud","Litmus"],Git:["GitHub","Docker"]};
-    function showRelatedSkills() {
-      const container=$("#related-skill-suggestions"); if(!container)return;container.replaceChildren();
-      const choices=[...new Set(skills.flatMap(skill=>relatedSkills[skill]||[]))].filter(skill=>!skills.some(saved=>saved.toLowerCase()===skill.toLowerCase())).slice(0,8);
-      if(!choices.length)return;const heading=document.createElement("small");heading.textContent="Related skills to consider (add only if you have them):";container.append(heading);
-      choices.forEach(skill=>{const button=document.createElement("button");button.type="button";button.className="bordered-button secondary-action";button.textContent=`+ ${skill}`;button.addEventListener("click",()=>{addSkill(skill);showRelatedSkills();});container.append(button);});
-    }
-    $("#add-skill").addEventListener("click", () => { addSkill($("#new-skill").value); $("#new-skill").value = ""; showRelatedSkills(); });
+    $("#add-skill").addEventListener("click", () => { addSkill($("#new-skill").value); $("#new-skill").value = ""; typedMatches = []; showSkillSuggestions(); });
     $("#new-skill").addEventListener("keydown", event => { if (event.key === "Enter") { event.preventDefault(); $("#add-skill").click(); } });
+    $("#new-skill").addEventListener("input", () => {
+      clearTimeout(typedTimer);
+      const term = $("#new-skill").value.trim();
+      if (term.length < 2) { typedMatches = []; showSkillSuggestions(); return; }
+      typedTimer = setTimeout(async () => { const found = await loadRelated(term); if ($("#new-skill").value.trim() === term) { typedMatches = found; showSkillSuggestions(); } }, 250);
+    });
     // Work history: one card per job (title, company, dates and the first point visible), opened to edit.
     const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     const monthLabel = value => { const m = /^(\d{4})-(\d{2})$/.exec(value || ""); return m ? `${MONTHS[Number(m[2]) - 1] || m[2]} ${m[1]}` : (value || ""); };
@@ -460,7 +474,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const selected = new Set($$("input:checked", resumeContent).map(el => el.dataset.field));
       if (selected.has("name")) { if (!$("#first-name").value) $("#first-name").value = suggestions.first_name || ""; if (!$("#last-name").value) $("#last-name").value = suggestions.last_name || ""; }
       if (selected.has("location") && !$("#home-location").value) { $("#home-location").value = suggestions.home_location || ""; $("#home-location").dispatchEvent(new Event("input")); }
-      if (selected.has("skills")) { (suggestions.skills || []).forEach(addSkill); showRelatedSkills(); }
+      if (selected.has("skills")) { (suggestions.skills || []).forEach(addSkill); }
       if (selected.has("history")) { (suggestions.work_history || []).forEach(job => { if (!history.some(existing => existing.role.toLowerCase() === job.role.toLowerCase() && existing.company.toLowerCase() === job.company.toLowerCase())) history.push(job); }); renderHistory(); }
       resumeDialog.close(); showToast("Suggestions added for review. Save Profile to keep them.", "success");
     });

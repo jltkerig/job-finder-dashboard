@@ -46,8 +46,11 @@ class ResumeSkills(unittest.TestCase):
 
     def test_the_dashboard_page_has_a_place_for_the_chips_and_the_script_fills_it(self):
         root = Path(__file__).resolve().parents[1]
-        self.assertIn('id="resume-skill-suggestions"', (root / "templates" / "user-dashboard.html").read_text(encoding="utf-8"))
-        self.assertIn("function showResumeSkills", (root / "static" / "js" / "charts.js").read_text(encoding="utf-8"))
+        page = (root / "templates" / "user-dashboard.html").read_text(encoding="utf-8")
+        self.assertIn('id="skill-suggestions"', page)  # one list for every kind of suggestion
+        self.assertIn("data-resume=", page)
+        self.assertNotIn("Suggestions from", page)  # people don't need to know where a suggestion came from
+        self.assertIn("function showSkillSuggestions", (root / "static" / "js" / "charts.js").read_text(encoding="utf-8"))
 
 
 class MoreSuggestions(unittest.TestCase):
@@ -75,7 +78,7 @@ class MoreSuggestions(unittest.TestCase):
 
     def test_the_page_has_a_place_for_the_job_demand_chips(self):
         root = Path(__file__).resolve().parents[1]
-        self.assertIn('id="demand-skill-suggestions"', (root / "templates" / "user-dashboard.html").read_text(encoding="utf-8"))
+        self.assertIn("data-demand=", (root / "templates" / "user-dashboard.html").read_text(encoding="utf-8"))
 
 
 HISTORY = """Jane Doe

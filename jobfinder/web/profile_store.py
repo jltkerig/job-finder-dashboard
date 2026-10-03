@@ -7,7 +7,7 @@ from mysql.connector import Error
 
 from jobfinder import db
 from jobfinder.profiles.onet_data import occupation_skill_suggestions, proper_title, related_title_suggestions
-from jobfinder.profiles.profile_tools import SKILL_ALIASES, normalize_skills, refresh_listing_skills, skill_demand
+from jobfinder.profiles.profile_tools import SKILL_ALIASES, normalize_skills, refresh_listing_skills, skill_demand, related_skills
 from jobfinder.web.schema import ensure_profile_tables
 
 RELATED_JOB_TITLES = {
@@ -243,3 +243,16 @@ def save_user_profile(first_name, last_name, state, job_titles, cities=None, *, 
             cursor.close()
         if connection is not None and connection.is_connected():
             connection.close()
+
+
+def related_skills_for(term, limit=8):
+    """Skills that go with `term`, from the curated list and from the skills named together in the jobs found."""
+    lists = []
+    try:
+        with db.cursor() as cursor:
+            cursor.execute("SELECT listing_skills FROM companies WHERE is_rejected = 0 AND listing_skills IS NOT NULL "
+                           "AND listing_skills LIKE %s LIMIT 800", (f"%{str(term)[:60]}%",))
+            lists = [row[0] for row in cursor.fetchall()]
+    except Error as error:
+        print(f"Could not read related skills from the listings: {error}")
+    return related_skills(term, lists, limit)
