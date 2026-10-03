@@ -262,6 +262,8 @@ def ensure_profile_tables():
         for column, definition in (
             ("home_location", "VARCHAR(150) NOT NULL DEFAULT ''"),
             ("home_zip", "VARCHAR(10) NOT NULL DEFAULT ''"),
+            ("linkedin_url", "VARCHAR(255) NOT NULL DEFAULT ''"),
+            ("portfolio_url", "VARCHAR(255) NOT NULL DEFAULT ''"),
             ("primary_job_title", "VARCHAR(255) NOT NULL DEFAULT ''"),
             ("avatar_data", "MEDIUMTEXT NULL"),
             ("work_preferences", "TEXT NULL"),

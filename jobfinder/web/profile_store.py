@@ -112,7 +112,7 @@ def get_user_profile():
         "first_name": "",
         "last_name": "",
         "state": "",
-        "home_location": "", "home_zip": "", "primary_job_title": "", "avatar_data": "", "skills": [], "work_history": [], "education": [], "work_preferences": [],
+        "home_location": "", "home_zip": "", "linkedin_url": "", "portfolio_url": "", "primary_job_title": "", "avatar_data": "", "skills": [], "work_history": [], "education": [], "work_preferences": [],
         "job_titles": [],
         "cities": [],
     }
@@ -121,7 +121,7 @@ def get_user_profile():
         connection = db.connect()
         cursor = connection.cursor(dictionary=True)
         cursor.execute("""
-            SELECT first_name, last_name, state, home_location, home_zip, primary_job_title, avatar_data, work_preferences
+            SELECT first_name, last_name, state, home_location, home_zip, linkedin_url, portfolio_url, primary_job_title, avatar_data, work_preferences
             FROM user_profile
             WHERE id = 1
         """)
@@ -170,6 +170,14 @@ def get_user_profile():
             connection.close()
 
 
+def clean_link(text):
+    """A web address as typed, with https:// added when it was left off; anything that isn't a plain web address is dropped."""
+    text = str(text or "").strip()[:255]
+    if text and not re.match(r"^https?://", text, re.I):
+        text = "https://" + text
+    return text if re.fullmatch(r"https?://[^\s<>\"']+\.[^\s<>\"']+", text, re.I) else ""
+
+
 def clean_education(entries):
     """Each school as {school, degree, major, minor, start_date, end_date, gpa}; entries without a school are dropped, and
     a degree that isn't one of the drop-down's choices becomes "Other"."""
@@ -187,7 +195,7 @@ def clean_education(entries):
 
 def save_user_profile(first_name, last_name, state, job_titles, cities=None, *, home_location=None, home_zip=None,
                       primary_job_title=None, skills=None, work_history=None, avatar_data=None, work_preferences=None,
-                      education=None):
+                      education=None, linkedin_url=None, portfolio_url=None):
     ensure_profile_tables()
     connection = None
     cursor = None
@@ -204,6 +212,10 @@ def save_user_profile(first_name, last_name, state, job_titles, cities=None, *, 
             cursor.execute("UPDATE user_profile SET home_location = %s WHERE id = 1", (home_location[:150],))
         if home_zip is not None:
             cursor.execute("UPDATE user_profile SET home_zip = %s WHERE id = 1", (home_zip,))
+        if linkedin_url is not None:
+            cursor.execute("UPDATE user_profile SET linkedin_url = %s WHERE id = 1", (clean_link(linkedin_url),))
+        if portfolio_url is not None:
+            cursor.execute("UPDATE user_profile SET portfolio_url = %s WHERE id = 1", (clean_link(portfolio_url),))
         if primary_job_title is not None:
             cursor.execute("UPDATE user_profile SET primary_job_title = %s WHERE id = 1", (primary_job_title[:255],))
         if avatar_data is not None:
