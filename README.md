@@ -59,7 +59,7 @@ It reads the expected version from `dashboard.py`, so no launcher version edit i
 
 Use **Search for Latest Version** in the dashboard. When a newer `job-finder-vX.Y.Z.zip` is found, the button changes to **Update to vX.Y.Z**. The updater backs up the current install, preserves local user files, verifies the new files, and restarts Job Finder.
 
-Preserved local files include `.env`, `settings.json`, blocked domain and company lists, and logs. New backup folders are named like `Job Finder v1.1.43 - 2026-09-28 at 01-20-00` (the version installed before the update and local date/time). Earlier backups keep their original names.
+Preserved local files are `.env` and everything in `user-data/`, `logs/` and `user-builds/` (settings, blocked domain and company lists, search records, logs). New backup folders are named like `Job Finder v1.1.43 - 2026-09-28 at 01-20-00` (the version installed before the update and local date/time). Earlier backups keep their original names.
 
 ## Location filtering
 
@@ -67,14 +67,35 @@ Saved cities can use 10, 15, 20, 30, or 50 mile radii. Nominatim geocoding is ra
 
 ## Main files
 
-- `start.ps1` — launcher and startup diagnostics
-- `update.ps1` — updater/rollback
-- `dashboard.py` — Flask dashboard
-- `job_finder.py` — scraper/search logic
-- `settings.json` — local scraper settings
-- `templates/` — dashboard pages
-- `static/` — CSS and JavaScript
-- `searxng/` — Docker/SearXNG runtime configuration
+Start here if you are new to the code:
+
+```
+dashboard.py            the web app: start it, open http://127.0.0.1:5000 (APP_VERSION lives here)
+job_finder.py           the search: run by the dashboard, or by hand with --help
+start.ps1 / update.ps1  launcher with startup checks / updater with backup and rollback
+release.py              builds a release ZIP: bumps the version, runs the tests, packs, re-tests the ZIP
+
+jobfinder/              the code
+  paths.py              where every file lives (read this first); creates user-data/ and logs/
+  db.py                 the one place that opens a database connection
+  web/                  the pages and buttons, one module per kind of page (see the list in dashboard.py)
+  search/               the search itself: runner.py is the search, the others are its parts
+                        (shared settings, docker, fetching, company_site, usa_location, geo, relevance ...)
+  sources/              where jobs come from: job sites, feeds, employer career boards (Workday, Greenhouse ...)
+  profiles/             your profile's helpers: skills and Job Fit, O*NET titles, places, drive times
+  records/              what Job Finder remembers: skipped pages, board health, imported captures, retention
+
+templates/, static/     the web pages (HTML, CSS, JavaScript)
+data/                   reference data shipped with Job Finder (O*NET, places, ZIP codes) and data/defaults/
+user-data/              YOURS: settings.json, block lists, watched employers, search records (updates never touch it)
+logs/                   dashboard and search logs
+user-builds/            résumés and cover letters from Résumé Builder
+searxng/                Docker/SearXNG runtime configuration
+tests/                  python -m unittest discover -s tests -p "test_*.py" -t tests
+```
+
+To change a setting or block list, edit the file in `user-data/` (or use the Tuning and Settings pages).
+The tests use a temporary folder, so they never touch `user-data/` or the database.
 
 Keep `.env` private and do not commit it.
 
