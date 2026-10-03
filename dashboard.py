@@ -34,16 +34,36 @@ from jobfinder.records.board_health import STATUSES as HEALTH_STATUSES, read_hea
 from jobfinder.records.search_skips import TTL_HOURS, latest_decisions
 from jobfinder.records.capture_import import CAPTURE_SOURCES, capture_dirs, move_pending, pending_files
 from jobfinder.records.job_retention import CLOSED_KEEP_DAYS, SAVED_STATUSES, tidy_closed_jobs
+from jobfinder.web.webfiles import (  # noqa: F401  (also used by callers that import these from here)
+    APPLICATION_STATUSES,
+    BASE_DIR,
+    BLOCKED_COMPANIES_FILE,
+    BLOCKED_DOMAINS_FILE,
+    BLOCK_METADATA_FILE,
+    COMPRESSIBLE,
+    EXTENSION_FILE,
+    EXTENSION_ID,
+    GRACEFUL_STOP_SECONDS,
+    JOB_FINDER_PATH,
+    LOCAL_HOSTS,
+    LOCAL_TIMEZONE,
+    RECOMMENDED_DOMAINS_FILE,
+    RESUME_FOLDER,
+    SEARCH_SKIPS_FILE,
+    SKIPS_PER_PAGE,
+    UPDATE_MARKER,
+    UPDATE_SCRIPT,
+    UPDATE_SEARCH_DIRS,
+    UPDATE_ZIP_PATTERN,
+)
+from jobfinder.web import webfiles
 
-BASE_DIR = Path(__file__).resolve().parent
-# Where the Resume Builder keeps the résumé you uploaded there (its text is read to suggest skills).
-RESUME_FOLDER = Path(os.getenv("RESUME_BUILDER_DIR", BASE_DIR.parent / "resume-builder")) / "data" / "current-resume"
-load_dotenv(BASE_DIR / ".env")
 
 app = Flask(__name__)
 
 APP_VERSION = "1.1.150"
 
+app.config["APP_VERSION"] = APP_VERSION
 app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY") or secrets.token_hex(32)
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Strict"
@@ -54,33 +74,12 @@ DB_USER = os.getenv("DB_USER", "root")
 DB_PASSWORD = os.getenv("DB_PASSWORD", "")
 DB_NAME = os.getenv("DB_NAME", "job_finder")
 
-JOB_FINDER_PATH = BASE_DIR / "job_finder.py"
-BLOCKED_DOMAINS_FILE = paths.BLOCKED_DOMAINS_FILE
-BLOCKED_COMPANIES_FILE = paths.BLOCKED_COMPANIES_FILE
-BLOCK_METADATA_FILE = paths.BLOCK_METADATA_FILE
-RECOMMENDED_DOMAINS_FILE = paths.RECOMMENDED_DOMAINS_FILE
-SCRAPER_LOG_FILE = paths.SEARCH_LOG
-SEARCH_SKIPS_FILE = paths.SEARCH_SKIPS_FILE
-UPDATE_SCRIPT = paths.UPDATE_SCRIPT
-UPDATE_MARKER = paths.UPDATE_MARKER
-# Update ZIPs are named job-finder-dashboard-vX.Y.Z.zip; older ones (job-finder-vX.Y.Z.zip) still count.
-UPDATE_ZIP_PATTERN = re.compile(r"^job-finder(?:-dashboard)?-v(\d+)\.(\d+)\.(\d+)\.zip$", re.IGNORECASE)
-UPDATE_SEARCH_DIRS = [
-    Path.home() / "Downloads",
-    BASE_DIR.parent,
-]
 scraper_process = None
 scraper_mode = None
 scraper_last_error = None
 scraper_lock = threading.Lock()
 scraper_started_at = None
 scraper_stopping = False
-# job_finder.py watches for this file and shuts down cleanly when it appears.
-STOP_REQUEST_FILE = paths.STOP_REQUEST_FILE
-SETTINGS_FILE = paths.SETTINGS_FILE
-GRACEFUL_STOP_SECONDS = 90
-# Choices for a saved job's Application Status, in the order the dropdowns show them.
-APPLICATION_STATUSES = ["None", "Saved", "Applied", "Talking With Recruiter", "Interview", "Rejected", "Closed"]
 # Schema checks that already succeeded in this process; they only need to run once.
 _schema_ready = set()
 
@@ -212,8 +211,6 @@ def profile_skill_suggestions(profile):
             if skill.casefold() not in saved]
 
 
-
-
 def _safe_db_identifier(value):
     if not re.fullmatch(r"[A-Za-z0-9_]+", value or ""):
         raise ValueError("DB_NAME may contain only letters, numbers, and underscores.")
@@ -284,11 +281,8 @@ def get_csrf_token():
 def inject_csrf_token():
     # Job sites (National Labor Exchange) list many employers' jobs like the remote feeds: shown as job-board
     # postings, and their domain is never offered for blocking.
-    return {"csrf_token": get_csrf_token(), "app_version": APP_VERSION, "feed_names": sorted(FEED_NAMES | JOB_SITE_NAMES),
+    return {"csrf_token": get_csrf_token(), "app_version": app.config["APP_VERSION"], "feed_names": sorted(FEED_NAMES | JOB_SITE_NAMES),
             "capture_sources": sorted(CAPTURE_SOURCES), "application_statuses": APPLICATION_STATUSES}
-
-
-LOCAL_HOSTS = {"127.0.0.1", "localhost", "[::1]"}
 
 
 @app.before_request
@@ -299,9 +293,6 @@ def refuse_foreign_hosts():
     if host.lower() not in LOCAL_HOSTS:
         abort(400)
     return None
-
-
-COMPRESSIBLE = {"text/html", "text/css", "application/javascript", "text/javascript", "application/json", "image/svg+xml"}
 
 
 @app.after_request
@@ -360,8 +351,6 @@ def ensure_keep_column():
             cursor.close()
         if connection is not None and connection.is_connected():
             connection.close()
-
-
 
 
 def ensure_job_tracking_columns():
@@ -1192,7 +1181,7 @@ def scraper_status():
         if exit_code != 0 and not was_stopping:
             scraper_last_error = (
                 f"Job Finder stopped with exit code {exit_code}. "
-                f"Details were saved to {SCRAPER_LOG_FILE.name}."
+                f"Details were saved to {webfiles.SCRAPER_LOG_FILE.name}."
             )
 
         scraper_process = None
@@ -1238,20 +1227,20 @@ def find_latest_update_zip():
 @app.route("/check-update")
 def check_update():
     try:
-        current_version = tuple(int(part) for part in APP_VERSION.split("."))
+        current_version = tuple(int(part) for part in app.config["APP_VERSION"].split("."))
         latest_version, latest_path = find_latest_update_zip()
 
         if latest_version is None:
             return jsonify({
                 "status": "none_found",
-                "current_version": APP_VERSION,
+                "current_version": app.config["APP_VERSION"],
                 "message": "No Job Finder update ZIPs were found in Downloads or the Python folder.",
             })
 
         latest_text = ".".join(str(part) for part in latest_version)
         return jsonify({
             "status": "update_available" if latest_version > current_version else "current",
-            "current_version": APP_VERSION,
+            "current_version": app.config["APP_VERSION"],
             "latest_version": latest_text,
             "file_name": latest_path.name,
             "folder": str(latest_path.parent),
@@ -1273,7 +1262,7 @@ def install_update():
     latest_version, latest_path = find_latest_update_zip()
     if latest_path is None:
         return api_error("E1402", "No update ZIP was found.", 404)
-    current_version = tuple(int(part) for part in APP_VERSION.split("."))
+    current_version = tuple(int(part) for part in app.config["APP_VERSION"].split("."))
     if latest_version <= current_version:
         return api_error("E1406", "No newer update is available to install.", 409)
     if requested and latest_path.name != requested:
@@ -1301,11 +1290,7 @@ def install_update():
 
 @app.route("/app-version")
 def app_version():
-    return jsonify({"version": APP_VERSION})
-
-
-EXTENSION_ID = "web-job-scraper@jamie.local"
-EXTENSION_FILE = re.compile(r"^web-job-scraper-v(\d+)\.(\d+)\.(\d+)\.xpi$")
+    return jsonify({"version": app.config["APP_VERSION"]})
 
 
 def extension_dist_dir():
@@ -1327,9 +1312,6 @@ def latest_extension_build():
     return ".".join(map(str, version)), path
 
 
-LOCAL_TIMEZONE = ZoneInfo("America/New_York")
-
-
 @app.template_filter("local_time")
 def local_time(value, fmt="%b %d, %Y %I:%M %p"):
     """Found, last-checked and updated times are saved in UTC; show them on this computer's clock."""
@@ -1340,6 +1322,7 @@ def local_time(value, fmt="%b %d, %Y %I:%M %p"):
     return value.astimezone(LOCAL_TIMEZONE).strftime(fmt)
 
 
+@app.template_filter("how_long")
 def how_long(value, now=None):
     """"3 days", "5 hours", "20 minutes": how long ago a saved (UTC) time was."""
     if not value:
@@ -1352,9 +1335,6 @@ def how_long(value, now=None):
             count = seconds // size
             return f"{count} {unit}{'' if count == 1 else 's'}"
     return "less than a minute"
-
-
-app.add_template_filter(how_long, "how_long")
 
 
 @app.route("/extension/updates.json")
@@ -1455,7 +1435,6 @@ def home():
     )
 
 
-
 @app.route("/dashboard")
 def user_dashboard():
     ensure_keep_column()
@@ -1509,7 +1488,7 @@ TUNING_SWITCHES = {
 
 def read_tuning_settings():
     try:
-        return json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))
+        return json.loads(webfiles.SETTINGS_FILE.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
 
@@ -1550,10 +1529,10 @@ def save_tuning_settings():
     updated, error = apply_tuning_form(request.form, read_tuning_settings())
     if error:
         return redirect("/tuning?error=" + quote(error) + "#search-settings")
-    temporary = Path(str(SETTINGS_FILE) + ".tmp")
+    temporary = Path(str(webfiles.SETTINGS_FILE) + ".tmp")
     try:
         temporary.write_text(json.dumps(updated, indent="\t") + "\n", encoding="utf-8")
-        os.replace(temporary, SETTINGS_FILE)
+        os.replace(temporary, webfiles.SETTINGS_FILE)
     except OSError as error:
         log_error_code("E4101", f"Could not save settings.json: {error}")
         return redirect("/tuning?error=" + quote("Could not save the settings file.") + "#search-settings")
@@ -1563,9 +1542,6 @@ def save_tuning_settings():
 @app.route("/credibility-scores")
 def credibility_scores():
     return render_template("credibility-scores.html")
-
-
-SKIPS_PER_PAGE = 25
 
 
 @app.route("/rejected-listings")
@@ -1866,7 +1842,6 @@ def save_kept():
             connection.close()
 
 
-
 @app.route("/unsave-kept/<int:company_id>", methods=["POST"])
 def unsave_kept(company_id):
     ensure_job_tracking_columns()
@@ -1905,7 +1880,7 @@ def _finish_graceful_stop(process):
         except (OSError, subprocess.TimeoutExpired) as error:
             log_error_code("E2106", f"Could not stop SearXNG: {error}")
     finally:
-        STOP_REQUEST_FILE.unlink(missing_ok=True)
+        webfiles.STOP_REQUEST_FILE.unlink(missing_ok=True)
 
 
 @app.route("/stop-search", methods=["POST"])
@@ -1921,7 +1896,7 @@ def stop_search():
             if not scraper_stopping:
                 scraper_stopping = True
                 try:
-                    STOP_REQUEST_FILE.touch()
+                    webfiles.STOP_REQUEST_FILE.touch()
                 except OSError as error:
                     scraper_stopping = False
                     log_error_code("E2105", f"Could not request a stop: {error}")
@@ -2071,8 +2046,8 @@ def launch_search_process(job_title, state, cities=None, mode="search"):
             global scraper_last_error
             scraper_last_error = None
             # A leftover request from an earlier stop would end this search immediately.
-            STOP_REQUEST_FILE.unlink(missing_ok=True)
-            with SCRAPER_LOG_FILE.open("a", encoding="utf-8") as log_file:
+            webfiles.STOP_REQUEST_FILE.unlink(missing_ok=True)
+            with webfiles.SCRAPER_LOG_FILE.open("a", encoding="utf-8") as log_file:
                 log_file.write(
                     f"\n=== {datetime.now().isoformat(timespec='seconds')} | {mode} | "
                     f"{job_title} | {state} ===\n"
@@ -2105,8 +2080,6 @@ def launch_search_process(job_title, state, cities=None, mode="search"):
             return jsonify({"status": "error", "message": str(error)}), 500
 
     return jsonify({"status": "started"}), 202
-
-
 
 
 @app.route("/job-title-matches")
@@ -2179,7 +2152,7 @@ def refresh_search():
         try:
             flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
             scraper_last_error = None
-            with SCRAPER_LOG_FILE.open("a", encoding="utf-8") as log_file:
+            with webfiles.SCRAPER_LOG_FILE.open("a", encoding="utf-8") as log_file:
                 log_file.write(f"\n=== {datetime.now().isoformat(timespec='seconds')} | update-existing ===\n")
                 log_file.flush()
                 scraper_process = subprocess.Popen(
@@ -2213,7 +2186,7 @@ def update_existing():
 
             global scraper_last_error
             scraper_last_error = None
-            with SCRAPER_LOG_FILE.open("a", encoding="utf-8") as log_file:
+            with webfiles.SCRAPER_LOG_FILE.open("a", encoding="utf-8") as log_file:
                 log_file.write(
                     f"\n=== {datetime.now().isoformat(timespec='seconds')} | update-existing ===\n"
                 )
@@ -2268,7 +2241,7 @@ def captures_import():
         try:
             flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
             scraper_last_error = None
-            with SCRAPER_LOG_FILE.open("a", encoding="utf-8") as log_file:
+            with webfiles.SCRAPER_LOG_FILE.open("a", encoding="utf-8") as log_file:
                 log_file.write(f"\n=== {datetime.now().isoformat(timespec='seconds')} | import | "
                                f"{len(moved)} capture file(s) ===\n")
                 log_file.flush()
@@ -2286,10 +2259,10 @@ def captures_import():
 
 
 def import_progress_from_log():
-    if not SCRAPER_LOG_FILE.exists():
+    if not webfiles.SCRAPER_LOG_FILE.exists():
         return "Preparing the import"
     try:
-        with SCRAPER_LOG_FILE.open("rb") as log_file:
+        with webfiles.SCRAPER_LOG_FILE.open("rb") as log_file:
             size = log_file.seek(0, 2)
             log_file.seek(max(0, size - 65536))
             tail = log_file.read().decode("utf-8", errors="replace")
@@ -2304,10 +2277,10 @@ def import_progress_from_log():
 
 
 def update_progress_from_log():
-    if not SCRAPER_LOG_FILE.exists():
+    if not webfiles.SCRAPER_LOG_FILE.exists():
         return "Preparing existing results"
     try:
-        with SCRAPER_LOG_FILE.open("rb") as log_file:
+        with webfiles.SCRAPER_LOG_FILE.open("rb") as log_file:
             size = log_file.seek(0, 2)
             log_file.seek(max(0, size - 65536))
             tail = log_file.read().decode("utf-8", errors="replace")
@@ -2328,10 +2301,10 @@ def update_progress_from_log():
 
 def search_progress_from_log(mode):
     fallback = "Starting replacement search" if mode == "replacement" else "Starting search"
-    if not SCRAPER_LOG_FILE.exists():
+    if not webfiles.SCRAPER_LOG_FILE.exists():
         return {"progress": fallback, "passed": 0, "checked": 0, "saved": 0, "limit": None}
     try:
-        with SCRAPER_LOG_FILE.open("rb") as log_file:
+        with webfiles.SCRAPER_LOG_FILE.open("rb") as log_file:
             size = log_file.seek(0, 2)
             log_file.seek(max(0, size - 2097152))
             tail = log_file.read().decode("utf-8", errors="replace")
@@ -2364,9 +2337,9 @@ def search_status():
     elapsed = int(time.monotonic() - scraper_started_at) if running and scraper_started_at else 0
     activity = search_progress_from_log(mode) if running and mode in ("search", "replacement") else None
     stop_reason = None
-    if not running and SCRAPER_LOG_FILE.exists():
+    if not running and webfiles.SCRAPER_LOG_FILE.exists():
         try:
-            with SCRAPER_LOG_FILE.open("rb") as log_file:
+            with webfiles.SCRAPER_LOG_FILE.open("rb") as log_file:
                 size = log_file.seek(0, 2)
                 log_file.seek(max(0, size - 8192))
                 reasons = re.findall(r"Stop reason: ([^\r\n]+)", log_file.read().decode("utf-8", errors="replace"))

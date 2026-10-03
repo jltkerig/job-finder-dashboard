@@ -1,3 +1,4 @@
+from jobfinder.web import webfiles
 import sys
 import tempfile
 import unittest
@@ -17,7 +18,7 @@ class ProgressMessages(unittest.TestCase):
                             "Checking result 1: Article\n"
                             "Skipped (Article or student employment guide): Article https://example.com/a\n",
                             encoding="utf-8")
-            with patch.object(dashboard, "SCRAPER_LOG_FILE", path):
+            with patch.object(webfiles, "SCRAPER_LOG_FILE", path):
                 status = dashboard.search_progress_from_log("search")
                 self.assertIn("Article or student employment guide", status["progress"])
                 self.assertEqual((status["checked"], status["passed"]), (1, 0))
@@ -40,7 +41,7 @@ class NewVersusAlreadySaved(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "job_finder.log"
             path.write_text(log, encoding="utf-8")
-            with patch.object(dashboard, "SCRAPER_LOG_FILE", path):
+            with patch.object(webfiles, "SCRAPER_LOG_FILE", path):
                 status = dashboard.search_progress_from_log("search")
         self.assertEqual((status["passed"], status["saved"], status["limit"]), (4, 2, 10))
 

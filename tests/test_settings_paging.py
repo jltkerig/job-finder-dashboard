@@ -1,3 +1,4 @@
+from jobfinder.web import webfiles
 import re
 import sys
 import unittest
@@ -23,7 +24,7 @@ class SettingsPaging(unittest.TestCase):
 
     def test_only_one_page_of_skipped_pages_is_sent(self):
         html = self.page()
-        self.assertEqual(len(re.findall(r'<li>\s*<div><strong><a href="https://example.com/job/', html)), dashboard.SKIPS_PER_PAGE)
+        self.assertEqual(len(re.findall(r'<li>\s*<div><strong><a href="https://example.com/job/', html)), webfiles.SKIPS_PER_PAGE)
         self.assertIn("60 skipped pages", html)
         self.assertIn("Page 1 of 3", html)
         self.assertIn("skip_page=2", html)
