@@ -1928,3 +1928,14 @@ body[data-page="search"] .results-toolbar .display-options .column-option { alig
   body[data-page="search"] #results-table.compact-rows td[data-label="Company"]::before { content:none; }
   body[data-page="search"] #results-table.compact-rows tr.details-row { margin-top:-13px; }
 }
+/* Search cards: every badge on the bottom line is the same height */
+body[data-page="search"] #results-table.compact-rows td[data-label="Job Fit"],
+body[data-page="search"] #results-table.compact-rows td[data-label="Career Credibility"],
+body[data-page="search"] #results-table.compact-rows td[data-label="USA Credibility"],
+body[data-page="search"] #results-table.compact-rows td[data-label="Listing"],
+body[data-page="search"] #results-table.compact-rows td[data-label="Found"] { box-sizing:border-box; height:28px; padding-top:0; padding-bottom:0; line-height:1; }
+body[data-page="search"] #results-table.compact-rows td[data-label="Job Fit"] .job-fit,
+body[data-page="search"] #results-table.compact-rows td .credibility-badge { display:inline-flex; align-items:center; height:20px; padding:0 8px; line-height:1; box-sizing:border-box; }
+body[data-page="search"] #results-table.compact-rows td .credibility-link { display:inline-flex; align-items:center; }
+body[data-page="search"] #results-table.compact-rows td[data-label="Found"] small,
+body[data-page="search"] #results-table.compact-rows td[data-label="Listing"] small { line-height:1; }
