@@ -1750,3 +1750,87 @@ body[data-page="dashboard"] .card-footer-actions .text-action:disabled { opacity
   body[data-page="dashboard"] .card-footer-actions { justify-content:flex-start; }
 }body[data-page="dashboard"] .card-panels { align-items:start; }
 body[data-page="dashboard"] .card-panel h4 { padding:0; border:0; }
+/* Phones: one consistent pass over every page */
+@media (max-width:640px) {
+  /* the menu wraps instead of running off the screen */
+  .nav-inner { flex-wrap:wrap; gap:6px; padding:10px 16px; }
+  .nav-link { min-width:0; padding:8px 14px; font-size:.92rem; }
+  header { padding:20px 16px; }
+  header h1 { font-size:1.6rem; }
+  main { padding-left:16px; padding-right:16px; }
+}
+@media (max-width:760px) {
+  /* Search results: each listing is a compact card, facts two to a row with a small label above each */
+  body[data-page="search"] #results-table .result-row { grid-template-columns:repeat(2,minmax(0,1fr)); padding:4px 0 8px; }
+  body[data-page="search"] #results-table .result-row td { display:block; grid-template-columns:none; padding:8px 14px; border-bottom:0; min-width:0; overflow-wrap:anywhere; }
+  body[data-page="search"] #results-table .result-row td::before { display:block; margin-bottom:3px; font-size:.68rem; }
+  body[data-page="search"] #results-table .result-row td[data-label="Job"],
+  body[data-page="search"] #results-table .result-row td[data-label="Company"],
+  body[data-page="search"] #results-table .result-row td[data-label="Domain"],
+  body[data-page="search"] #results-table .result-row td[data-label="Save"],
+  body[data-page="search"] #results-table .result-row td.row-actions { grid-column:1 / -1; }
+  body[data-page="search"] #results-table .result-row td[data-label="Job"] { padding-top:12px; }
+  body[data-page="search"] #results-table .result-row td[data-label="Save"]::before,
+  body[data-page="search"] #results-table .result-row td.row-actions::before { display:none; }
+  body[data-page="search"] #results-table .result-row td[data-label="Save"] { order:9; padding-top:12px; border-top:1px solid #eceef0; }
+  body[data-page="search"] #results-table .result-row td.row-actions { order:10; padding-top:0; }
+  body[data-page="search"] #results-table .keep-action { width:100%; max-width:none; }
+  body[data-page="search"] #results-table .job-fit { min-width:3em; width:auto; }
+  body[data-page="search"] #results-table .row-action-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
+  body[data-page="search"] #results-table .row-action-grid .bordered-button { width:100%; min-width:0; min-height:40px; padding:6px 4px; font-size:.85rem; }
+  body[data-page="search"] #results-table .btn-long { display:none; }
+  /* blocking stays in Details, as on a computer */
+  body[data-page="search"] #results-table .row-action-grid .block-action,
+  body[data-page="search"] #results-table .row-action-grid .block-company-action { display:none; }
+  #results-table .details-blocks { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+  /* Dashboard summary lines: no stray dot at the start of a wrapped line */
+  .summary-facts span + span::before, .summary-status > span + span::before { content:none; }
+  body[data-page="dashboard"] .summary-line { gap:2px 12px; }
+}@media (max-width:760px) { body[data-page="search"] #results-table .result-row td[data-label="Job"]::before, body[data-page="search"] #results-table .result-row td[data-label="Company"]::before { display:none; } body[data-page="search"] #results-table .result-row td[data-label="Company"] { padding-top:0; } }
+
+/* Search filters, compact: one tight row of small boxes; rows and columns tucked away */
+body[data-page="search"] .results-toolbar { position:relative; display:flex; flex-wrap:wrap; align-items:flex-end; gap:10px 12px; padding:12px 16px 14px; }
+body[data-page="search"] .results-toolbar .toolbar-title { flex-basis:100%; margin:0; padding-right:110px; font-size:.95rem; }
+body[data-page="search"] .results-toolbar .results-count { position:absolute; top:12px; right:16px; margin:0; font-size:.9rem; }
+body[data-page="search"] .results-toolbar > .compact-field { flex:1 1 140px; min-width:130px; margin:0; }
+body[data-page="search"] .results-toolbar > .compact-field:first-of-type { flex:2 1 220px; }
+body[data-page="search"] .results-toolbar .compact-field > label { display:block; margin:0 0 3px; font-size:.74rem; font-weight:700; color:#4b5563; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+body[data-page="search"] .results-toolbar .compact-field input[type="search"],
+body[data-page="search"] .results-toolbar .compact-field select { height:36px !important; min-height:36px !important; padding:6px 10px !important; font-size:.9rem !important; }
+body[data-page="search"] .results-toolbar .display-options { flex-basis:100%; }
+body[data-page="search"] .results-toolbar .display-options > summary { cursor:pointer; width:max-content; font-size:.84rem; font-weight:700; color:#374151; }
+body[data-page="search"] .results-toolbar .display-options[open] > summary { margin-bottom:8px; }
+body[data-page="search"] .results-toolbar .display-options .compact-field { margin:0 0 10px; }
+body[data-page="search"] .results-toolbar .display-options .column-options button,
+body[data-page="search"] .results-toolbar .display-options .column-option { font-size:.82rem; }
+@media (max-width:760px) {
+  body[data-page="search"] .results-toolbar > .compact-field, body[data-page="search"] .results-toolbar > .compact-field:first-of-type { flex:1 1 calc(50% - 6px); min-width:0; }
+  body[data-page="search"] .results-toolbar > .compact-field:first-of-type { flex-basis:100%; }
+}
+/* Settings: rejected listings in normal type with normal-sized buttons */
+body[data-page="rejected"] .saved-job-card { font-family:inherit; font-stretch:normal; }
+body[data-page="rejected"] .saved-job-card .card-actions { grid-auto-rows:auto; align-items:start; align-content:start; }
+body[data-page="rejected"] .saved-job-card .card-actions > button,
+body[data-page="rejected"] .saved-job-card .card-actions form,
+body[data-page="rejected"] .saved-job-card .card-actions form button { height:auto; min-height:40px; max-height:none; flex:none; }
+body[data-page="rejected"] .saved-job-card .job-meta { font-size:.9rem; }
+/* Tuning: wide tables scroll sideways on a phone instead of being cut off */
+@media (max-width:760px) {
+  .board-health-table, #search-health table { display:block; max-width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  body[data-page="rejected"] .saved-job-card .card-actions { grid-template-columns:1fr 1fr; }
+}body[data-page="search"] .results-toolbar > .compact-field:first-of-type { flex:1 1 140px; }
+body[data-page="search"] .results-toolbar > .compact-field:has(#result-filter) { flex:2 1 240px; }
+body[data-page="search"] .results-toolbar .display-options .column-options { gap:6px; }
+body[data-page="search"] .results-toolbar .display-options .column-option { min-height:30px !important; height:auto !important; padding:4px 12px !important; border-radius:999px; font-size:.82rem; }
+body[data-page="search"] .results-toolbar .display-options #column-show-all { min-height:30px; padding:4px 12px; font-size:.82rem; }
+body[data-page="search"] .results-toolbar .display-options .compact-rows-toggle { display:inline-flex; align-items:center; gap:8px; min-height:0; font-size:.88rem; }
+body[data-page="search"] .results-toolbar .display-options .field-label { display:block; margin:0 0 4px; font-size:.78rem; }
+@media (max-width:760px) {
+  body[data-page="search"] .results-toolbar > .compact-field:first-of-type { flex:1 1 calc(50% - 6px); }
+  body[data-page="search"] .results-toolbar > .compact-field:has(#result-filter) { flex-basis:100%; }
+}body[data-page="search"] .results-toolbar .display-options .column-chooser-inline { display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
+body[data-page="search"] .results-toolbar .display-options .column-option { align-self:center; }
+@media (min-width:761px) {
+  body[data-page="search"] .results-toolbar > .compact-field, body[data-page="search"] .results-toolbar > .compact-field:first-of-type { flex:1 1 0; min-width:0; }
+  body[data-page="search"] .results-toolbar > .compact-field:has(#result-filter) { flex:1.6 1 0; }
+}
