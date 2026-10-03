@@ -4,6 +4,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
+from owners import web_source
 import dashboard
 from jobfinder.profiles.onet_data import proper_title, related_title_suggestions, title_matches
 
@@ -31,13 +32,13 @@ class ProperTitles(unittest.TestCase):
 
 class SavedTitles(unittest.TestCase):
     def test_saving_a_profile_writes_titles_properly_capitalized(self):
-        source = (Path(__file__).resolve().parents[1] / "dashboard.py").read_text(encoding="utf-8")
+        source = web_source()
         self.assertIn('title = proper_title(part.strip()[:255])', source)
         self.assertIn('primary = proper_title(request.form.get("primary_job_title", "").strip()[:255])', source)
         self.assertIn('title = proper_title(str(data.get("title", "")).strip()[:255])', source)
 
     def test_the_profile_is_shown_with_proper_capitalization(self):
-        source = (Path(__file__).resolve().parents[1] / "dashboard.py").read_text(encoding="utf-8")
+        source = web_source()
         self.assertIn('profile["job_titles"] = list(dict.fromkeys(proper_title(title) for title in profile["job_titles"]))', source)
 
 

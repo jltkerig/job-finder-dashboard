@@ -1,3 +1,4 @@
+from jobfinder.web import schema
 import sys
 import unittest
 from datetime import datetime
@@ -89,7 +90,7 @@ class RecentSearchDisplay(unittest.TestCase):
 class RecordingASearch(unittest.TestCase):
     def record(self, earlier_id):
         connection = FakeConnection(earlier_id)
-        with patch.object(dashboard, "ensure_job_tracking_columns"), \
+        with patch.object(schema, "ensure_job_tracking_columns"), \
                 patch.object(dashboard.mysql.connector, "connect", return_value=connection):
             dashboard.record_search_history("Web Designer, Graphic Design", "Maryland", [{"city": "Bel Air, MD", "radius": 20}])
         return connection
