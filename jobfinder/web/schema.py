@@ -214,6 +214,10 @@ def tidy_expired_closed_jobs():
             connection.close()
 
 
+WORK_DETAIL_COLUMNS = (("street", 200), ("city", 100), ("state", 50), ("zip", 20), ("phone", 40), ("website", 255),
+                       ("supervisor_name", 150), ("supervisor_title", 150), ("supervisor_email", 255))
+
+
 def ensure_profile_tables():
     if "profile" in _schema_ready:
         return
@@ -264,6 +268,9 @@ def ensure_profile_tables():
             id INT AUTO_INCREMENT PRIMARY KEY, profile_id TINYINT NOT NULL,
             company VARCHAR(150) NOT NULL DEFAULT '', role VARCHAR(150) NOT NULL DEFAULT '',
             dates VARCHAR(100) NOT NULL DEFAULT '', description TEXT NULL)""")
+        # Optional details some applications ask for: where the job was, its phone and website, and the supervisor.
+        for column, size in WORK_DETAIL_COLUMNS:
+            cursor.execute(f"ALTER TABLE user_profile_work_history ADD COLUMN IF NOT EXISTS {column} VARCHAR({size}) NOT NULL DEFAULT ''")
         cursor.execute("""
             INSERT IGNORE INTO user_profile (id, first_name, last_name, state)
             VALUES (1, '', '', '')

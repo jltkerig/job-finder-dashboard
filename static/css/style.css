@@ -1834,3 +1834,11 @@ body[data-page="search"] .results-toolbar .display-options .column-option { alig
   body[data-page="search"] .results-toolbar > .compact-field, body[data-page="search"] .results-toolbar > .compact-field:first-of-type { flex:1 1 0; min-width:0; }
   body[data-page="search"] .results-toolbar > .compact-field:has(#result-filter) { flex:1.6 1 0; }
 }
+/* Work history: optional location, contact and supervisor details */
+.work-extra { grid-column:1 / -1; margin:4px 0 0; padding:12px 14px 14px; border:1px solid #e3e7ec; border-radius:8px; background:#fafbfc; min-width:0; }
+.work-extra legend { padding:0 4px; font-size:.88rem; font-weight:700; color:#1f2937; }
+.work-extra > .field-help { display:block; margin:0 0 10px; }
+.work-extra-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px 14px; }
+.work-extra-grid > label { display:grid; gap:4px; font-size:.84rem; font-weight:700; color:#374151; min-width:0; }
+.work-extra-grid > label.work-wide { grid-column:1 / -1; }
+@media (max-width:640px) { .work-extra-grid { grid-template-columns:1fr 1fr; } }
