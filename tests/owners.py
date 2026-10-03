@@ -37,3 +37,11 @@ def search_source():
     root = Path(__file__).resolve().parents[1]
     files = [root / "job_finder.py", *sorted((root / "jobfinder" / "search").glob("*.py"))]
     return "\n".join(f.read_text(encoding="utf-8") for f in files)
+
+
+def web_source():
+    """The text of dashboard.py and every module in jobfinder/web/, for tests that check how the pages are wired."""
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    files = [root / "dashboard.py", *sorted((root / "jobfinder" / "web").glob("*.py"))]
+    return "\n".join(f.read_text(encoding="utf-8") for f in files)

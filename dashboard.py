@@ -74,6 +74,15 @@ from jobfinder.web.core import (  # noqa: F401  (also used by callers that impor
     protect_local_post_requests,
     refuse_foreign_hosts,
 )
+from jobfinder.web.schema import (  # noqa: F401  (also used by callers that import these from here)
+    _safe_db_identifier,
+    _schema_ready,
+    ensure_keep_column,
+    ensure_profile_tables,
+    initialize_database,
+    tidy_expired_closed_jobs,
+)
+from jobfinder.web import schema
 
 
 APP_VERSION = "1.1.150"
@@ -87,8 +96,6 @@ scraper_last_error = None
 scraper_lock = threading.Lock()
 scraper_started_at = None
 scraper_stopping = False
-# Schema checks that already succeeded in this process; they only need to run once.
-_schema_ready = set()
 
 
 RELATED_JOB_TITLES = {
@@ -151,209 +158,9 @@ def profile_skill_suggestions(profile):
             if skill.casefold() not in saved]
 
 
-def _safe_db_identifier(value):
-    if not re.fullmatch(r"[A-Za-z0-9_]+", value or ""):
-        raise ValueError("DB_NAME may contain only letters, numbers, and underscores.")
-    return value
-
-
-def initialize_database():
-    """Create only missing database objects. Never drops or overwrites existing data."""
-    database_name = _safe_db_identifier(db.settings()["database"])
-    connection = None
-    cursor = None
-    try:
-        connection = db.connect(database=False)
-        cursor = connection.cursor()
-        cursor.execute(f"CREATE DATABASE IF NOT EXISTS `{database_name}`")
-        cursor.execute(f"USE `{database_name}`")
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS companies (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                name VARCHAR(255) NULL,
-                career_job_title VARCHAR(255) NULL,
-                career_credibility INT NULL,
-                domain VARCHAR(255) NULL,
-                career_url TEXT NULL,
-                source_url TEXT NULL,
-                source_type VARCHAR(50) NOT NULL DEFAULT 'SearXNG',
-                country VARCHAR(100) NULL,
-                state VARCHAR(100) NULL,
-                city VARCHAR(150) NULL,
-                latitude DECIMAL(10,7) NULL,
-                longitude DECIMAL(10,7) NULL,
-                distance_miles DECIMAL(8,2) NULL,
-                work_arrangement VARCHAR(20) NULL,
-                listing_skills TEXT NULL,
-                listing_details TEXT NULL,
-                usa_credibility INT NULL,
-                date_found TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                last_checked TIMESTAMP NULL DEFAULT NULL,
-                result_updated_at TIMESTAMP NULL DEFAULT NULL,
-                is_kept TINYINT(1) NOT NULL DEFAULT 0,
-                job_open_status VARCHAR(20) NOT NULL DEFAULT 'Open',
-                application_status VARCHAR(30) NOT NULL DEFAULT 'None',
-                notes TEXT NULL,
-                is_rejected TINYINT(1) NOT NULL DEFAULT 0,
-                rejection_reason VARCHAR(40) NULL,
-                rejected_at TIMESTAMP NULL DEFAULT NULL,
-                pre_reject_kept TINYINT(1) NULL,
-                pre_reject_status VARCHAR(30) NULL
-            )
-        """)
-        connection.commit()
-    finally:
-        if cursor is not None:
-            cursor.close()
-        if connection is not None and connection.is_connected():
-            connection.close()
-
-
-def ensure_keep_column():
-    if "keep" in _schema_ready:
-        return
-    connection = None
-    cursor = None
-
-    try:
-        connection = db.connect()
-        cursor = connection.cursor()
-        cursor.execute("""
-            ALTER TABLE companies
-            ADD COLUMN IF NOT EXISTS is_kept TINYINT(1) NOT NULL DEFAULT 0
-        """)
-        connection.commit()
-        _schema_ready.add("keep")
-    except Error as error:
-        print()
-        print("Could not ensure the keep column exists.")
-        print(error)
-    finally:
-        if cursor is not None:
-            cursor.close()
-        if connection is not None and connection.is_connected():
-            connection.close()
-
-
-def ensure_job_tracking_columns():
-    if "tracking" in _schema_ready:
-        return
-    connection = None
-    cursor = None
-
-    try:
-        connection = db.connect()
-        cursor = connection.cursor()
-        for legacy, current in (("career_confidence", "career_credibility"),
-                                ("usa_confidence", "usa_credibility")):
-            cursor.execute("SHOW COLUMNS FROM companies LIKE %s", (legacy,))
-            old_exists = cursor.fetchone() is not None
-            cursor.execute("SHOW COLUMNS FROM companies LIKE %s", (current,))
-            new_exists = cursor.fetchone() is not None
-            if old_exists and not new_exists:
-                cursor.execute(f"ALTER TABLE companies CHANGE COLUMN {legacy} {current} INT NULL")
-            elif old_exists and new_exists:
-                cursor.execute(f"UPDATE companies SET {current} = COALESCE({current}, {legacy})")
-                cursor.execute(f"ALTER TABLE companies DROP COLUMN {legacy}")
-        cursor.execute("""
-            ALTER TABLE companies
-            ADD COLUMN IF NOT EXISTS job_open_status VARCHAR(20) NOT NULL DEFAULT 'Open'
-        """)
-        cursor.execute("""
-            ALTER TABLE companies
-            ADD COLUMN IF NOT EXISTS application_status VARCHAR(30) NOT NULL DEFAULT 'None'
-        """)
-        # Keep unsaved legacy rows from appearing as if the user explicitly saved them.
-        cursor.execute("""
-            UPDATE companies
-            SET application_status = 'None'
-            WHERE is_kept = 0 AND is_rejected = 0 AND application_status = 'Saved'
-        """)
-        cursor.execute("""
-            ALTER TABLE companies
-            MODIFY COLUMN application_status VARCHAR(30) NOT NULL DEFAULT 'None'
-        """)
-        cursor.execute("""
-            ALTER TABLE companies
-            ADD COLUMN IF NOT EXISTS notes TEXT NULL
-        """)
-        cursor.execute("ALTER TABLE companies ADD COLUMN IF NOT EXISTS listing_skills TEXT NULL")
-        cursor.execute("ALTER TABLE companies ADD COLUMN IF NOT EXISTS listing_details TEXT NULL")
-        cursor.execute("""
-            ALTER TABLE companies
-            ADD COLUMN IF NOT EXISTS source_type VARCHAR(50) NOT NULL DEFAULT 'SearXNG'
-        """)
-        cursor.execute("""
-            ALTER TABLE companies
-            ADD COLUMN IF NOT EXISTS is_rejected TINYINT(1) NOT NULL DEFAULT 0
-        """)
-        cursor.execute("ALTER TABLE companies ADD COLUMN IF NOT EXISTS rejection_reason VARCHAR(40) NULL")
-        cursor.execute("""
-            ALTER TABLE companies
-            ADD COLUMN IF NOT EXISTS rejected_at TIMESTAMP NULL DEFAULT NULL
-        """)
-        # What the listing looked like before rejection, so Restore can put it back.
-        cursor.execute("ALTER TABLE companies ADD COLUMN IF NOT EXISTS pre_reject_kept TINYINT(1) NULL")
-        # Who rejected it: 'user' (the Reject button) or 'system' (Job Finder's own filters). Older rows are left empty, so they count as the user's.
-        cursor.execute("ALTER TABLE companies ADD COLUMN IF NOT EXISTS rejected_by VARCHAR(10) NULL")
-        cursor.execute("ALTER TABLE companies ADD COLUMN IF NOT EXISTS pre_reject_status VARCHAR(30) NULL")
-        cursor.execute("""ALTER TABLE companies ADD COLUMN IF NOT EXISTS city VARCHAR(150) NULL""")
-        cursor.execute("""ALTER TABLE companies ADD COLUMN IF NOT EXISTS latitude DECIMAL(10,7) NULL""")
-        cursor.execute("""ALTER TABLE companies ADD COLUMN IF NOT EXISTS longitude DECIMAL(10,7) NULL""")
-        cursor.execute("""ALTER TABLE companies ADD COLUMN IF NOT EXISTS distance_miles DECIMAL(8,2) NULL""")
-        cursor.execute("""ALTER TABLE companies ADD COLUMN IF NOT EXISTS result_updated_at TIMESTAMP NULL DEFAULT NULL""")
-        cursor.execute("""ALTER TABLE companies ADD COLUMN IF NOT EXISTS work_arrangement VARCHAR(20) NULL""")
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS search_history (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                job_title TEXT NOT NULL,
-                state VARCHAR(100) NOT NULL,
-                cities_json TEXT NULL,
-                searched_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        cursor.execute("""
-            ALTER TABLE search_history
-            MODIFY COLUMN job_title TEXT NOT NULL
-        """)
-        cursor.execute("""ALTER TABLE search_history ADD COLUMN IF NOT EXISTS cities_json TEXT NULL""")
-        # One row per posting rather than per website, so an employer can have many openings.
-        index_status = ensure_unique_source_index(cursor)
-        if index_status:
-            print(f"Database index update: {index_status}")
-        connection.commit()
-        _schema_ready.add("tracking")
-    except Error as error:
-        print()
-        print("Could not ensure job tracking fields exist.")
-        print(error)
-    finally:
-        if cursor is not None:
-            cursor.close()
-        if connection is not None and connection.is_connected():
-            connection.close()
-
-
-def tidy_expired_closed_jobs():
-    """At startup: delete jobs closed for more than a week, keeping saved ones (see job_retention.py)."""
-    connection = None
-    try:
-        connection = db.connect()
-        deleted = tidy_closed_jobs(connection)
-        if deleted:
-            print(f"Deleted {deleted} job(s) closed for more than {CLOSED_KEEP_DAYS} days (saved jobs are kept).")
-    except Error as error:
-        print()
-        print("Could not tidy closed jobs.")
-        print(error)
-    finally:
-        if connection is not None and connection.is_connected():
-            connection.close()
-
-
 def record_search_history(job_title, state, cities=None):
     job_title = ", ".join(proper_title(part) for part in str(job_title or "").split(",") if part.strip())
-    ensure_job_tracking_columns()
+    schema.ensure_job_tracking_columns()
     connection = None
     cursor = None
     try:
@@ -409,7 +216,7 @@ def collapse_search_history(rows, limit=10):
 
 
 def get_search_history(limit=10):
-    ensure_job_tracking_columns()
+    schema.ensure_job_tracking_columns()
     connection = None
     cursor = None
     try:
@@ -470,7 +277,7 @@ def listing_skill_demand(saved_skills, limit=12):
 
 
 def get_dashboard_counts():
-    ensure_job_tracking_columns()
+    schema.ensure_job_tracking_columns()
     connection = None
     cursor = None
     counts = {"saved": 0, "applied": 0, "recruiter": 0, "interview": 0, "closed": 0}
@@ -495,73 +302,6 @@ def get_dashboard_counts():
         print("Could not read dashboard counts.")
         print(error)
         return counts
-    finally:
-        if cursor is not None:
-            cursor.close()
-        if connection is not None and connection.is_connected():
-            connection.close()
-
-
-def ensure_profile_tables():
-    if "profile" in _schema_ready:
-        return
-    connection = None
-    cursor = None
-
-    try:
-        connection = db.connect()
-        cursor = connection.cursor()
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS user_profile (
-                id TINYINT PRIMARY KEY,
-                first_name VARCHAR(100) NOT NULL DEFAULT '',
-                last_name VARCHAR(100) NOT NULL DEFAULT '',
-                state VARCHAR(100) NOT NULL DEFAULT '',
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-            )
-        """)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS user_profile_job_titles (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                profile_id TINYINT NOT NULL,
-                job_title VARCHAR(255) NOT NULL,
-                UNIQUE KEY unique_profile_job_title (profile_id, job_title)
-            )
-        """)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS user_profile_cities (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                profile_id TINYINT NOT NULL,
-                city VARCHAR(150) NOT NULL,
-                radius_miles INT NOT NULL DEFAULT 50,
-                UNIQUE KEY unique_profile_city (profile_id, city)
-            )
-        """)
-        for column, definition in (
-            ("home_location", "VARCHAR(150) NOT NULL DEFAULT ''"),
-            ("home_zip", "VARCHAR(10) NOT NULL DEFAULT ''"),
-            ("primary_job_title", "VARCHAR(255) NOT NULL DEFAULT ''"),
-            ("avatar_data", "MEDIUMTEXT NULL"),
-            ("work_preferences", "TEXT NULL"),
-        ):
-            cursor.execute(f"ALTER TABLE user_profile ADD COLUMN IF NOT EXISTS {column} {definition}")
-        cursor.execute("""CREATE TABLE IF NOT EXISTS user_profile_skills (
-            id INT AUTO_INCREMENT PRIMARY KEY, profile_id TINYINT NOT NULL,
-            skill VARCHAR(80) NOT NULL, UNIQUE KEY unique_profile_skill (profile_id, skill))""")
-        cursor.execute("""CREATE TABLE IF NOT EXISTS user_profile_work_history (
-            id INT AUTO_INCREMENT PRIMARY KEY, profile_id TINYINT NOT NULL,
-            company VARCHAR(150) NOT NULL DEFAULT '', role VARCHAR(150) NOT NULL DEFAULT '',
-            dates VARCHAR(100) NOT NULL DEFAULT '', description TEXT NULL)""")
-        cursor.execute("""
-            INSERT IGNORE INTO user_profile (id, first_name, last_name, state)
-            VALUES (1, '', '', '')
-        """)
-        connection.commit()
-        _schema_ready.add("profile")
-    except Error as error:
-        print()
-        print("Could not ensure profile tables exist.")
-        print(error)
     finally:
         if cursor is not None:
             cursor.close()
@@ -802,7 +542,7 @@ def manage_blocked_company():
 
 @app.route("/block-company/<int:company_id>", methods=["POST"])
 def block_company(company_id):
-    ensure_job_tracking_columns()
+    schema.ensure_job_tracking_columns()
     connection = None
     cursor = None
     try:
@@ -861,7 +601,7 @@ def remove_domain_from_blocklist(domain):
 
 
 def get_rejected_companies():
-    ensure_job_tracking_columns()
+    schema.ensure_job_tracking_columns()
     connection = None
     cursor = None
     try:
@@ -888,7 +628,7 @@ def get_rejected_companies():
 
 
 def get_kept_companies(status_filter="", state_filter="", title_filter="", sort_by="date_desc"):
-    ensure_job_tracking_columns()
+    schema.ensure_job_tracking_columns()
     connection = None
     cursor = None
 
@@ -1258,7 +998,7 @@ def home():
     print("=" * 60)
 
     ensure_keep_column()
-    ensure_job_tracking_columns()
+    schema.ensure_job_tracking_columns()
     companies = get_companies()
 
     running, mode = scraper_status()
@@ -1295,7 +1035,7 @@ def home():
 @app.route("/dashboard")
 def user_dashboard():
     ensure_keep_column()
-    ensure_job_tracking_columns()
+    schema.ensure_job_tracking_columns()
     status_filter = request.args.get("status", "").strip()[:30]
     state_filter = request.args.get("state", "").strip()[:100]
     title_filter = request.args.get("title", "").strip()[:255]
@@ -1403,7 +1143,7 @@ def credibility_scores():
 
 @app.route("/rejected-listings")
 def rejected_listings():
-    ensure_job_tracking_columns()
+    schema.ensure_job_tracking_columns()
     decisions = latest_decisions(SEARCH_SKIPS_FILE)
     search_skips = []
     for event in reversed(list(decisions.values())):
@@ -1446,7 +1186,7 @@ def rejected_listings():
 
 @app.route("/reject-listing/<int:company_id>", methods=["POST"])
 def reject_listing(company_id):
-    ensure_job_tracking_columns()
+    schema.ensure_job_tracking_columns()
     wants_json = request.headers.get("X-Requested-With") == "fetch" or request.accept_mimetypes.best == "application/json"
     connection = None
     cursor = None
@@ -1495,7 +1235,7 @@ def reject_listing(company_id):
 
 @app.route("/restore-rejected/<int:company_id>", methods=["POST"])
 def restore_rejected(company_id):
-    ensure_job_tracking_columns()
+    schema.ensure_job_tracking_columns()
     wants_json = request.headers.get("X-Requested-With") == "fetch" or request.accept_mimetypes.best == "application/json"
     connection = None
     cursor = None
@@ -1543,7 +1283,7 @@ def restore_rejected(company_id):
 
 @app.route("/block-domain/<int:company_id>", methods=["POST"])
 def block_domain(company_id):
-    ensure_job_tracking_columns()
+    schema.ensure_job_tracking_columns()
     connection = None
     cursor = None
     try:
@@ -1701,7 +1441,7 @@ def save_kept():
 
 @app.route("/unsave-kept/<int:company_id>", methods=["POST"])
 def unsave_kept(company_id):
-    ensure_job_tracking_columns()
+    schema.ensure_job_tracking_columns()
     connection = None
     cursor = None
     try:
@@ -1777,7 +1517,7 @@ def stop_search():
 
 @app.route("/update-kept/<int:company_id>", methods=["POST"])
 def update_kept(company_id):
-    ensure_job_tracking_columns()
+    schema.ensure_job_tracking_columns()
     application_status = request.form.get("application_status", "None").strip()
     notes = request.form.get("notes", "").strip()[:5000]
     if application_status not in APPLICATION_STATUSES:
@@ -2222,7 +1962,7 @@ def search_status():
 if __name__ == "__main__":
     initialize_database()
     ensure_keep_column()
-    ensure_job_tracking_columns()
+    schema.ensure_job_tracking_columns()
     ensure_profile_tables()
     tidy_expired_closed_jobs()
     app.run(host="127.0.0.1", port=5000, debug=False, use_reloader=False)

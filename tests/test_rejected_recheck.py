@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
-from owners import search_source
+from owners import search_source, web_source
 from jobfinder.search import refresh
 from jobfinder.search import web_captures
 from jobfinder.search import relevance
@@ -143,7 +143,7 @@ class WhoRejected(unittest.TestCase):
         self.assertEqual(params, ("wrong_role", 9))
 
     def test_the_reject_button_marks_user_and_restore_clears_it(self):
-        source = (ROOT / "dashboard.py").read_text(encoding="utf-8")
+        source = web_source()
         self.assertIn("rejection_reason = %s, rejected_by = 'user'", source)
         self.assertIn("rejected_at = NULL, rejection_reason = NULL, rejected_by = NULL", source)
         self.assertIn("ADD COLUMN IF NOT EXISTS rejected_by VARCHAR(10) NULL", source)
@@ -172,7 +172,7 @@ class ClosedJobs(unittest.TestCase):
         self.assertIn("Applied", job_retention.SAVED_STATUSES)
 
     def test_closed_unsaved_jobs_are_hidden_from_the_results(self):
-        source = (ROOT / "dashboard.py").read_text(encoding="utf-8")
+        source = web_source()
         self.assertIn('row.get("job_open_status") == "Closed" and not row.get("is_kept")', source)
         self.assertIn('row.get("application_status") not in SAVED_STATUSES', source)
 

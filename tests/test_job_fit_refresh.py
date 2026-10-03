@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
-from owners import search_source
+from owners import search_source, web_source
 import dashboard
 from jobfinder.search import refresh
 from jobfinder.profiles.profile_tools import fit_score, refresh_listing_skills
@@ -103,7 +103,7 @@ class WhenTheSkillsChange(unittest.TestCase):
         self.assertEqual(dashboard.refresh_job_fit(), 0)  # the tests have no database
 
     def test_saving_changed_skills_goes_back_to_the_dashboard_with_the_result(self):
-        source = (ROOT / "dashboard.py").read_text(encoding="utf-8")
+        source = web_source()
         self.assertIn('redirect(f"/dashboard?fit_updated={refresh_job_fit()}")', source)
         self.assertIn('previous_skills = {str(skill).casefold() for skill in get_user_profile().get("skills", [])}', source)
         html = (ROOT / "templates" / "user-dashboard.html").read_text(encoding="utf-8")
