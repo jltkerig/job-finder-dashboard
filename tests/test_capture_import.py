@@ -1,3 +1,4 @@
+from jobfinder.web import listing_queries
 from jobfinder.web import blocklists
 from jobfinder.search import web_captures
 import json
@@ -355,7 +356,7 @@ class DashboardVisibility(unittest.TestCase):
         with patch.object(dashboard.mysql.connector, "connect", return_value=Connection()), \
                 patch.object(blocklists, "get_blocked_domains", return_value=["linkedin.com"]), \
                 patch.object(blocklists, "get_blocked_companies", return_value=[]):
-            shown = dashboard.get_companies()
+            shown = listing_queries.get_companies()
         self.assertEqual([row["id"] for row in shown], [1])
 
 

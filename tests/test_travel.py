@@ -1,3 +1,4 @@
+from jobfinder.web import listing_queries
 from jobfinder.web import profile_store
 import sys
 import unittest
@@ -41,10 +42,10 @@ class DistanceEstimate(unittest.TestCase):
     def test_saved_job_cards_get_the_estimate(self):
         jobs = [{"city": "Bel Air", "state": "MD", "latitude": None, "longitude": None},
                 {"city": "Nowhereville", "state": "ZZ"}]
-        dashboard.add_drive_times(jobs, "21009", "MD")
+        listing_queries.add_drive_times(jobs, "21009", "MD")
         self.assertTrue(jobs[0]["drive"]["text"].startswith(f"{jobs[0]['drive']['miles']} mi"))
         self.assertIsNone(jobs[1]["drive"])
-        dashboard.add_drive_times(jobs, "", "MD")
+        listing_queries.add_drive_times(jobs, "", "MD")
         self.assertIsNone(jobs[0]["drive"])
 
     def test_the_extension_address_estimates_each_place(self):

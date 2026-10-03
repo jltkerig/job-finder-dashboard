@@ -1,3 +1,4 @@
+from jobfinder.web import listing_queries
 import sys
 import unittest
 from pathlib import Path
@@ -15,7 +16,7 @@ class NoRealDatabase(unittest.TestCase):
             mysql.connector.connect(host="127.0.0.1", user="root", database="job_finder")
 
     def test_app_code_falls_back_instead_of_reading_real_data(self):
-        self.assertEqual(dashboard.get_dashboard_counts()["saved"], 0)
+        self.assertEqual(listing_queries.get_dashboard_counts()["saved"], 0)
 
 
 if __name__ == "__main__":

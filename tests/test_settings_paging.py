@@ -1,3 +1,4 @@
+from jobfinder.web import listing_queries
 from jobfinder.web import blocklists
 from jobfinder.web import webfiles
 import re
@@ -18,7 +19,7 @@ EVENTS = {f"https://example.com/job/{n}": {"url": f"https://example.com/job/{n}"
 class SettingsPaging(unittest.TestCase):
     def page(self, query=""):
         with patch.object(dashboard, "latest_decisions", return_value=EVENTS), \
-                patch.object(dashboard, "get_rejected_companies", return_value=[]), \
+                patch.object(listing_queries, "get_rejected_companies", return_value=[]), \
                 patch.object(blocklists, "get_blocked_domains", return_value=[]), \
                 patch.object(blocklists, "get_blocked_companies", return_value=[]):
             return dashboard.app.test_client().get("/rejected-listings" + query, headers={"Host": "127.0.0.1:5000"}).get_data(as_text=True)
