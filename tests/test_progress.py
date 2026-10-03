@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
+from jobfinder.web import search_control
 from jobfinder.web import webfiles
 import dashboard
 
@@ -19,13 +20,13 @@ class ProgressMessages(unittest.TestCase):
                             "Skipped (Article or student employment guide): Article https://example.com/a\n",
                             encoding="utf-8")
             with patch.object(webfiles, "SCRAPER_LOG_FILE", path):
-                status = dashboard.search_progress_from_log("search")
+                status = search_control.search_progress_from_log("search")
                 self.assertIn("Article or student employment guide", status["progress"])
                 self.assertEqual((status["checked"], status["passed"]), (1, 0))
                 with path.open("a", encoding="utf-8") as stream:
                     stream.write("Checking result 2: Web Designer\n"
                                  "Passed validation: 1 · Web Designer — JobPosting data, direct listing link\n")
-                status = dashboard.search_progress_from_log("search")
+                status = search_control.search_progress_from_log("search")
                 self.assertIn("JobPosting data", status["progress"])
                 self.assertEqual((status["checked"], status["passed"]), (2, 1))
 
@@ -42,7 +43,7 @@ class NewVersusAlreadySaved(unittest.TestCase):
             path = Path(directory) / "job_finder.log"
             path.write_text(log, encoding="utf-8")
             with patch.object(webfiles, "SCRAPER_LOG_FILE", path):
-                status = dashboard.search_progress_from_log("search")
+                status = search_control.search_progress_from_log("search")
         self.assertEqual((status["passed"], status["saved"], status["limit"]), (4, 2, 10))
 
 
