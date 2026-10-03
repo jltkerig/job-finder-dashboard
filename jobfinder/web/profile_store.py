@@ -296,3 +296,12 @@ def related_skills_for(term, limit=8):
     except Error as error:
         print(f"Could not read related skills from the listings: {error}")
     return related_skills(term, lists, limit)
+
+def profile_version(profile):
+    """A short fingerprint of the saved profile. A form carries the one it was loaded with; if the profile has changed
+    since (for example in the other app), saving that form would overwrite the change, so it is refused instead."""
+    import hashlib
+    shared = {key: profile.get(key) for key in ("first_name", "last_name", "home_location", "home_zip", "linkedin_url",
+                                                 "portfolio_url", "primary_job_title", "job_titles", "skills", "work_history",
+                                                 "education")}
+    return hashlib.sha1(json.dumps(shared, sort_keys=True, default=str).encode("utf-8")).hexdigest()[:16]

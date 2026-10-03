@@ -107,7 +107,8 @@ class WhenTheSkillsChange(unittest.TestCase):
     def test_saving_changed_skills_goes_back_to_the_dashboard_with_the_result(self):
         source = web_source()
         self.assertIn('redirect(f"/dashboard?fit_updated={refresh_job_fit()}")', source)
-        self.assertIn('previous_skills = {str(skill).casefold() for skill in profile_store.get_user_profile().get("skills", [])}', source)
+        self.assertIn('saved_profile = profile_store.get_user_profile()', source)
+        self.assertIn('previous_skills = {str(skill).casefold() for skill in saved_profile.get("skills", [])}', source)
         html = (ROOT / "templates" / "user-dashboard.html").read_text(encoding="utf-8")
         self.assertIn("{% if fit_updated is not none %}", html)
         self.assertIn("Job Fit is up to date", html)

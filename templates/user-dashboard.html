@@ -26,7 +26,8 @@
             </p>
           </div>
         </div>
-        <form action="/save-profile" method="post" class="profile-form" id="profile-form"><input type="hidden" name="csrf_token" value="{{ csrf_token }}" /><input type="hidden" name="cities_json" id="profile-cities-json" value='{{ profile.cities|tojson }}' /><input type="hidden" name="skills_json" id="skills-json" value='{{ profile.skills|tojson }}' /><input type="hidden" name="work_history_json" id="work-history-json" value='{{ profile.work_history|tojson }}' /><input type="hidden" name="education_json" id="education-json" value='{{ (profile.education or [])|tojson }}' /><input type="hidden" name="avatar_data" id="avatar-data" value="{{ profile.avatar_data or '' }}" />
+        {% if profile_changed %}<p class="profile-changed-note" role="alert">Your profile was changed in Résumé Builder after this page loaded, so nothing was saved here. It now shows the latest version: make your change again, then Save Profile.</p>{% endif %}
+        <form action="/save-profile" method="post" class="profile-form" id="profile-form"><input type="hidden" name="csrf_token" value="{{ csrf_token }}" /><input type="hidden" name="profile_version" value="{{ profile_version }}" /><input type="hidden" name="cities_json" id="profile-cities-json" value='{{ profile.cities|tojson }}' /><input type="hidden" name="skills_json" id="skills-json" value='{{ profile.skills|tojson }}' /><input type="hidden" name="work_history_json" id="work-history-json" value='{{ profile.work_history|tojson }}' /><input type="hidden" name="education_json" id="education-json" value='{{ (profile.education or [])|tojson }}' /><input type="hidden" name="avatar_data" id="avatar-data" value="{{ profile.avatar_data or '' }}" />
           <div class="profile-name-grid">
             <div class="form-field"><label for="first-name">First Name</label><input id="first-name" name="first_name" type="text" value="{{ profile.first_name }}" />
             </div>

@@ -18,6 +18,24 @@ class ProfileLinks(unittest.TestCase):
         self.assertEqual(clean_link("not a link"), "")
         self.assertEqual(clean_link(""), "")
 
+    def test_a_profile_changed_in_resume_builder_is_not_overwritten(self):
+        from unittest.mock import patch
+        import dashboard
+        from jobfinder.web import profile_store
+        saved = {"first_name": "Jane", "last_name": "Doe", "skills": ["HTML", "Figma"], "work_history": [], "education": []}
+        stale = profile_store.profile_version(dict(saved, skills=["HTML"]))
+        client = dashboard.app.test_client()
+        with client.session_transaction() as session:
+            session["csrf_token"] = "t"
+        with patch.object(profile_store, "get_user_profile", return_value=saved), \
+                patch.object(profile_store, "save_user_profile") as save:
+            response = client.post("/save-profile", data={"csrf_token": "t", "profile_version": stale, "first_name": "Jane",
+                                                          "last_name": "Doe", "state": "MD", "job_title": "Web Designer"})
+        save.assert_not_called()
+        self.assertIn("profile_changed=1", response.headers["Location"])
+        page = (ROOT / "templates" / "user-dashboard.html").read_text(encoding="utf-8")
+        self.assertIn('name="profile_version" value="{{ profile_version }}"', page)
+
     def test_the_dashboard_has_both_boxes(self):
         page = (ROOT / "templates" / "user-dashboard.html").read_text(encoding="utf-8")
         self.assertIn('name="linkedin_url" type="text" inputmode="url"', page)
