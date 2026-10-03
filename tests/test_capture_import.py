@@ -1,6 +1,3 @@
-from jobfinder.web import listing_queries
-from jobfinder.web import blocklists
-from jobfinder.search import web_captures
 import json
 import os
 import sys
@@ -12,6 +9,9 @@ from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
+from jobfinder.web import listing_queries
+from jobfinder.web import blocklists
+from jobfinder.search import web_captures
 from jobfinder.records import capture_import as capture
 from jobfinder.search import judging
 from owners import holders

@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
+from jobfinder.web import tuning
 import time
 from jobfinder.records import board_health
 import dashboard
@@ -24,7 +25,7 @@ GOOD_FORM = {'searxng_timeout_minutes': '45', 'max_search_results': '10', 'max_s
 class Settings(unittest.TestCase):
     def test_valid_form_changes_only_known_options(self):
         current = {'remote_feeds': {'Remotive': False}, 'usa_only': True, 'start_mysql_automatically': True}
-        updated, error = dashboard.apply_tuning_form(GOOD_FORM, current)
+        updated, error = tuning.apply_tuning_form(GOOD_FORM, current)
         self.assertIsNone(error)
         self.assertEqual((updated['searxng_timeout_minutes'], updated['search_query_delay_seconds']), (45, 2.5))
         self.assertEqual(updated['remote_feeds'], {'Remotive': False})
@@ -33,7 +34,7 @@ class Settings(unittest.TestCase):
 
     def test_out_of_range_and_non_numeric_values_are_refused(self):
         for key, value in (('searxng_timeout_minutes', '0'), ('parallel_page_fetches', '99'), ('max_search_results', 'lots')):
-            updated, error = dashboard.apply_tuning_form(dict(GOOD_FORM, **{key: value}), {})
+            updated, error = tuning.apply_tuning_form(dict(GOOD_FORM, **{key: value}), {})
             self.assertIsNone(updated)
             self.assertTrue(error)
 
@@ -42,7 +43,7 @@ class Settings(unittest.TestCase):
             settings_file = Path(folder) / 'settings.json'
             settings_file.write_text(json.dumps({'searxng_timeout_minutes': 33, 'max_search_results': 10}), encoding='utf-8')
             with patch.object(webfiles, 'SETTINGS_FILE', settings_file), \
-                    patch.object(dashboard, 'read_health', lambda: None):
+                    patch.object(tuning, 'read_health', lambda: None):
                 client = dashboard.app.test_client()
                 page = client.get('/tuning')
                 self.assertEqual(page.status_code, 200)
@@ -81,7 +82,7 @@ class Health(unittest.TestCase):
     def test_the_page_lists_board_results(self):
         report = {'updated': '2026-09-30T12:00:00+00:00', 'run': 'search',
                   'boards': [{'name': 'Ciena', 'kind': 'Employer board', 'status': 'blocked', 'matches': 0, 'saved': 0, 'detail': 'HTTP 403'}]}
-        with patch.object(dashboard, 'read_health', lambda: dict(report)):
+        with patch.object(tuning, 'read_health', lambda: dict(report)):
             text = dashboard.app.test_client().get('/tuning').get_data(as_text=True)
         self.assertIn('Ciena', text)
         self.assertIn('<strong>Blocked</strong>', text)
