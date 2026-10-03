@@ -471,7 +471,56 @@ document.addEventListener("DOMContentLoaded", () => {
         historyNote.hidden = false;
       }
     }
-    renderSkills(); renderHistory();
+    // Education: one card per school, opened to edit, like the jobs above.
+    const educationField = $("#education-json"), educationList = $("#education-list");
+    let education = []; try { education = JSON.parse(educationField.value); } catch {}
+    let degrees = []; try { degrees = JSON.parse(educationList.dataset.degrees || "[]"); } catch {}
+    function renderEducation() {
+      educationList.replaceChildren();
+      if (!education.length) educationList.append(el("p", "work-empty", "No schools added yet."));
+      education.forEach((school, index) => {
+        const details = el("details", "work-entry"), summary = el("summary");
+        const main = el("span", "work-main"), name = el("strong", "work-role"), degree = el("span", "work-company"), dates = el("span", "work-dates");
+        main.append(name, degree); summary.append(main, dates); details.append(summary);
+        const refresh = () => {
+          name.textContent = school.school || "New school";
+          degree.textContent = [school.degree, school.major].filter(Boolean).join(", ");
+          const label = school.start_date || school.end_date ? `${monthLabel(school.start_date) || "?"} – ${school.end_date === "Present" ? "Present" : monthLabel(school.end_date) || "?"}` : "";
+          dates.textContent = label; dates.hidden = !label;
+        };
+        refresh();
+        const save = () => { educationField.value = JSON.stringify(education); refresh(); };
+        const fields = el("div", "work-fields");
+        const box = (caption, key, example, max, wide) => {
+          const label = el("label", wide ? "work-wide" : ""); label.append(caption + " ");
+          const input = el("input"); input.value = school[key] || ""; input.placeholder = example; input.maxLength = max;
+          input.addEventListener("input", () => { school[key] = input.value; save(); }); label.append(input); return label;
+        };
+        fields.append(box("School", "school", "e.g. State University", 200, true));
+        const degreeLabel = el("label"); degreeLabel.append("Degree ");
+        const select = el("select"); select.append(new Option("Choose…", ""));
+        for (const option of degrees) select.append(new Option(option, option));
+        select.value = school.degree || ""; select.addEventListener("change", () => { school.degree = select.value; save(); });
+        degreeLabel.append(select); fields.append(degreeLabel, box("GPA (optional)", "gpa", "e.g. 3.5", 10));
+        fields.append(box("Major", "major", "e.g. Graphic Design", 150), box("Minor (optional)", "minor", "e.g. Art History", 150));
+        const months = el("div", "history-months");
+        const start = el("input"), end = el("input"), current = el("input"); start.type = end.type = "month"; current.type = "checkbox";
+        start.value = /^\d{4}-\d{2}$/.test(school.start_date || "") ? school.start_date : "";
+        current.checked = school.end_date === "Present"; end.value = /^\d{4}-\d{2}$/.test(school.end_date || "") ? school.end_date : ""; end.disabled = current.checked;
+        const sync = () => { school.start_date = start.value; school.end_date = current.checked ? "Present" : end.value; end.disabled = current.checked; save(); };
+        [start, end, current].forEach(control => control.addEventListener("change", sync));
+        for (const [caption, control] of [["Start month", start], ["End month", end], ["Currently attending", current]]) { const item = el("label"); item.append(control, caption); months.append(item); }
+        const dateBlock = el("fieldset", "work-dates-editor"); dateBlock.append(el("legend", "", "Time There"), months); fields.append(dateBlock);
+        const actions = el("div", "work-actions");
+        const remove = el("button", "bordered-button destructive-action", "Remove School"); remove.type = "button";
+        remove.addEventListener("click", () => { education.splice(index, 1); renderEducation(); });
+        const done = el("button", "bordered-button secondary-action", "Done"); done.type = "button";
+        done.addEventListener("click", () => { details.open = false; });
+        actions.append(remove, done); fields.append(actions); details.append(fields); educationList.append(details);
+      }); educationField.value = JSON.stringify(education);
+    }
+    $("#add-education").addEventListener("click", () => { education.push({ school: "", degree: "", major: "", minor: "", start_date: "", end_date: "", gpa: "" }); renderEducation(); educationList.lastElementChild.open = true; });
+    renderSkills(); renderHistory(); renderEducation();
     $("#home-location").addEventListener("input", () => { const value = $("#home-location").value.trim(); $("#profile-state").value = value.includes(",") ? value.split(",").pop().trim() : ""; });
     const resumeFile = $("#resume-file"), resumeDialog = $("#resume-review"), resumeContent = $("#resume-review-content");
     $("#upload-resume").addEventListener("click", () => resumeFile.click());
