@@ -215,7 +215,8 @@ def tidy_expired_closed_jobs():
 
 
 WORK_DETAIL_COLUMNS = (("street", 200), ("city", 100), ("state", 50), ("zip", 20), ("phone", 40), ("website", 255),
-                       ("supervisor_name", 150), ("supervisor_title", 150), ("supervisor_email", 255))
+                       ("supervisor_name", 150), ("supervisor_title", 150), ("supervisor_email", 255),
+                       ("supervisor_phone", 40))
 
 
 # Education: the degree is one of these (the drop-down's choices), and each field's maximum length.
