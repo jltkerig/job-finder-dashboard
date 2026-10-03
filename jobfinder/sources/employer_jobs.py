@@ -611,6 +611,83 @@ class BambooHR(_WholeBoard):
                         schedule=_schedule(job.get("employmentStatusLabel")))
 
 
+class Recruitee(_WholeBoard):
+    """Recruitee career sites (<company>.recruitee.com): every offer comes from one public JSON address."""
+
+    def __init__(self, config):
+        super().__init__(config)
+        self.slug = config["slug"]
+        self.base = f"https://{self.slug}.recruitee.com/api/offers/"
+
+    def _fetch(self, http):
+        return _get_json(http, self.base).get("offers") or []
+
+    def _first_place(self, job):
+        return ", ".join(part for part in (job.get("city"), job.get("state_code"), job.get("country_code")) if part) or job.get("location") or ""
+
+    def _id_from(self, url):
+        match = re.search(r"/o/([a-z0-9-]+)", url, re.I)
+        return match.group(1) if match else None
+
+    def status(self, url, http):
+        wanted = self._id_from(url)
+        if not wanted:
+            return "Unknown"
+        return "Open" if any(wanted == str(job.get("slug")) for job in self._fetch(http)) else "Closed"
+
+    def detail(self, listing, http, employer):
+        job = listing["raw"]
+        arrangement = "Remote" if job.get("remote") else None
+        return _opening(employer, title=job.get("title", ""), url=job.get("careers_url") or f"https://{self.slug}.recruitee.com/o/{job.get('slug')}",
+                        locations=[self._first_place(job)], html=(job.get("description") or "") + (job.get("requirements") or ""),
+                        posted=str(job.get("published_at") or "")[:10], arrangement=arrangement,
+                        schedule=_schedule(job.get("employment_type_code")))
+
+
+class Teamtailor(_WholeBoard):
+    """Teamtailor career sites (<company>.teamtailor.com): every opening is in the site's public job feed (jobs.rss)."""
+
+    def __init__(self, config):
+        super().__init__(config)
+        self.slug = config["slug"]
+        self.base = f"https://{self.slug}.teamtailor.com"
+
+    def _fetch(self, http):
+        response = http.get(self.base + "/jobs.rss", accept="application/rss+xml,application/xml")
+        if response.status_code != 200:
+            raise ValueError(f"{self.slug}.teamtailor.com answered HTTP {response.status_code}")
+        import xml.etree.ElementTree as ET
+        jobs = []
+        for item in ET.fromstring(response.content).iter("item"):
+            places = [", ".join(part.text.strip() for part in (loc.find("{*}city"), loc.find("{*}country")) if part is not None and part.text)
+                      for loc in item.findall(".//{*}location")]
+            jobs.append({"id": (item.findtext("guid") or item.findtext("link") or "").strip(), "title": (item.findtext("title") or "").strip(),
+                         "link": (item.findtext("link") or "").strip(), "description": item.findtext("description") or "",
+                         "posted": (item.findtext("pubDate") or "")[:16], "places": [p for p in places if p],
+                         "remote": (item.findtext("{*}remoteStatus") or "").casefold()})
+        return jobs
+
+    def _first_place(self, job):
+        return (job.get("places") or [""])[0]
+
+    def _id_from(self, url):
+        match = re.search(r"/jobs/(\d+)", url)
+        return match.group(1) if match else None
+
+    def status(self, url, http):
+        wanted = self._id_from(url)
+        if not wanted:
+            return "Unknown"
+        return "Open" if any(f"/jobs/{wanted}" in str(job.get("link")) or wanted in str(job.get("id")) for job in self._fetch(http)) else "Closed"
+
+    def detail(self, listing, http, employer):
+        job = listing["raw"]
+        remote = job.get("remote", "")
+        arrangement = "Remote" if remote == "fully" else "Hybrid" if remote == "hybrid" else None
+        return _opening(employer, title=job.get("title", ""), url=job.get("link", ""), locations=job.get("places") or [],
+                        html=job.get("description") or "", arrangement=arrangement)
+
+
 class SmartRecruiters:
     """SmartRecruiters company boards (public postings service; searched by keyword)."""
 
@@ -896,7 +973,8 @@ class NeoGov:
 
 ADAPTERS = {"workday": Workday, "oracle": Oracle, "icims": ICIMS, "successfactors": SuccessFactors, "ultipro": UltiPro,
             "greenhouse": Greenhouse, "lever": Lever, "ashby": Ashby, "bamboohr": BambooHR, "smartrecruiters": SmartRecruiters,
-            "adp": ADP, "paylocity": Paylocity, "workable": Workable, "neogov": NeoGov}
+            "adp": ADP, "paylocity": Paylocity, "workable": Workable, "neogov": NeoGov,
+            "recruitee": Recruitee, "teamtailor": Teamtailor}
 
 
 class Employer:

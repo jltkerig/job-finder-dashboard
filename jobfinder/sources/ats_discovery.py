@@ -69,6 +69,14 @@ def identify(url):
     if host == "apply.workable.com":
         return {"system": "workable", "slug": parts[0]} if parts and parts[0].casefold() not in _NOT_A_BOARD | {"j", "j"} else None
 
+    match = re.fullmatch(r"([a-z0-9-]+)\.recruitee\.com", host)
+    if match and match.group(1) not in _NOT_A_BOARD:
+        return {"system": "recruitee", "slug": match.group(1)}
+
+    match = re.fullmatch(r"([a-z0-9-]+)\.teamtailor\.com", host)
+    if match and match.group(1) not in _NOT_A_BOARD | {"career", "app"}:
+        return {"system": "teamtailor", "slug": match.group(1)}
+
     if host in ("jobs.smartrecruiters.com", "careers.smartrecruiters.com"):
         return {"system": "smartrecruiters", "company": parts[0]} if parts and not parts[0].isdigit() and parts[0].casefold() not in _NOT_A_BOARD else None
 
@@ -77,7 +85,16 @@ def identify(url):
 
 # Hiring platforms Job Finder recognises but cannot read yet (their job lists need a browser).
 UNREADABLE_SYSTEMS = {"dayforce": "Dayforce", "paycom": "Paycom", "paycor": "Paycor", "jobvite": "Jobvite",
-                      "taleo": "Taleo", "jazzhr": "JazzHR"}
+                      "taleo": "Taleo", "jazzhr": "JazzHR", "paradox": "Paradox", "recruitcrm": "Recruit CRM", "fountain": "Fountain",
+                      "recruiterbox": "Recruiterbox (Trakstar Hire)", "bullhorn": "Bullhorn", "darwinbox": "Darwinbox",
+                      "avature": "Avature", "beamery": "Beamery", "phenom": "Phenom", "breezy": "Breezy HR",
+                      "successfactors": "SAP SuccessFactors"}
+# Address endings that identify those systems: (host ends with, system).
+_UNREADABLE_HOSTS = (("paradox.ai", "paradox"), ("recruitcrm.io", "recruitcrm"), ("fountain.com", "fountain"),
+                     ("recruiterbox.com", "recruiterbox"), ("hire.trakstar.com", "recruiterbox"), ("bullhornstaffing.com", "bullhorn"),
+                     ("darwinbox.in", "darwinbox"), ("darwinbox.com", "darwinbox"), ("avature.net", "avature"),
+                     ("beamery.com", "beamery"), ("phenompeople.com", "phenom"), ("breezy.hr", "breezy"),
+                     ("successfactors.com", "successfactors"), ("successfactors.eu", "successfactors"))
 
 
 def identify_unreadable(url):
@@ -96,8 +113,11 @@ def identify_unreadable(url):
         return {"system": "jobvite", "company": parts[0]}
     if host.endswith(".taleo.net"):
         return {"system": "taleo", "host": host}
-    if host.endswith(".applytojob.com"):
+    if host.endswith(".applytojob.com") or host.endswith(".jazz.hr"):
         return {"system": "jazzhr", "host": host}
+    for ending, system in _UNREADABLE_HOSTS:
+        if host == ending or host.endswith("." + ending):
+            return {"system": system, "host": host}
     return None
 
 

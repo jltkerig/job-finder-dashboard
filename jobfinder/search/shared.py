@@ -154,7 +154,8 @@ def related_family_titles(typed):
 # Job-board sites searched directly (one query per title). Each company board found there is then read in full
 # through its public API. Add more, such as "boards.greenhouse.io", in settings.json under "job_board_sites".
 JOB_BOARD_SITES = settings.get("job_board_sites", ["jobs.ashbyhq.com", "greenhouse.io", "jobs.lever.co", "apply.workable.com",
-                                                       "jobs.smartrecruiters.com"])
+                                                       "jobs.smartrecruiters.com", "icims.com", "myworkdayjobs.com",
+                                                       "bamboohr.com", "recruitee.com", "teamtailor.com"])
 
 # Board-site queries return many companies and few pages matter, so they read fewer result pages than title queries.
 SITE_QUERY_PAGES = settings.get("site_query_pages", 2)
