@@ -11,6 +11,7 @@ from jobfinder.profiles.profile_tools import resume_skill_suggestions, parse_wor
 from jobfinder.records.search_skips import TTL_HOURS, latest_decisions
 from jobfinder.sources.job_listings import is_pdf_url
 from jobfinder.web import blocklists
+from jobfinder.web.application_files import RESUME_BUILDER_URL, add_application_files
 from jobfinder.web import listing_queries
 from jobfinder.web import profile_store
 from jobfinder.web import schema
@@ -86,6 +87,7 @@ def user_dashboard():
     profile = profile_store.get_user_profile()
     add_job_fit(companies, profile.get("skills", []))
     add_drive_times(companies, profile.get("home_zip"), profile.get("state") or "")
+    add_application_files(companies)
     resume_skills = resume_skill_suggestions(RESUME_FOLDER, profile.get("skills", []))
     # With no work history saved yet, the form is filled in from the uploaded résumé (nothing is saved until Save Profile).
     resume_history = [] if profile.get("work_history") else parse_work_history(uploaded_resume(RESUME_FOLDER)[1])
@@ -94,6 +96,7 @@ def user_dashboard():
         "user-dashboard.html",
         companies=companies,
         profile=profile,
+        resume_builder_url=RESUME_BUILDER_URL,
         counts=get_dashboard_counts(),
         search_history=get_search_history(),
         skill_suggestions=profile_skill_suggestions(profile),
