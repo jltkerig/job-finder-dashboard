@@ -1,6 +1,3 @@
-from jobfinder.web import listing_queries
-from jobfinder.web import blocklists
-from jobfinder.web import webfiles
 import re
 import sys
 import unittest
@@ -9,6 +6,9 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
+from jobfinder.web import listing_queries
+from jobfinder.web import blocklists
+from jobfinder.web import webfiles
 import dashboard
 
 EVENTS = {f"https://example.com/job/{n}": {"url": f"https://example.com/job/{n}", "title": f"Skipped page {n}",

@@ -1,5 +1,3 @@
-from jobfinder.web import search_history
-from jobfinder.web import schema
 import sys
 import unittest
 from datetime import datetime
@@ -8,6 +6,8 @@ from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
+from jobfinder.web import search_history
+from jobfinder.web import schema
 import dashboard
 
 ROOT = Path(__file__).resolve().parents[1]

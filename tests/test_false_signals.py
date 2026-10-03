@@ -1,6 +1,3 @@
-from jobfinder.search import geo
-from jobfinder.search import company_site
-from jobfinder.search import usa_location
 """Regression tests for things a job page can say that look like evidence but are not."""
 import json
 import sys
@@ -9,6 +6,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
+from jobfinder.search import geo
+from jobfinder.search import company_site
+from jobfinder.search import usa_location
 import job_finder as finder
 from jobfinder.search import company_names
 from bs4 import BeautifulSoup

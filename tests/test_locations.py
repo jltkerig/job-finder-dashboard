@@ -1,6 +1,3 @@
-from jobfinder.search import relevance
-from jobfinder.search import geo
-from jobfinder.search import usa_location
 import json
 import sys
 import unittest
@@ -8,6 +5,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
+from jobfinder.search import relevance
+from jobfinder.search import geo
+from jobfinder.search import usa_location
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import job_finder as finder
 from jobfinder.search import company_names

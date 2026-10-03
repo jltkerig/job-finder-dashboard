@@ -1,4 +1,3 @@
-from jobfinder.web import profile_store
 import json
 import sys
 import unittest
@@ -7,6 +6,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
+from jobfinder.web import profile_store
 from owners import search_source, web_source
 import dashboard
 from jobfinder.search import refresh
