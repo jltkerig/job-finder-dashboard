@@ -2,10 +2,11 @@
 
 import re
 
+from mysql.connector import Error
+
 from jobfinder import db
 from jobfinder.db_schema import ensure_unique_source_index
 from jobfinder.records.job_retention import CLOSED_KEEP_DAYS, tidy_closed_jobs
-from mysql.connector import Error
 
 
 # Schema checks that already succeeded in this process; they only need to run once.

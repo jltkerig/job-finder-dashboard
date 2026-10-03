@@ -1,9 +1,10 @@
 """What the Web Job Scraper extension asks Job Finder for: updates, your fit profile and distances."""
 
-from pathlib import Path
 import hashlib
+from pathlib import Path
 
 from flask import abort, jsonify, request, send_from_directory
+
 from jobfinder.profiles.onet_data import spelling_fix
 from jobfinder.profiles.profile_tools import AMBIGUOUS_SKILLS, SKILL_ALIASES
 from jobfinder.profiles.travel import describe as describe_trip

@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
+from flask import render_template
 from jobfinder.web import profile_store
 import dashboard
 
@@ -39,7 +40,7 @@ class PrimaryJobTitle(unittest.TestCase):
                    "primary_job_title": "Web Designer", "job_titles": ["Web Designer", "Web Producer"],
                    "cities": [], "skills": [], "work_history": [], "work_preferences": []}
         with dashboard.app.test_request_context("/dashboard"):
-            html = dashboard.render_template("user-dashboard.html", profile=profile, companies=[], search_history=[],
+            html = render_template("user-dashboard.html", profile=profile, companies=[], search_history=[],
                                              counts={"saved": 0}, skill_suggestions=[],
                                              filters={"title": "", "state": "", "status": "", "sort": "date_desc"})
         self.assertIn('id="primary-job-title" name="primary_job_title" type="text" data-title-suggest="single" value="Web Designer"', html)

@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
+import mysql.connector
 from jobfinder.web import search_history
 from jobfinder.web import schema
 import dashboard
@@ -92,7 +93,7 @@ class RecordingASearch(unittest.TestCase):
     def record(self, earlier_id):
         connection = FakeConnection(earlier_id)
         with patch.object(schema, "ensure_job_tracking_columns"), \
-                patch.object(dashboard.mysql.connector, "connect", return_value=connection):
+                patch.object(mysql.connector, "connect", return_value=connection):
             search_history.record_search_history("Web Designer, Graphic Design", "Maryland", [{"city": "Bel Air, MD", "radius": 20}])
         return connection
 

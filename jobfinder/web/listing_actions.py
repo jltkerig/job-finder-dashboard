@@ -1,6 +1,8 @@
 """What the buttons on a listing do: reject, restore, block a domain, keep, update notes and status, delete."""
 
 from flask import jsonify, redirect, request
+from mysql.connector import Error
+
 from jobfinder import db
 from jobfinder.sources.job_feeds import FEED_NAMES
 from jobfinder.web import schema
@@ -8,7 +10,6 @@ from jobfinder.web.blocklists import add_domain_to_blocklist
 from jobfinder.web.core import api_error, app
 from jobfinder.web.schema import ensure_keep_column
 from jobfinder.web.webfiles import APPLICATION_STATUSES
-from mysql.connector import Error
 
 
 @app.route("/reject-listing/<int:company_id>", methods=["POST"])

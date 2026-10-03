@@ -5,14 +5,14 @@ import gzip
 import os
 import secrets
 
+from dotenv import load_dotenv
 from flask import Flask, abort, jsonify, request, session
+
+from jobfinder import paths
 from jobfinder.records.capture_import import CAPTURE_SOURCES
 from jobfinder.sources.job_feeds import FEED_NAMES
 from jobfinder.sources.job_sites import JOB_SITE_NAMES
 from jobfinder.web.webfiles import APPLICATION_STATUSES, COMPRESSIBLE, LOCAL_HOSTS, LOCAL_TIMEZONE
-
-from dotenv import load_dotenv
-from jobfinder import paths
 
 load_dotenv(paths.ENV_FILE)  # the database login and the secret key live in .env; read before anything uses them
 

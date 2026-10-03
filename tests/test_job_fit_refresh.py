@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
+import mysql.connector
 from jobfinder.web import profile_store
 from owners import search_source, web_source
 import dashboard
@@ -96,7 +97,7 @@ class RereadingSavedListings(unittest.TestCase):
 class WhenTheSkillsChange(unittest.TestCase):
     def test_refresh_job_fit_reads_the_saved_listings(self):
         connection = FakeConnection([(1, json.dumps([]), details("Experience with WordPress."))])
-        with patch.object(dashboard.mysql.connector, "connect", return_value=connection):
+        with patch.object(mysql.connector, "connect", return_value=connection):
             self.assertEqual(profile_store.refresh_job_fit(), 1)
         self.assertEqual(json.loads(connection.updates[0][0]), ["WordPress"])
 

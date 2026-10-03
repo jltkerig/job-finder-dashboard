@@ -1,8 +1,10 @@
 """Reading saved companies and jobs from the database for the Search, Dashboard and Settings pages."""
 
-from urllib.parse import urlparse
 import json
 import re
+from urllib.parse import urlparse
+
+from mysql.connector import Error
 
 from jobfinder import db
 from jobfinder.profiles.profile_tools import fit_score
@@ -12,7 +14,6 @@ from jobfinder.records.job_retention import SAVED_STATUSES
 from jobfinder.sources.job_listings import NON_JOB_PATH
 from jobfinder.web import blocklists
 from jobfinder.web import schema
-from mysql.connector import Error
 
 
 def get_dashboard_counts():

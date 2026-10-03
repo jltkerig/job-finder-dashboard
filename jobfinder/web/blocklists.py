@@ -5,11 +5,17 @@ import json
 import re
 
 from flask import abort, jsonify, redirect, request
+from mysql.connector import Error
+
 from jobfinder import db
 from jobfinder.web import schema
 from jobfinder.web.core import api_error, app, log_error_code
-from jobfinder.web.webfiles import BLOCKED_COMPANIES_FILE, BLOCKED_DOMAINS_FILE, BLOCK_METADATA_FILE, RECOMMENDED_DOMAINS_FILE
-from mysql.connector import Error
+from jobfinder.web.webfiles import (
+    BLOCKED_COMPANIES_FILE,
+    BLOCKED_DOMAINS_FILE,
+    BLOCK_METADATA_FILE,
+    RECOMMENDED_DOMAINS_FILE,
+)
 
 
 def read_block_metadata():
