@@ -86,9 +86,7 @@
       </div>
       <div class="form-field compact-field"><label for="result-status-filter">Listing Status</label><select id="result-status-filter"><option value="all">All statuses</option><option value="open">Open only</option><option value="closed">Closed only</option><option value="unknown">Unknown only</option></select>
       </div>
-      <div class="form-field compact-field"><label for="result-min-credibility">Minimum Career Credibility</label>
-          <p id="search-result-guide" class="field-help">Only individual openings at 30%+ count toward the goal. Lower scores are hidden after a search or refresh; choose Show all scores to review them.
-        </p><select id="result-min-credibility"><option value="0">30%+ (default)</option><option value="-1">Show all scores</option><option value="3">30%+</option><option value="5">50%+</option><option value="7">70%+</option><option value="9">90%+</option></select>
+      <div class="form-field compact-field"><label for="result-min-credibility" title="Only individual openings at 30%+ count toward the goal. Lower scores are hidden after a search or refresh; choose Show all scores to review them.">Min. Career Credibility</label><select id="result-min-credibility" title="Only individual openings at 30%+ count toward the goal. Lower scores are hidden after a search or refresh; choose Show all scores to review them."><option value="0">30%+ (default)</option><option value="-1">Show all scores</option><option value="3">30%+</option><option value="5">50%+</option><option value="7">70%+</option><option value="9">90%+</option></select>
       </div>
       <div class="form-field compact-field"><label for="result-schedule-filter">Work Type</label><select id="result-schedule-filter"><option value="all">All work types</option><option value="part">Part-time</option><option value="full">Full-time</option><option value="contract">Contract</option><option value="freelance">Freelance / Gig</option><option value="unknown">Unspecified</option></select>
       </div>
@@ -96,6 +94,7 @@
       </div>
       <div class="form-field compact-field"><label for="result-sort">Sort</label><select id="result-sort"><option value="default">Newest</option><option value="company">Company A–Z</option><option value="job">Job title A–Z</option><option value="distance">Distance</option><option value="career-credibility">Career credibility</option><option value="usa-credibility">USA credibility</option></select>
       </div>
+      <details class="display-options"><summary>Rows and Columns</summary>
       <div class="form-field compact-field compact-rows-field"><span class="field-label">Rows</span><label class="compact-rows-toggle"><input type="checkbox" id="compact-rows-toggle" checked /> Compact rows</label></div>
       <div class="form-field compact-field column-chooser-field"><span class="field-label" id="column-chooser-label">Columns</span>
         <div id="column-chooser" class="column-chooser-inline">
@@ -103,6 +102,7 @@
           </div><button id="column-show-all" class="bordered-button secondary-action" type="button">Show all</button>
         </div>
       </div>
+      </details>
       <div class="results-count" id="results-count">{{ companies|length }} results
       </div>
     </section>
