@@ -12,6 +12,15 @@ def read(*parts):
     return ROOT.joinpath(*parts).read_text(encoding="utf-8")
 
 
+class ApplyButton(unittest.TestCase):
+    def test_each_listing_has_an_apply_button_that_names_the_job_for_claude_desktop(self):
+        self.assertIn('class="bordered-button apply-action" type="button" data-job-id="{{ company.id }}"', read("templates", "index.html"))
+        script = read("static", "js", "charts.js")
+        self.assertIn("Job Finder job #${jobId}", script)  # Résumé Builder's get_job reads this id
+        self.assertIn("read my writing rules", script)
+        self.assertIn('window.location.href = "claude://"', script)
+
+
 class DashboardWording(unittest.TestCase):
     def test_section_headings_are_capitalized_and_locations_is_just_locations(self):
         html = read("templates", "user-dashboard.html")
