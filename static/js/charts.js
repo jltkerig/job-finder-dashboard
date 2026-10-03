@@ -389,6 +389,7 @@ document.addEventListener("DOMContentLoaded", () => {
       typedTimer = setTimeout(async () => { const found = await loadRelated(term); if ($("#new-skill").value.trim() === term) { typedMatches = found; showSkillSuggestions(); } }, 250);
     });
     // Work history: one card per job (title, company, dates and the first point visible), opened to edit.
+    const WORK_SIZES = { description: 3000, dates: 100, street: 200, city: 100, state: 50, zip: 20, phone: 40, website: 255, supervisor_email: 255 };
     const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     const monthLabel = value => { const m = /^(\d{4})-(\d{2})$/.exec(value || ""); return m ? `${MONTHS[Number(m[2]) - 1] || m[2]} ${m[1]}` : (value || ""); };
     const datesLabel = text => {
@@ -416,7 +417,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const field = (labelText, key, example, area) => {
           const label = el("label", area ? "work-wide" : ""); label.append(labelText + " ");
           const input = el(area ? "textarea" : "input"); input.value = job[key] || ""; input.placeholder = example;
-          input.maxLength = key === "description" ? 3000 : key === "dates" ? 100 : 150; if (area) input.rows = 6;
+          input.maxLength = WORK_SIZES[key] || 150; if (area) input.rows = 6;
           input.addEventListener("input", () => { job[key] = input.value; save(); });
           label.append(input); return { label, input };
         };
@@ -438,6 +439,19 @@ document.addEventListener("DOMContentLoaded", () => {
         const description = field("What you did", "description", "e.g. Built responsive pages for client websites", true);
         description.label.append(el("small", "field-help", "One point per line."));
         fields.append(description.label);
+        // Optional details some applications ask for.
+        const group = (legend, help, rows) => {
+          const box = el("fieldset", "work-extra"); box.append(el("legend", "", legend), el("small", "field-help", help));
+          const grid = el("div", "work-extra-grid");
+          for (const [caption, key, example, wide] of rows) { const item = field(caption, key, example); if (wide) item.label.className = "work-wide"; grid.append(item.label); }
+          box.append(grid); return box;
+        };
+        fields.append(group("Location and Contact", "Optional. Some applications ask where the job was and how to reach the company.", [
+          ["Street", "street", "e.g. 1 Main St, Suite 250", true], ["City", "city", "e.g. Springfield"], ["State", "state", "e.g. MD"],
+          ["ZIP", "zip", "e.g. 21000"], ["Phone", "phone", "e.g. 555-555-0100"], ["Website", "website", "e.g. example.com", true]]));
+        fields.append(group("Supervisor", "Optional. Some applications ask who you reported to.", [
+          ["Name", "supervisor_name", "e.g. Sam Lee"], ["Title", "supervisor_title", "e.g. Senior Manager of Design"],
+          ["Email", "supervisor_email", "e.g. name@company.com", true]]));
         const actions = el("div", "work-actions");
         const remove = el("button", "bordered-button destructive-action", "Remove Job"); remove.type = "button";
         remove.addEventListener("click", () => { history.splice(index, 1); renderHistory(); });

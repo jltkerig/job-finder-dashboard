@@ -8,7 +8,7 @@ from mysql.connector import Error
 from jobfinder import db
 from jobfinder.profiles.onet_data import occupation_skill_suggestions, proper_title, related_title_suggestions
 from jobfinder.profiles.profile_tools import SKILL_ALIASES, normalize_skills, refresh_listing_skills, skill_demand, related_skills
-from jobfinder.web.schema import ensure_profile_tables
+from jobfinder.web.schema import WORK_DETAIL_COLUMNS, ensure_profile_tables
 
 RELATED_JOB_TITLES = {
     "web designer": ["UI Designer", "UX/UI Designer", "Digital Designer", "Website Designer", "Visual Designer", "WordPress Designer"],
@@ -149,8 +149,9 @@ def get_user_profile():
         profile["cities"] = cursor.fetchall()
         cursor.execute("SELECT skill FROM user_profile_skills WHERE profile_id = 1 ORDER BY skill")
         profile["skills"] = [row["skill"] for row in cursor.fetchall()]
-        cursor.execute("SELECT company, role, dates, description FROM user_profile_work_history WHERE profile_id = 1 ORDER BY id")
-        profile["work_history"] = cursor.fetchall()
+        detail_columns = ", ".join(column for column, _ in WORK_DETAIL_COLUMNS)
+        cursor.execute(f"SELECT company, role, dates, description, {detail_columns} FROM user_profile_work_history WHERE profile_id = 1 ORDER BY id")
+        profile["work_history"] = [{key: (value or "") for key, value in row.items()} for row in cursor.fetchall()]
         # Titles are always shown properly capitalized; searching ignores case, so this never changes what is found.
         profile["primary_job_title"] = proper_title(profile.get("primary_job_title") or "")
         profile["job_titles"] = list(dict.fromkeys(proper_title(title) for title in profile["job_titles"]))
@@ -226,10 +227,13 @@ def save_user_profile(first_name, last_name, state, job_titles, cities=None, *, 
                 role = str(item.get("role", "")).strip()[:150]
                 dates = str(item.get("dates", "")).strip()[:100]
                 description = str(item.get("description", "")).strip()[:3000]
+                details = [str(item.get(column, "") or "").strip()[:size] for column, size in WORK_DETAIL_COLUMNS]
                 if company or role:
-                    cursor.execute("""INSERT INTO user_profile_work_history
-                        (profile_id, company, role, dates, description) VALUES (1, %s, %s, %s, %s)""",
-                        (company, role, dates, description))
+                    columns = ", ".join(column for column, _ in WORK_DETAIL_COLUMNS)
+                    cursor.execute(f"""INSERT INTO user_profile_work_history
+                        (profile_id, company, role, dates, description, {columns})
+                        VALUES (1, %s, %s, %s, %s{", %s" * len(WORK_DETAIL_COLUMNS)})""",
+                        (company, role, dates, description, *details))
 
         connection.commit()
         return True
