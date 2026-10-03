@@ -7,7 +7,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
 from jobfinder.web import listing_queries
-from jobfinder.web import blocklists
+from jobfinder.web import blocklists, pages
 from jobfinder.web import webfiles
 import dashboard
 
@@ -18,7 +18,7 @@ EVENTS = {f"https://example.com/job/{n}": {"url": f"https://example.com/job/{n}"
 
 class SettingsPaging(unittest.TestCase):
     def page(self, query=""):
-        with patch.object(dashboard, "latest_decisions", return_value=EVENTS), \
+        with patch.object(pages, "latest_decisions", return_value=EVENTS), \
                 patch.object(listing_queries, "get_rejected_companies", return_value=[]), \
                 patch.object(blocklists, "get_blocked_domains", return_value=[]), \
                 patch.object(blocklists, "get_blocked_companies", return_value=[]):
