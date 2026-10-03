@@ -36,6 +36,10 @@
             </div>
             <div class="form-field"><label for="home-location">Home City, State</label><input id="home-location" name="home_location" type="text" list="city-state-options" value="{{ profile.home_location or '' }}" placeholder="e.g. Baltimore, MD" autocomplete="off" /><input id="profile-state" name="state" type="hidden" value="{{ profile.state }}" />
             </div>
+            <div class="form-field profile-link-field"><label for="linkedin-url">LinkedIn Profile</label><input id="linkedin-url" name="linkedin_url" type="text" inputmode="url" maxlength="255" value="{{ profile.linkedin_url or '' }}" placeholder="e.g. linkedin.com/in/your-name" autocomplete="url" />
+            </div>
+            <div class="form-field profile-link-field"><label for="portfolio-url">Portfolio or Website</label><input id="portfolio-url" name="portfolio_url" type="text" inputmode="url" maxlength="255" value="{{ profile.portfolio_url or '' }}" placeholder="e.g. yourname.com" autocomplete="url" />
+            </div>
           </div>
           <section class="profile-subsection">
             <h3>Job Titles

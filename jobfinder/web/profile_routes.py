@@ -54,6 +54,7 @@ def save_profile():
                       home_location=home_location, home_zip=home_zip, primary_job_title=primary,
                       skills=read_list("skills_json"), work_history=read_list("work_history_json"),
                       education=read_list("education_json"),
+                      linkedin_url=request.form.get("linkedin_url", ""), portfolio_url=request.form.get("portfolio_url", ""),
                       avatar_data=avatar if "avatar_data" in request.form else None,
                       work_preferences=[value for value in request.form.getlist("work_preferences")
                                         if value in {"Part-time", "Full-time", "Contract", "Freelance / Gig", "Remote", "Hybrid", "Onsite"}])
