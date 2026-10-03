@@ -4,6 +4,7 @@ import os
 import subprocess
 
 from flask import jsonify, request
+
 from jobfinder.web.core import api_error, app, log_error_code
 from jobfinder.web.webfiles import BASE_DIR, UPDATE_SCRIPT, UPDATE_SEARCH_DIRS, UPDATE_ZIP_PATTERN
 

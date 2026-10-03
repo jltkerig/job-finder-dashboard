@@ -10,6 +10,7 @@ import threading
 import time
 
 from flask import jsonify, request
+
 from jobfinder.records.capture_import import capture_dirs, move_pending, pending_files
 from jobfinder.web import profile_store
 from jobfinder.web import webfiles

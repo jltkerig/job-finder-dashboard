@@ -3,11 +3,12 @@
 import json
 import re
 
+from mysql.connector import Error
+
 from jobfinder import db
 from jobfinder.profiles.onet_data import occupation_skill_suggestions, proper_title, related_title_suggestions
 from jobfinder.profiles.profile_tools import SKILL_ALIASES, normalize_skills, refresh_listing_skills, skill_demand
 from jobfinder.web.schema import ensure_profile_tables
-from mysql.connector import Error
 
 
 RELATED_JOB_TITLES = {

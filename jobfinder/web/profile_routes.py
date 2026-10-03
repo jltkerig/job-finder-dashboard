@@ -1,10 +1,11 @@
 """Saving your profile, reading a résumé for it, and the job-title and city suggestions as you type."""
 
-from pathlib import Path
 import json
+from pathlib import Path
 import re
 
 from flask import abort, jsonify, redirect, request
+
 from jobfinder.profiles.onet_data import proper_title, title_matches
 from jobfinder.profiles.places import city_matches
 from jobfinder.profiles.profile_tools import resume_suggestions

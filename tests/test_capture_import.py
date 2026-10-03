@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
+import mysql.connector
 from jobfinder.web import listing_queries
 from jobfinder.web import blocklists
 from jobfinder.search import web_captures
@@ -353,7 +354,7 @@ class DashboardVisibility(unittest.TestCase):
             def close(self):
                 pass
 
-        with patch.object(dashboard.mysql.connector, "connect", return_value=Connection()), \
+        with patch.object(mysql.connector, "connect", return_value=Connection()), \
                 patch.object(blocklists, "get_blocked_domains", return_value=["linkedin.com"]), \
                 patch.object(blocklists, "get_blocked_companies", return_value=[]):
             shown = listing_queries.get_companies()

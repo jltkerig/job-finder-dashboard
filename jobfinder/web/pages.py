@@ -1,8 +1,10 @@
 """The pages themselves: Search, Dashboard, Settings (rejected listings, skips, block lists) and the credibility guide."""
 
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from flask import render_template, request
+
 from jobfinder.profiles.profile_tools import resume_skill_suggestions, parse_work_history, uploaded_resume
 from jobfinder.records.search_skips import TTL_HOURS, latest_decisions
 from jobfinder.sources.job_listings import is_pdf_url
@@ -12,13 +14,18 @@ from jobfinder.web import profile_store
 from jobfinder.web import schema
 from jobfinder.web.blocklists import block_details
 from jobfinder.web.core import app
-from jobfinder.web.listing_queries import add_drive_times, add_job_fit, get_companies, get_dashboard_counts, get_kept_companies
+from jobfinder.web.listing_queries import (
+    add_drive_times,
+    add_job_fit,
+    get_companies,
+    get_dashboard_counts,
+    get_kept_companies,
+)
 from jobfinder.web.profile_store import listing_skill_demand, profile_skill_suggestions
 from jobfinder.web.schema import ensure_keep_column
 from jobfinder.web.search_control import scraper_status
 from jobfinder.web.search_history import get_search_history
 from jobfinder.web.webfiles import RESUME_FOLDER, SEARCH_SKIPS_FILE, SKIPS_PER_PAGE
-from zoneinfo import ZoneInfo
 
 
 @app.route("/")

@@ -1,11 +1,11 @@
 """The files, folders and fixed settings the web pages use. Other modules read these as webfiles.NAME so a test can change one in one place."""
 
-from pathlib import Path
 import os
+from pathlib import Path
 import re
+from zoneinfo import ZoneInfo
 
 from jobfinder import paths
-from zoneinfo import ZoneInfo
 
 
 BASE_DIR = paths.ROOT

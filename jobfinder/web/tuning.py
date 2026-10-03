@@ -1,12 +1,13 @@
 """The Tuning page: the search settings you can change and where they are saved."""
 
 from datetime import datetime
-from pathlib import Path
-from urllib.parse import quote
 import json
 import os
+from pathlib import Path
+from urllib.parse import quote
 
 from flask import redirect, render_template, request
+
 from jobfinder.records.board_health import STATUSES as HEALTH_STATUSES, read_health
 from jobfinder.web import webfiles
 from jobfinder.web.core import app, log_error_code

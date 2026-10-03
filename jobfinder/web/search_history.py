@@ -2,10 +2,11 @@
 
 import json
 
+from mysql.connector import Error
+
 from jobfinder import db
 from jobfinder.profiles.onet_data import proper_title
 from jobfinder.web import schema
-from mysql.connector import Error
 
 
 def record_search_history(job_title, state, cities=None):
