@@ -570,7 +570,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   $$(".save-history-title").forEach(button => button.addEventListener("click", async () => {
     button.disabled = true;
-    try { const response = await fetch("/profile/save-title",{method:"POST",headers:{"Content-Type":"application/json","X-CSRF-Token":csrfToken},body:JSON.stringify({title:button.dataset.jobTitle})}); const data=await readJsonResponse(response,"Could not save title."); if(!response.ok)throw new Error(data.message); button.textContent="Saved"; showToast("Job title saved to your profile.","success"); }
+    try { const response = await fetch("/profile/save-title",{method:"POST",headers:{"Content-Type":"application/json","X-CSRF-Token":csrfToken},body:JSON.stringify({title:button.dataset.jobTitle})}); const data=await readJsonResponse(response,"Could not save title."); if(!response.ok)throw new Error(data.message); const versionField=document.querySelector('input[name="profile_version"]'); if(versionField&&data.profile_version)versionField.value=data.profile_version; button.textContent="Saved"; showToast("Job title saved to your profile.","success"); }
     catch(error){button.disabled=false;showToast(error.message,"danger");}
   }));
   const dashboardRefresh = $("#refresh-dashboard"), dashboardRefreshStatus = $("#dashboard-refresh-status");

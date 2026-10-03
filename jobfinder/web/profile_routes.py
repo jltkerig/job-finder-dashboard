@@ -46,7 +46,11 @@ def save_profile():
     primary = proper_title(request.form.get("primary_job_title", "").strip()[:255])
     if primary:
         job_titles = [primary] + [title for title in job_titles if title.casefold() != primary.casefold()]
-    previous_skills = {str(skill).casefold() for skill in profile_store.get_user_profile().get("skills", [])}
+    saved_profile = profile_store.get_user_profile()
+    sent_version = request.form.get("profile_version", "")
+    if sent_version and sent_version != profile_store.profile_version(saved_profile):
+        return redirect("/dashboard?profile_changed=1")  # changed elsewhere since this page loaded: don't overwrite it
+    previous_skills = {str(skill).casefold() for skill in saved_profile.get("skills", [])}
     avatar = request.form.get("avatar_data", "")
     if avatar and (not re.fullmatch(r"data:image/jpeg;base64,[A-Za-z0-9+/=]+", avatar) or len(avatar) > 550000):
         abort(400)
@@ -78,7 +82,7 @@ def save_profile_title():
     if not profile_store.save_user_profile(profile["first_name"], profile["last_name"], profile["state"],
                              profile["job_titles"], profile["cities"]):
         return api_error("E3302", "Could not save the job title.", 500)
-    return jsonify({"status": "saved"})
+    return jsonify({"status": "saved", "profile_version": profile_store.profile_version(profile_store.get_user_profile())})
 
 
 @app.route("/profile/parse-resume", methods=["POST"])
