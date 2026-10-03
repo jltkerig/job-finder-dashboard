@@ -350,3 +350,60 @@ def detect_work_arrangement(job_title="", html=""):
         text, re.I,
     )
     return classify(" ".join(context))
+
+
+# Metropolitan areas a posting may name instead of a city: (what to look for, the city and state to use).
+METRO_AREAS = (
+    (r"dallas[-/ ]+fort worth|\bdfw\b", "Dallas, TX"), (r"houston[- ]the woodlands|greater houston", "Houston, TX"),
+    (r"washington[ ,]+d\.?c\.?(?: metro| area| metropolitan)|\bdmv\b|washington metro", "Washington, DC"),
+    (r"baltimore[-/ ]+washington|greater baltimore|baltimore metro", "Baltimore, MD"),
+    (r"(?:san francisco )?bay area|silicon valley", "San Francisco, CA"), (r"greater los angeles|los angeles metro|\bsocal\b", "Los Angeles, CA"),
+    (r"greater boston|boston metro", "Boston, MA"), (r"new york city metro|nyc metro|tri-state area", "New York, NY"),
+    (r"greater chicago|chicagoland", "Chicago, IL"), (r"greater philadelphia|philadelphia metro|delaware valley", "Philadelphia, PA"),
+    (r"greater atlanta|atlanta metro", "Atlanta, GA"), (r"research triangle|raleigh[-/ ]+durham", "Raleigh, NC"),
+    (r"twin cities", "Minneapolis, MN"), (r"phoenix metro|greater phoenix", "Phoenix, AZ"), (r"greater seattle|seattle metro", "Seattle, WA"),
+)
+_STATE_CODES = "|".join(sorted(US_STATE_ABBREVIATIONS))
+_CITY = r"[A-Z][A-Za-z.'’]+(?:[-/ ][A-Z][A-Za-z.'’]+){0,4}"
+# "Role is full time in Irving-Las Colinas, TX", "Location: Austin, TX", "based in Denver, CO", "office in Reston, VA"
+_PLACE_AFTER_CUE = re.compile(
+    rf"(?i:\b(?:role|position|job|work|office|located|location|based|headquartered|onsite|on-site|hybrid|full[- ]time|part[- ]time)\b[^.\n]{{0,30}}?(?:\bin\b|:|-|–)\s*)"
+    rf"({_CITY}),\s*({_STATE_CODES})\b")
+
+
+def location_from_description(text):
+    """The place a posting says its job is in, taken from its description when the site gave none: a "City, ST" next to words
+    like "role is full time in" or "location:", or a named metropolitan area ("Dallas-Fort Worth Metroplex"). "" when unsure."""
+    text = " ".join(str(text or "").split())
+    if not text:
+        return ""
+    match = _PLACE_AFTER_CUE.search(text)
+    if match:
+        return f"{match.group(1)}, {match.group(2)}"
+    lower = text.lower()
+    for pattern, place in METRO_AREAS:
+        if re.search(pattern, lower):
+            return place
+    return ""
+
+
+_HYBRID_WORDS = re.compile(
+    r"\bhybrid\b"
+    r"|\b(?:one|two|three|four|[1-4])\s+days?\s+(?:a|per|each|every)\s+week\s+(?:in|at|from)\s+(?:the|our)\s+(?:office|workplace)"
+    r"|\b(?:in|at|from)\s+(?:the|our)\s+office\s+(?:one|two|three|four|[1-4])\s+days?\b"
+    r"|\bwork\s+(?:in|from)\s+(?:the|our)\s+office\s+(?:one|two|three|four|[1-4])\s+days?\b", re.I)
+_REMOTE_WORDS = re.compile(r"\b(?:fully|completely|100%)\s+remote\b|\bthis\s+is\s+a\s+remote\s+(?:position|role|job)\b|\bwork\s+from\s+anywhere\b", re.I)
+_ONSITE_WORDS = re.compile(
+    r"\bon[- ]?site\b(?!\s+(?:interview|visit))|\bin[- ]office\s+(?:role|position|job)\b|\b(?:five|5)\s+days\s+(?:a|per)\s+week\s+in\s+(?:the|our)\s+office\b"
+    r"|\bmust\s+(?:work|be)\s+(?:in|at|on)\s+(?:the|our)\s+office\b|\b(?:role|position|job)\s+is\s+(?:full|part)[- ]time\s+in\s+[A-Z]", re.I)
+
+
+def arrangement_from_description(text):
+    """'Hybrid', 'Remote' or 'Onsite' when the description says so plainly (e.g. "in our office 4 days a week" is Hybrid), else None."""
+    text = " ".join(str(text or "").split())
+    if _HYBRID_WORDS.search(text):
+        return "Hybrid"
+    remote, onsite = bool(_REMOTE_WORDS.search(text)), bool(_ONSITE_WORDS.search(text))
+    if remote and onsite:
+        return None
+    return "Remote" if remote else "Onsite" if onsite else None

@@ -217,6 +217,27 @@ class ImportFilter(unittest.TestCase):
         self.assertEqual(result[0], "added")
         self.assertTrue(self.saved[0][1]["listing_details"]["location_unknown"])
 
+    APEX = ("Role Requirements Role is full time in Irving-Las Colinas, TX All employees must work in our office 4 days a week, "
+            "with Wednesday being work-from-home. " + "x" * 160)
+
+    def test_a_card_without_a_place_is_judged_by_the_place_its_description_names(self):
+        result, assess, _ = self.import_one(import_run(), job(location="", description=self.APEX, level="opened", work_arrangement=""),
+                                            outcome=passing(arrangement="Hybrid"))  # what judging returns from the opening's own type
+        assess.assert_called_once()
+        self.assertEqual(assess.call_args[0][1]["location"], "Irving-Las Colinas, TX")  # the opening that was judged
+        self.assertEqual(assess.call_args[0][1]["type"], "Hybrid")  # four days a week in the office
+        details = self.saved[0][1]["listing_details"]
+        self.assertEqual(details["location"], "Irving-Las Colinas, TX")
+        self.assertFalse(details["location_unknown"])
+        self.assertTrue(details["location_from_description"])
+        self.assertEqual(self.saved[0][1]["work_arrangement"], "Hybrid")
+
+    def test_such_a_job_is_left_out_when_that_place_is_outside_your_cities(self):
+        result, _, _ = self.import_one(import_run(), job(location="", description=self.APEX, level="opened", work_arrangement=""),
+                                       outcome=passing(skip="Outside selected location"))
+        self.assertEqual(result, ("skipped", "Outside selected location"))
+        self.assertEqual(self.saved, [])
+
     def test_the_same_job_already_saved_from_another_source_is_linked(self):
         existing = {"id": 7, "name": "Acme, Inc.", "career_job_title": "Web Designer", "work_arrangement": "On-site",
                     "city": "Austin", "state": "TX", "source_url": "https://careers.acme.com/jobs/12",

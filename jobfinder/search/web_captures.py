@@ -40,7 +40,8 @@ from jobfinder.search.shared import (
     related_family_titles,
     settings,
 )
-from jobfinder.search.usa_location import US_STATES, detect_work_arrangement, find_state_from_text, selected_state_codes
+from jobfinder.search.usa_location import (US_STATES, arrangement_from_description, detect_work_arrangement, find_state_from_text,
+                                            location_from_description, selected_state_codes)
 from jobfinder.sources.job_listings import canonical_url, matching_title as matching_job_title
 
 
@@ -177,9 +178,9 @@ class CaptureImport:
             details["original_source"] = url
         return site.get("domain") or site_domain, site.get("posting_url") or board.get("url") or url
 
-    def assess(self, job, arrangement):
+    def assess(self, job, arrangement, location=None):
         """judging.assess_opening's result for a captured job, or a plain pass for one without a location."""
-        location = str(job.get("location") or "").strip()
+        location = str(job.get("location") if location is None else location or "").strip()
         if not location:
             return {"skip": None, "arrangement": arrangement, "location": {"score": 0}, "detail_score": CAREER_CREDIBILITY_THRESHOLD,
                     "country": None, "state_name": None, "remote_limited_to": set(), "city": None, "lat": None, "lon": None,
@@ -217,8 +218,14 @@ class CaptureImport:
                 return "skipped", "Internship"
         closed = bool(job.get("closed"))
         location = str(job.get("location") or "").strip()
-        arrangement = job.get("work_arrangement") or detect_work_arrangement(title, location) or None
-        outcome = self.assess(job, arrangement)
+        description = str(job.get("description") or "")
+        # A card without a place is read again from the description ("Role is full time in Irving-Las Colinas, TX"),
+        # so the job is judged by where it really is, and its work arrangement likewise ("in our office 4 days a week").
+        described_place = "" if location else location_from_description(description)
+        location = location or described_place
+        arrangement = (job.get("work_arrangement") or detect_work_arrangement(title, location)
+                       or arrangement_from_description(description) or None)
+        outcome = self.assess(job, arrangement, location)
         if outcome["skip"] and not applied:
             details = _row_details(row) if row else {}
             # A job imported earlier as "Location unknown" is filtered again now that its location is known.
@@ -250,8 +257,9 @@ class CaptureImport:
             "capture_level": job.get("level") or "seen", "page_kind": job.get("page_kind") or "other",
             "location": location, "salary": job.get("salary") or "", "posted": job.get("posted") or "",
             "description": str(job.get("description") or "")[:20000], "closes": str(job.get("closes") or "")[:10], "matched_title": matched_title,
-            "location_unknown": not location, "remote_limited_to": sorted(outcome["remote_limited_to"]),
-            "evidence": [f"Seen on {source_type}", "you applied" if applied else "matching title"],
+            "location_unknown": not location, "location_from_description": bool(described_place), "remote_limited_to": sorted(outcome["remote_limited_to"]),
+            "evidence": [f"Seen on {source_type}", "you applied" if applied else "matching title"]
+                        + (["place read from the description"] if described_place else []),
         }
         details = merge_details(_row_details(row) if row else {}, new_details)
         domain, career_url = self.company_site(company, title, url, location, details, domain)
