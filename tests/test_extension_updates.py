@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
+from jobfinder.web import extension_api
 import dashboard
 
 
@@ -17,7 +18,7 @@ class ExtensionUpdates(unittest.TestCase):
         self.dist = Path(folder.name)
         for name in ("web-job-scraper-v0.1.2.xpi", "web-job-scraper-v0.1.10.xpi", "notes.txt"):
             (self.dist / name).write_bytes(name.encode())
-        patcher = patch.object(dashboard, "extension_dist_dir", return_value=self.dist)
+        patcher = patch.object(extension_api, "extension_dist_dir", return_value=self.dist)
         patcher.start()
         self.addCleanup(patcher.stop)
         self.client = dashboard.app.test_client()
