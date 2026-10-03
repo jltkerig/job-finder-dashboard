@@ -80,11 +80,6 @@ APP_VERSION = "1.1.150"
 
 app.config.update(APP_VERSION=APP_VERSION)
 
-DB_HOST = os.getenv("DB_HOST", "127.0.0.1")
-DB_PORT = int(os.getenv("DB_PORT", "3306"))
-DB_USER = os.getenv("DB_USER", "root")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "")
-DB_NAME = os.getenv("DB_NAME", "job_finder")
 
 scraper_process = None
 scraper_mode = None
@@ -164,7 +159,7 @@ def _safe_db_identifier(value):
 
 def initialize_database():
     """Create only missing database objects. Never drops or overwrites existing data."""
-    database_name = _safe_db_identifier(DB_NAME)
+    database_name = _safe_db_identifier(db.settings()["database"])
     connection = None
     cursor = None
     try:
