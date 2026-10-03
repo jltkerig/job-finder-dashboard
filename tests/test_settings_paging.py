@@ -1,3 +1,4 @@
+from jobfinder.web import blocklists
 from jobfinder.web import webfiles
 import re
 import sys
@@ -18,8 +19,8 @@ class SettingsPaging(unittest.TestCase):
     def page(self, query=""):
         with patch.object(dashboard, "latest_decisions", return_value=EVENTS), \
                 patch.object(dashboard, "get_rejected_companies", return_value=[]), \
-                patch.object(dashboard, "get_blocked_domains", return_value=[]), \
-                patch.object(dashboard, "get_blocked_companies", return_value=[]):
+                patch.object(blocklists, "get_blocked_domains", return_value=[]), \
+                patch.object(blocklists, "get_blocked_companies", return_value=[]):
             return dashboard.app.test_client().get("/rejected-listings" + query, headers={"Host": "127.0.0.1:5000"}).get_data(as_text=True)
 
     def test_only_one_page_of_skipped_pages_is_sent(self):
