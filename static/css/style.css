@@ -1842,3 +1842,89 @@ body[data-page="search"] .results-toolbar .display-options .column-option { alig
 .work-extra-grid > label { display:grid; gap:4px; font-size:.84rem; font-weight:700; color:#374151; min-width:0; }
 .work-extra-grid > label.work-wide { grid-column:1 / -1; }
 @media (max-width:640px) { .work-extra-grid { grid-template-columns:1fr 1fr; } }
+/* Search results, redesigned: each listing is a card. Title first, then company and place, the website, a row of
+   score badges, and the buttons on the right. Only styling: the column chooser and Details work as before. */
+@media (min-width:0px) {
+  body[data-page="search"] .table-wrapper { border:0; background:transparent; overflow:visible; }
+  body[data-page="search"] #results-table.compact-rows tbody { display:grid; gap:12px; }
+  body[data-page="search"] #results-table.compact-rows tbody tr.result-row {
+    position:relative; display:flex; flex-wrap:wrap; align-items:center; column-gap:0; row-gap:6px;
+    min-height:118px; padding:16px 268px 16px 20px; border:1px solid #dfe3e8; border-radius:12px; background:#fff;
+    box-shadow:0 1px 2px rgba(15,23,42,.04); transition:box-shadow .15s ease, border-color .15s ease; }
+  body[data-page="search"] #results-table.compact-rows tbody tr.result-row:hover { background:#fff; border-color:#c3cad3; box-shadow:0 4px 14px rgba(15,23,42,.08); }
+  body[data-page="search"] #results-table.compact-rows tbody tr.result-row:has(+ tr.details-row:not([hidden])) { border-radius:12px 12px 0 0; }
+  body[data-page="search"] #results-table.compact-rows .result-row td { flex:0 1 auto; width:auto; padding:0; border:0; background:none; font-size:.9rem; color:#374151; text-align:left; justify-self:auto; grid-column:auto; grid-row:auto; }
+  body[data-page="search"] #results-table.compact-rows .result-row td::before { content:none; }
+  /* line 1: the job */
+  body[data-page="search"] #results-table.compact-rows td[data-label="Job"] { order:1; flex-basis:100%; }
+  body[data-page="search"] #results-table.compact-rows td[data-label="Job"] strong { font-size:1.08rem; color:#111827; }
+  body[data-page="search"] #results-table.compact-rows td[data-label="Job"] .job-meta { display:inline; margin-left:10px; font-size:.82rem; color:#526174; }
+  /* line 2: company · place · work type · distance */
+  body[data-page="search"] #results-table.compact-rows td[data-label="Company"] { order:2; font-weight:600; color:#1f2937; }
+  body[data-page="search"] #results-table.compact-rows td[data-label="Location"] { order:3; }
+  body[data-page="search"] #results-table.compact-rows td[data-label="Work Location"] { order:4; }
+  body[data-page="search"] #results-table.compact-rows td[data-label="Distance"] { order:5; }
+  body[data-page="search"] #results-table.compact-rows td[data-label="Location"]::before,
+  body[data-page="search"] #results-table.compact-rows td[data-label="Work Location"]::before,
+  body[data-page="search"] #results-table.compact-rows td[data-label="Distance"]::before { content:"·"; display:inline; margin:0 8px; font-size:inherit; font-weight:400; letter-spacing:0; text-transform:none; color:#9ca3af; }
+  /* line 3: the website and where the posting was found */
+  body[data-page="search"] #results-table.compact-rows td[data-label="Domain"] { order:6; flex-basis:100%; font-size:.8rem; color:#6b7280; }
+  body[data-page="search"] #results-table.compact-rows td[data-label="Domain"] br { display:none; }
+  body[data-page="search"] #results-table.compact-rows td[data-label="Domain"] .verification { display:inline; margin-left:8px; color:#6b7280; }
+  /* line 4: badges */
+  body[data-page="search"] #results-table.compact-rows td[data-label="Job Fit"],
+  body[data-page="search"] #results-table.compact-rows td[data-label="Career Credibility"],
+  body[data-page="search"] #results-table.compact-rows td[data-label="USA Credibility"],
+  body[data-page="search"] #results-table.compact-rows td[data-label="Listing"],
+  body[data-page="search"] #results-table.compact-rows td[data-label="Found"] {
+    display:inline-flex; align-items:center; gap:6px; margin:4px 8px 0 0; padding:3px 4px 3px 10px; border:1px solid #e5e7eb; border-radius:999px; background:#f9fafb; font-size:.78rem; color:#4b5563; white-space:nowrap; }
+  body[data-page="search"] #results-table.compact-rows td[data-label="Job Fit"] { order:7; }
+  body[data-page="search"] #results-table.compact-rows td[data-label="Career Credibility"] { order:8; }
+  body[data-page="search"] #results-table.compact-rows td[data-label="USA Credibility"] { order:9; }
+  body[data-page="search"] #results-table.compact-rows td[data-label="Listing"] { order:10; padding-right:10px; }
+  body[data-page="search"] #results-table.compact-rows td[data-label="Found"] { order:11; padding-right:10px; }
+  body[data-page="search"] #results-table.compact-rows td[data-label="Job Fit"]::before { content:"Job Fit"; }
+  body[data-page="search"] #results-table.compact-rows td[data-label="Career Credibility"]::before { content:"Career"; }
+  body[data-page="search"] #results-table.compact-rows td[data-label="USA Credibility"]::before { content:"USA"; }
+  body[data-page="search"] #results-table.compact-rows td[data-label="Listing"]::before { content:"Listing"; }
+  body[data-page="search"] #results-table.compact-rows td[data-label="Job Fit"]::before,
+  body[data-page="search"] #results-table.compact-rows td[data-label="Career Credibility"]::before,
+  body[data-page="search"] #results-table.compact-rows td[data-label="USA Credibility"]::before,
+  body[data-page="search"] #results-table.compact-rows td[data-label="Listing"]::before { display:inline; margin:0; font-size:inherit; font-weight:600; letter-spacing:0; text-transform:none; color:#6b7280; }
+  body[data-page="search"] #results-table.compact-rows .job-fit,
+  body[data-page="search"] #results-table.compact-rows .credibility-badge { min-width:0; padding:1px 8px; border-radius:999px; font-size:.78rem; }
+  body[data-page="search"] #results-table.compact-rows .found-cell small { font-size:.78rem; }
+  /* buttons on the right: Keep, then Details / Apply / Reject */
+  body[data-page="search"] #results-table.compact-rows td[data-label="Save"] { position:absolute; top:16px; right:20px; width:228px; }
+  body[data-page="search"] #results-table.compact-rows td[data-label="Actions"] { position:absolute; top:58px; right:20px; width:228px; }
+  body[data-page="search"] #results-table.compact-rows .keep-action { width:100%; min-width:0; max-width:none; min-height:34px; font-size:.86rem; }
+  body[data-page="search"] #results-table.compact-rows .row-action-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; }
+  body[data-page="search"] #results-table.compact-rows .row-action-grid .bordered-button { width:100%; min-width:0; min-height:34px; padding:4px 6px; font-size:.82rem; }
+  body[data-page="search"] #results-table.compact-rows .row-action-grid .block-action,
+  body[data-page="search"] #results-table.compact-rows .row-action-grid .block-company-action { display:none; }
+  body[data-page="search"] #results-table.compact-rows .btn-long { display:none; }
+  /* Details opens as the bottom of the same card */
+  body[data-page="search"] #results-table.compact-rows tr.details-row { margin-top:-13px; }
+  body[data-page="search"] #results-table.compact-rows tr.details-row > td { border:1px solid #dfe3e8; border-top:1px dashed #e5e7eb; border-radius:0 0 12px 12px; background:#f8fafc; }
+}@media (min-width:0px) {
+  body[data-page="search"] #results-table.compact-rows tbody tr.result-row,
+  body[data-page="search"] #results-table.compact-rows tbody tr.result-row td,
+  body[data-page="search"] #results-table.compact-rows tr.details-row { font-family:Arial, Helvetica, sans-serif; font-stretch:normal; }
+  body[data-page="search"] #results-table.compact-rows .result-row td.is-empty { display:none; }
+  body[data-page="search"] #results-table.compact-rows td[data-label="Save"] .keep-action,
+  body[data-page="search"] #results-table.compact-rows td[data-label="Actions"] .bordered-button { width:100% !important; min-width:0 !important; max-width:none !important; }
+  body[data-page="search"] #results-table.compact-rows td[data-label="Save"],
+  body[data-page="search"] #results-table.compact-rows td[data-label="Actions"] { min-width:228px; max-width:228px; }
+}
+@media (max-width:760px) {
+  body[data-page="search"] #results-table.compact-rows tbody tr.result-row { padding:14px 14px 12px; min-height:0; margin:0; }
+  body[data-page="search"] #results-table.compact-rows td[data-label="Save"],
+  body[data-page="search"] #results-table.compact-rows td[data-label="Actions"] { position:static; order:20; flex-basis:100%; width:100%; min-width:0; max-width:none; margin-top:8px; }
+  body[data-page="search"] #results-table.compact-rows td[data-label="Actions"] { order:21; margin-top:6px; }
+  body[data-page="search"] #results-table.compact-rows td[data-label="Save"] { padding-top:10px; border-top:1px solid #eef0f3; }
+  body[data-page="search"] #results-table.compact-rows td[data-label="Job"] .job-meta { display:block; margin:2px 0 0; }
+  body[data-page="search"] #results-table.compact-rows td[data-label="Domain"] .verification { display:block; margin:2px 0 0; }
+  body[data-page="search"] #results-table.compact-rows td[data-label="Job"]::before,
+  body[data-page="search"] #results-table.compact-rows td[data-label="Company"]::before { content:none; }
+  body[data-page="search"] #results-table.compact-rows tr.details-row { margin-top:-13px; }
+}
