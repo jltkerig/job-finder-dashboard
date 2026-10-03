@@ -1556,7 +1556,7 @@ body[data-page="search"] .results-toolbar .column-chooser-inline .column-option 
   body[data-page="search"] #results-table.compact-rows, #results-table.compact-rows tbody { display:block; width:100%; min-width:0; }
   #results-table.compact-rows thead { display:none; }
   #results-table.compact-rows tr.result-row { display:grid; align-items:center; column-gap:14px; row-gap:6px; padding:12px 16px; border-bottom:1px solid #e3e6ea;
-    grid-template-columns:86px minmax(110px,1fr) minmax(200px,2.2fr) minmax(110px,1fr) 78px 78px 150px 168px; }
+    grid-template-columns:86px minmax(110px,1fr) minmax(200px,2.2fr) minmax(110px,1fr) 78px 78px 150px 236px; }
   #results-table.compact-rows tr.result-row:hover { background:#f8fafc; }
   #results-table.compact-rows tr.details-row { display:block; }
   #results-table.compact-rows tr.details-row[hidden] { display:none; }
@@ -1606,7 +1606,7 @@ body[data-page="search"] .results-toolbar .column-chooser-inline .column-option 
 }
 /* A narrower window: five columns on the first line, the rest stacked beneath them. Still no sideways scrolling. */
 @media (min-width:761px) and (max-width:1100px) {
-  #results-table.compact-rows tr.result-row { grid-template-columns:80px minmax(90px,1fr) minmax(150px,2fr) minmax(90px,1fr) 156px; }
+  #results-table.compact-rows tr.result-row { grid-template-columns:80px minmax(90px,1fr) minmax(150px,2fr) minmax(90px,1fr) 224px; }
   #results-table.compact-rows td[data-label="Location"] { grid-column:4; }
   #results-table.compact-rows td[data-label="Actions"] { grid-column:5; }
   #results-table.compact-rows td[data-label="Distance"] { grid-column:2; grid-row:2; }
