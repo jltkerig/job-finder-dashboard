@@ -676,7 +676,7 @@ document.addEventListener("DOMContentLoaded", () => {
       try {
         const response = await fetch(`/job-title-matches?q=${encodeURIComponent(typed)}`, { cache: "no-store" });
         const data = await response.json();
-        if (term() !== typed) return;
+        if (term() !== typed || document.activeElement !== input) return; // the box was left while this loaded
         const have = multi ? input.value.split(",").map((t) => t.trim().toLowerCase()) : [];
         items = (data.matches || []).filter((title) => title.toLowerCase() === typed.toLowerCase() ? false : !have.slice(0, -1).includes(title.toLowerCase()));
         active = -1; render();

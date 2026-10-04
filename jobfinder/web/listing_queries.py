@@ -11,7 +11,9 @@ from jobfinder.profiles.profile_tools import fit_score
 from jobfinder.profiles.travel import describe as describe_trip
 from jobfinder.records.capture_import import CAPTURE_SOURCES
 from jobfinder.records.job_retention import SAVED_STATUSES
+from jobfinder.sources.job_feeds import FEED_NAMES
 from jobfinder.sources.job_listings import NON_JOB_PATH
+from jobfinder.sources.job_sites import JOB_SITE_NAMES
 from jobfinder.web import blocklists
 from jobfinder.web import schema
 
@@ -207,8 +209,10 @@ def get_companies():
                                    (row.get("career_url") or "").lower())
                          and (row.get("career_job_title") or "").strip().casefold() in
                          {"directory search", "campus employment & internships", "student employment"})
-                # The blocked-domain list is for web-search results; jobs you captured on those sites still show.
-                and (row.get("source_type") in CAPTURE_SOURCES
+                # The blocked-domain list is for web-search results: jobs you captured on those sites, and jobs from the
+                # remote feeds and job sites (whose domain is the board's, such as remoteok.com), still show.
+                and (row.get("source_type") in CAPTURE_SOURCES or row.get("source_type") in FEED_NAMES
+                     or row.get("source_type") in JOB_SITE_NAMES
                      or not any((row.get("domain") or "").lower().removeprefix("www.") == domain
                                 or (row.get("domain") or "").lower().endswith("." + domain)
                                 for domain in blocked_domains))]

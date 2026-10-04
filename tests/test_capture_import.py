@@ -353,6 +353,9 @@ class DashboardVisibility(unittest.TestCase):
              "source_url": "https://www.linkedin.com/jobs/view/1", "career_url": "https://www.linkedin.com/jobs/view/1"},
             {"id": 2, "name": "Beta", "domain": "linkedin.com", "source_type": "SearXNG",
              "source_url": "https://www.linkedin.com/jobs/view/2", "career_url": "https://www.linkedin.com/jobs/view/2"},
+            # A remote-feed job: its domain is the feed's (remoteok.com, on the recommended block list), and it still shows.
+            {"id": 3, "name": "Gamma", "domain": "remoteok.com", "source_type": "Remote OK",
+             "source_url": "https://remoteok.com/remote-jobs/3", "career_url": "https://remoteok.com/remote-jobs/3"},
         ]
 
         class Cursor:
@@ -376,10 +379,10 @@ class DashboardVisibility(unittest.TestCase):
                 pass
 
         with patch.object(mysql.connector, "connect", return_value=Connection()), \
-                patch.object(blocklists, "get_blocked_domains", return_value=["linkedin.com"]), \
+                patch.object(blocklists, "get_blocked_domains", return_value=["linkedin.com", "remoteok.com"]), \
                 patch.object(blocklists, "get_blocked_companies", return_value=[]):
             shown = listing_queries.get_companies()
-        self.assertEqual([row["id"] for row in shown], [1])
+        self.assertEqual([row["id"] for row in shown], [1, 3])
 
 
 class ClosedJobRetention(unittest.TestCase):
