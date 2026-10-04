@@ -1,20 +1,43 @@
+# This repo is public. Anything personal, uploaded or secret stays out of it.
+
+# Secrets
 .env
+.env.*
+!.env.example
+.secret_key
+*.key
+*.pem
+
+# Machine-only
 __pycache__/
 *.pyc
-search_skips.jsonl
-.stop-requested
-search_debug.json
-discovered_employers.json
-board_health.json
-feed_cache/
 *.log
-# Resumes and cover letters from Resume Builder (personal)
-user-builds/
-# Your own files and the logs (see jobfinder/paths.py); updates never touch them
+*.bak
+.stop-requested
+feed_cache/
+
+# Job Finder: your own files and the logs (see jobfinder/paths.py); updates never touch them
 user-data/
 logs/
+search_skips.jsonl
+search_debug.json
 search_scope.json
+discovered_employers.json
+board_health.json
 watched_employers.before-*.json
-*.bak
-# Résumé Builder: its own git repo, and its data/ is personal; never in Job Finder releases
+# Résumés and cover letters made by Résumé Builder
+user-builds/
+
+# Résumé Builder: your uploaded résumé, reference documents, references, drafts,
+# writing rules, saved design, downloaded fonts and the secret key
+resume-builder/data/
+
+# Uploaded or personal documents anywhere in the project, as a safety net
+*.pdf
+*.doc
+*.docx
+*.rtf
+*.odt
+
+# Résumé Builder still has its own git repo; remove this line when it joins this repo
 resume-builder/
