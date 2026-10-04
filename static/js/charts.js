@@ -1,6 +1,9 @@
 document.addEventListener("DOMContentLoaded", () => {
   const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || "";
   const page = document.body.dataset.page || "";
+  // Your own examples for empty boxes, from user-data/form-examples.json; blank when it has none.
+  const formExamples = (() => { try { return JSON.parse(document.body.dataset.formExamples || "{}"); } catch { return {}; } })();
+  const example = (key) => formExamples[key] || "";
   const toastRegion = document.getElementById("toast-region");
   let currentUpdateController = null;
   let requestReplacement = async () => {};
@@ -421,10 +424,10 @@ document.addEventListener("DOMContentLoaded", () => {
           input.addEventListener("input", () => { job[key] = input.value; save(); });
           label.append(input); return { label, input };
         };
-        const title = field("Job Title", "role", "e.g. Web Designer"), companyField = field("Company", "company", "e.g. Acme Widgets");
+        const title = field("Job Title", "role", "e.g. Web Designer"), companyField = field("Company", "company", example("work_company"));
         fields.append(title.label, companyField.label);
         // Dates: month pickers when the dates fit them; the typed text too when they don't (e.g. just years).
-        const datesField = field("Dates as written", "dates", "e.g. 2014 – 2015"); datesField.label.className = "work-wide";
+        const datesField = field("Dates as written", "dates", example("work_dates")); datesField.label.className = "work-wide";
         const known = (job.dates || "").match(/^(\d{4}-\d{2})\s*[–-]\s*(\d{4}-\d{2}|Present)$/i);
         const months = el("div", "history-months");
         const start = el("input"), end = el("input"), current = el("input"); start.type = end.type = "month"; current.type = "checkbox";
@@ -447,10 +450,10 @@ document.addEventListener("DOMContentLoaded", () => {
           box.append(grid); return box;
         };
         fields.append(group("Location and Contact", "Optional. Some applications ask where the job was and how to reach the company.", [
-          ["Street", "street", "e.g. 1 Main St, Suite 250", true], ["City", "city", "e.g. Springfield"], ["State", "state", "e.g. MD"],
-          ["ZIP", "zip", "e.g. 21000"], ["Phone", "phone", "e.g. 555-555-0100"], ["Website", "website", "e.g. example.com", true]]));
+          ["Street", "street", example("work_street"), true], ["City", "city", example("work_city")], ["State", "state", example("work_state")],
+          ["ZIP", "zip", example("work_zip")], ["Phone", "phone", example("work_phone")], ["Website", "website", example("work_website"), true]]));
         fields.append(group("Supervisor", "Optional. Some applications ask who you reported to.", [
-          ["Name", "supervisor_name", "e.g. Sam Lee"], ["Title", "supervisor_title", "e.g. Senior Manager of Design"],
+          ["Name", "supervisor_name", example("supervisor_name")], ["Title", "supervisor_title", example("supervisor_title")],
           ["Email", "supervisor_email", "e.g. name@company.com"], ["Phone", "supervisor_phone", "Their own number, if you have it"]]));
         const actions = el("div", "work-actions");
         const remove = el("button", "bordered-button destructive-action", "Remove Job"); remove.type = "button";
@@ -496,13 +499,13 @@ document.addEventListener("DOMContentLoaded", () => {
           const input = el("input"); input.value = school[key] || ""; input.placeholder = example; input.maxLength = max;
           input.addEventListener("input", () => { school[key] = input.value; save(); }); label.append(input); return label;
         };
-        fields.append(box("School", "school", "e.g. State University", 200, true));
+        fields.append(box("School", "school", example("school"), 200, true));
         const degreeLabel = el("label"); degreeLabel.append("Degree ");
         const select = el("select"); select.append(new Option("Choose…", ""));
         for (const option of degrees) select.append(new Option(option, option));
         select.value = school.degree || ""; select.addEventListener("change", () => { school.degree = select.value; save(); });
-        degreeLabel.append(select); fields.append(degreeLabel, box("GPA (optional)", "gpa", "e.g. 3.5", 10));
-        fields.append(box("Major", "major", "e.g. Graphic Design", 150), box("Minor (optional)", "minor", "e.g. Art History", 150));
+        degreeLabel.append(select); fields.append(degreeLabel, box("GPA (optional)", "gpa", example("gpa"), 10));
+        fields.append(box("Major", "major", example("major"), 150), box("Minor (optional)", "minor", example("minor"), 150));
         const months = el("div", "history-months");
         const start = el("input"), end = el("input"), current = el("input"); start.type = end.type = "month"; current.type = "checkbox";
         start.value = /^\d{4}-\d{2}$/.test(school.start_date || "") ? school.start_date : "";

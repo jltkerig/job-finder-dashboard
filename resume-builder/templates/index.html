@@ -1,0 +1,532 @@
+{% extends "base.html" %}
+{% block header %}
+  <h1>Résumé Builder</h1>
+  <p class="app-version">Version {{ app_version }}</p>
+{% endblock %}
+{% block content %}
+<div class="grid">
+
+<section class="card wide how-to">
+  <div class="how-to-head">
+    <h2>How to Use It</h2>
+    {% if connector.installed %}
+      <span class="how-to-status status-ok">Connected to Claude Desktop</span>
+    {% else %}
+      <span class="how-to-status status-warn">Not connected to Claude Desktop yet</span>
+    {% endif %}
+  </div>
+  <ol class="steps">
+    <li>
+      <span class="step-number" aria-hidden="true">1</span>
+      <h3>Upload Your Résumé</h3>
+      <p>Choose your current résumé below. Its layout is copied: fonts, sizes, colors and section order.</p>
+    </li>
+    <li>
+      <span class="step-number" aria-hidden="true">2</span>
+      <h3>Check Your Profile</h3>
+      <p>Make sure your name, location, job titles, work history and skills are right.</p>
+    </li>
+    <li>
+      <span class="step-number" aria-hidden="true">3</span>
+      <h3>Ask Claude Desktop</h3>
+      <p>Ask it to write for a job you saved:</p>
+      <q>Use Résumé Builder to write a résumé and cover letter for the Acme web developer job.</q>
+    </li>
+    <li>
+      <span class="step-number" aria-hidden="true">4</span>
+      <h3>Review and Download</h3>
+      <p>Come back here to read, edit and download the finished PDFs.</p>
+    </li>
+  </ol>
+  {% if not connector.installed %}
+    <p class="how-to-setup">To connect, run <code>install-connector.ps1</code> in the resume-builder folder, then quit and reopen Claude Desktop.</p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Your Current Résumé</h2>
+  {% if resume %}
+    <p><strong>{{ resume.original_name }}</strong> &middot; uploaded {{ resume.uploaded_at.replace('T', ' ') }}{% if resume.pages %} &middot; {{ resume.pages }} page{{ 's' if resume.pages != 1 }}{% endif %}</p>
+    {% for note in resume.notes %}<p class="field-help">{{ note }}</p>{% endfor %}
+    {% if resume.preview_pdf %}
+      <div class="pages">
+        {% for n in range([resume.pages or 1, 2]|min) %}<img src="{{ url_for('resume_page', number=n) }}" alt="Page {{ n + 1 }} of your current résumé" />{% endfor %}
+      </div>
+    {% endif %}
+  {% else %}
+    <p>No résumé uploaded yet.</p>
+  {% endif %}
+  <form method="post" action="{{ url_for('upload') }}" enctype="multipart/form-data" class="upload">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}" />
+    <label for="resume">{{ 'Replace with' if resume else 'Upload' }} a PDF or Word (.docx) file</label>
+    <input id="resume" name="resume" type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" required />
+    <button class="bordered-button primary" type="submit">Upload</button>
+  </form>
+</section>
+
+<section class="card" id="documents">
+  <h2>Reference Documents</h2>
+  <p class="field-help">Anything that helps Claude write about you: past cover letters, performance reviews, award letters, certificates, a list of projects. Claude Desktop can read these in every chat and uses only what is actually in them. Kept only on this computer.</p>
+  {% if documents %}
+  <ul class="ref-list">
+  {% for d in documents %}
+    <li class="ref-entry">
+      <div class="ref-summary">
+        <p class="ref-name"><strong>{{ d.label }}</strong> <span class="chip">{{ d.type }}</span></p>
+        <p class="field-help">{{ d.original_name }} &middot; uploaded {{ d.uploaded_at.replace('T', ' ') }}{% if d.pages %} &middot; {{ d.pages }} page{{ 's' if d.pages != 1 }}{% endif %}
+          &middot; {% if d.chars %}{{ '{:,}'.format(d.chars) }} characters of text{% else %}<span class="status-warn">no text found (scan or image)</span>{% endif %}</p>
+      </div>
+      <div class="ref-actions">
+        <a class="icon-button" href="{{ url_for('document_file', doc_id=d.id) }}" target="_blank" rel="noopener" title="{{ 'View' if d.type == 'PDF' else 'Download' }} {{ d.label }}" aria-label="{{ 'View' if d.type == 'PDF' else 'Download' }} {{ d.label }}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5.5 5.5"/></svg></a>
+        <details class="ref-edit">
+          <summary class="icon-button" title="Rename {{ d.label }}" aria-label="Rename {{ d.label }}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h9l5 5v13H5z"/><path d="M14 3v5h5"/><path d="M9 17l1-3 6-6 2 2-6 6z"/></svg></summary>
+          <form method="post" action="{{ url_for('rename_document', doc_id=d.id) }}">
+            <input type="hidden" name="csrf" value="{{ csrf_token() }}" />
+            <div class="ref-grid"><label class="ref-notes">Label <input name="label" value="{{ d.label }}" maxlength="120" required /></label></div>
+            <button class="bordered-button primary" type="submit">Save label</button>
+          </form>
+        </details>
+        <form method="post" action="{{ url_for('delete_document', doc_id=d.id) }}" onsubmit="return confirm('Delete this document?');">
+          <input type="hidden" name="csrf" value="{{ csrf_token() }}" />
+          <button class="icon-button icon-delete" type="submit" title="Delete {{ d.label }}" aria-label="Delete {{ d.label }}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8l8 8M16 8l-8 8"/></svg></button>
+        </form>
+      </div>
+    </li>
+  {% endfor %}
+  </ul>
+  {% else %}
+    <p>No documents yet.</p>
+  {% endif %}
+  <form method="post" action="{{ url_for('add_document') }}" enctype="multipart/form-data" class="reference reference-new">
+    <h3>Add a Document</h3>
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}" />
+    <div class="ref-grid">
+      <label>Label <input name="label" maxlength="120" placeholder="e.g. 2024 performance review" /></label>
+      <label>File <span class="field-help">PDF, Word .docx, .txt or .md, up to 10 MB</span>
+        <input name="document" type="file" accept=".pdf,.docx,.txt,.md" required /></label>
+    </div>
+    <button class="bordered-button primary" type="submit">Add document</button>
+  </form>
+</section>
+
+{% if design_on %}
+<section class="card wide" id="design">
+<details class="section-collapse" id="design-panel">
+  <summary><h2>Résumé Design</h2><span class="summary-chevron" aria-hidden="true"></span></summary>
+  <p class="field-help">What Résumé Builder sees in your uploaded résumé is written out below. Change anything, then Save Design: new résumés and cover letters are drawn with it, and Claude Desktop reads your notes.</p>
+
+  <h3>What It Sees</h3>
+  <dl class="design-rows">
+    {% for label, text in design_rows %}<div><dt>{{ label }}</dt><dd>{{ text }}</dd></div>{% endfor %}
+  </dl>
+  <form method="post" action="{{ url_for('reread_design') }}" class="inline-form">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}" />
+    <button class="bordered-button" type="submit">Look at My Résumé Again</button>
+  </form>
+
+  <form method="post" action="{{ url_for('save_design') }}" class="design-form">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}" />
+    {% if design_unsaved %}<p class="flash flash-warn">These are the fonts from jamiekerig.com. They are not saved yet: check them, then Save Design.</p>{% endif %}
+    {% set l = design_layout %}
+
+    <h3>Fonts</h3>
+    <p class="field-help">Pick from the list or type a name. The list has the fonts installed on this computer and Google Fonts; a Google Font is saved here the first time you use it.</p>
+    <datalist id="font-list">
+      {% for f in installed_fonts %}<option value="{{ f }}" label="Installed"></option>{% endfor %}
+      {% for f in google_fonts %}<option value="{{ f }}" label="Google Font"></option>{% endfor %}
+    </datalist>
+    <div class="fields font-fields">
+      {% for key, label, st in font_roles %}
+      <div class="font-field">
+        <label>{{ label }}
+          <input name="{{ key }}" list="font-list" value="{{ l[key] }}" maxlength="60" autocomplete="off"{{ ' required' if key == 'font_family' }} /></label>
+        <p class="font-status font-{{ st.status }}">{{ st.text }}</p>
+        {% if st.similar %}<p class="field-help">Similar fonts to try:
+          {% for s in st.similar %}<button type="button" class="chip-button" data-fill="{{ key }}" data-font="{{ s }}">{{ s }}</button>{% endfor %}</p>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    <p class="field-help">Leave a font empty to use the body text font. Dates, sub-headings and the contact lines use the last one.</p>
+
+    <h3>Sizes and Spacing</h3>
+    <div class="fields">
+      <label>Name Size (pt) <input name="name_size" type="number" step="0.5" min="10" max="40" value="{{ l.name_size }}" /></label>
+      <label>Section Heading Size (pt) <input name="heading_size" type="number" step="0.5" min="8" max="24" value="{{ l.heading_size }}" /></label>
+      <label>Body Text Size (pt) <input name="body_size" type="number" step="0.5" min="7" max="14" value="{{ l.body_size }}" /></label>
+      <label>Line Height (times the text size) <input name="line_spacing" type="number" step="0.05" min="1" max="1.8" value="{{ l.line_spacing }}" /></label>
+      <label>Space Above Headings (pt) <input name="section_gap" type="number" step="1" min="2" max="40" value="{{ l.section_gap if l.section_gap is not none }}" placeholder="same as text" /></label>
+    </div>
+
+    <h3>Page and Margins</h3>
+    <div class="fields">
+      <label>Paper <select name="page_size"><option value="letter" {{ 'selected' if l.page_size == 'letter' }}>Letter</option><option value="a4" {{ 'selected' if l.page_size == 'a4' }}>A4</option></select></label>
+      {% for side in ('top', 'right', 'bottom', 'left') %}{% set key = 'margin_' ~ side %}
+      <label>Margin, {{ side|capitalize }} (in) <input name="{{ key }}" type="number" step="0.05" min="0.3" max="1.5" value="{{ l[key] if l[key] is not none else '' }}" placeholder="{{ l.margin_in }}" /></label>
+      {% endfor %}
+    </div>
+
+    <h3>Header and Headings</h3>
+    <div class="fields">
+      <label>Name Position <select name="name_align"><option value="left" {{ 'selected' if l.name_align == 'left' }}>Left</option><option value="center" {{ 'selected' if l.name_align == 'center' }}>Centered</option></select></label>
+      <label>Contact Items Separated By <select name="contact_separator">{% for c in ('|', '•', '·', '/', ',', '–', '-') %}<option {{ 'selected' if l.contact_separator == c }}>{{ c }}</option>{% endfor %}</select></label>
+      <label>Headings <select name="heading_case"><option value="upper" {{ 'selected' if l.heading_case == 'upper' }}>CAPITALS</option><option value="title" {{ 'selected' if l.heading_case == 'title' }}>As Written</option></select></label>
+      <label>Bullet Style <select name="bullet_char">{% for c in ('•', '–', '-', '·', '▪', '○', '›') %}<option {{ 'selected' if l.bullet_char == c }}>{{ c }}</option>{% endfor %}</select></label>
+      <label>Heading and Name Color <input name="accent_color" type="color" value="{{ l.accent_color }}" /></label>
+      <label>Text Color <input name="text_color" type="color" value="{{ l.text_color }}" /></label>
+      <label class="check"><input name="header_rule" type="checkbox" {{ 'checked' if l.header_rule }} /> Line Under the Header</label>
+      <label class="check"><input name="heading_rule" type="checkbox" {{ 'checked' if l.heading_rule }} /> Line Under Each Heading</label>
+    </div>
+
+    <h3>Design Notes</h3>
+    <p class="field-help">Written from your résumé. Edit it as you like; Claude Desktop reads it when it writes for you.</p>
+    <textarea name="notes" rows="12" maxlength="6000">{{ design_notes }}</textarea>
+
+    <div class="form-actions">
+      <button class="bordered-button primary" type="submit">Save Design</button>
+      <a class="bordered-button" href="{{ url_for('design_preview') }}" target="_blank" rel="noopener">Preview With Sample Text</a>
+      <a class="bordered-button" href="{{ url_for('index', preset='portfolio') }}#design">Match My Portfolio (jamiekerig.com)</a>
+    </div>
+  </form>
+  <form method="post" action="{{ url_for('reset_design') }}" class="inline-form" onsubmit="return confirm('Go back to the design measured from your résumé?');">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}" />
+    <button class="bordered-button" type="submit">Reset to My Résumé</button>
+  </form>
+
+  <h3>Type on jamiekerig.com</h3>
+  <p class="field-help">Read from the site’s stylesheet on {{ portfolio.checked_at }}{{ '' if portfolio.live else ' (when this was built)' }}. “Match My Portfolio” fills the fonts above with these; the site’s pale yellow is too light for white paper, so headings use its dark gray.</p>
+  <table class="design-table">
+    <thead><tr><th>Used For</th><th>Font</th><th>Available</th></tr></thead>
+    <tbody>
+    {% for label, font, st in portfolio_fonts %}
+      <tr><td>{{ label }}</td><td><strong>{{ font }}</strong></td>
+        <td><span class="font-status font-{{ st.status }}">{{ st.text }}</span>
+          {% if st.similar %}<br />Similar: {{ st.similar|join(', ') }}{% endif %}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% if portfolio.accents %}<p class="field-help">Also on the site: {{ portfolio.accents|join(', ') }}.</p>{% endif %}
+  <form method="post" action="{{ url_for('check_portfolio') }}" class="inline-form">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}" />
+    <button class="bordered-button" type="submit">Check the Site Again</button>
+  </form>
+</details>
+</section>
+{% endif %}
+
+<section class="card wide" id="profile">
+<details class="section-collapse" id="profile-panel">
+  <summary><h2>Profile</h2><span class="summary-chevron" aria-hidden="true"></span></summary>
+  {% if profile_error %}
+    <p class="status status-warn">{{ profile_error }}</p>
+  {% elif profile %}
+    {% set missing = not (profile.first_name and profile.last_name and profile.home_location) %}
+    {% if missing %}
+      <p class="status status-warn">Add your name and location below. Résumés, cover letters and file names use them.</p>
+    {% endif %}
+    {% set others = profile.job_titles | reject('equalto', profile.primary_job_title) | list %}
+    <dl class="facts">
+      <dt>Name</dt><dd>{{ (profile.first_name ~ ' ' ~ profile.last_name).strip() or '—' }}</dd>
+      <dt>Location</dt><dd>{{ profile.home_location or '—' }}</dd>
+      <dt>Links</dt><dd>{% if profile.linkedin_url %}<div><a href="{{ profile.linkedin_url }}" target="_blank" rel="noopener">LinkedIn</a></div>{% endif %}{% if profile.portfolio_url %}<div><a href="{{ profile.portfolio_url }}" target="_blank" rel="noopener">{{ profile.portfolio_url.split('://')[-1].rstrip('/') }}</a></div>{% endif %}{% if not (profile.linkedin_url or profile.portfolio_url) %}— <span class="field-help">(add them on Job Finder's Dashboard)</span>{% endif %}</dd>
+      <dt>Primary job</dt><dd>{{ profile.primary_job_title or '—' }}</dd>
+      <dt>Other titles</dt><dd>{{ others|join(', ') or '—' }}</dd>
+      <dt>Work history</dt><dd>{% for w in profile.work_history %}<div>{{ w.role }}{% if w.role and w.company %} at {% endif %}{{ w.company }}{% if w.dates %} <span class="field-help">({{ w.dates }})</span>{% endif %}</div>{% else %}—{% endfor %}</dd>
+      {% if resume_jobs %}<dt></dt><dd><p class="status status-warn">Your résumé lists {{ resume_jobs|length }} job{{ 's' if resume_jobs|length != 1 }} that {{ 'are' if resume_jobs|length != 1 else 'is' }} not in your Profile yet: {% for j in resume_jobs %}{{ j.role }}{% if j.company %} at {{ j.company }}{% endif %}{{ '; ' if not loop.last }}{% endfor %}.</p>
+        <form method="post" action="{{ url_for('fill_profile_from_resume') }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}" /><button class="bordered-button" type="submit">Add them to my Profile</button></form></dd>{% endif %}
+      <dt>Education</dt><dd>{% for e in profile.education or [] %}<div>{{ e.degree or 'School' }}{% if e.major %} in {{ e.major }}{% endif %}{% if e.minor %} (minor: {{ e.minor }}){% endif %}, {{ e.school }}{% if e.start_date or e.end_date %} <span class="field-help">({{ e.start_date or '?' }} – {{ e.end_date or '?' }})</span>{% endif %}{% if e.gpa %} <span class="field-help">GPA {{ e.gpa }}</span>{% endif %}</div>{% else %}—{% endfor %}</dd>
+      <dt>Skills</dt><dd>{% for s in profile.skills %}<span class="chip">{{ s }}</span>{% else %}—{% endfor %}</dd>
+    </dl>
+    {% if document_finds.jobs or document_finds.skills or document_finds.details %}
+    <form method="post" action="{{ url_for('add_from_documents') }}" class="document-finds" id="document-suggestions">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}" />
+      <h3>Found in Your Reference Documents</h3>
+      <p class="field-help">These aren't in your Profile yet. Tick what you want, then add it. Nothing is added until you click the button.</p>
+      {% if document_finds.jobs %}
+      <h4>Work History</h4>
+      <ul class="find-list">{% for j in document_finds.jobs %}
+        <li><label><input type="checkbox" name="job" value="{{ j.key }}" checked />
+          <span><strong>{{ j.role }}</strong>{% if j.company %} at {{ j.company }}{% endif %}{% if j.dates %} <span class="field-help">({{ j.dates }})</span>{% endif %}
+          {% if j.description %}<small>{{ j.description[:160] }}{{ '…' if j.description|length > 160 }}</small>{% endif %}
+          <small class="find-source">From {{ j.source }}</small></span></label><button class="dismiss-button" type="submit" formaction="{{ url_for('dismiss_suggestion') }}" formnovalidate name="dismiss" value="job:{{ j.dismiss }}" title="Don't suggest this job again" aria-label="Don't suggest {{ j.role }} at {{ j.company }} again">Dismiss</button></li>{% endfor %}
+      </ul>
+      {% endif %}
+      {% if document_finds.skills %}
+      <h4>Skills</h4>
+      <div class="find-skills">{% for s in document_finds.skills %}<span class="find-skill"><label><input type="checkbox" name="skill" value="{{ s }}" checked /> {{ s }}</label><button class="dismiss-x" type="submit" formaction="{{ url_for('dismiss_suggestion') }}" formnovalidate name="dismiss" value="skill:{{ s|lower }}" title="Don't suggest {{ s }} again" aria-label="Don't suggest {{ s }} again">&times;</button></span>{% endfor %}</div>
+      {% endif %}
+      {% if document_finds.details %}
+      <h4>Missing Details for Jobs You Already Have</h4>
+      <p class="field-help">These jobs are already in your work history. Your documents have details their empty boxes are missing; tick a job to fill them in. Nothing you've already typed is changed.</p>
+      <ul class="find-list">{% for d in document_finds.details %}
+        <li><label><input type="checkbox" name="detail" value="{{ d.index }}" checked />
+          <span><strong>{{ d.role }}</strong>{% if d.company %} at {{ d.company }}{% endif %}
+          <small><b>Fill in:</b> {% for key, value in d.details.items() %}{{ detail_labels[key] }} {{ value }}{% if key in ('supervisor_phone', 'supervisor_email', 'supervisor_title') and d.supervisor and 'supervisor_name' not in d.details %} ({{ d.supervisor }}'s){% endif %}{{ ' · ' if not loop.last }}{% endfor %}</small>
+          <small class="find-source">From {{ d.source }}</small></span></label><button class="dismiss-button" type="submit" formaction="{{ url_for('dismiss_suggestion') }}" formnovalidate name="dismiss" value="detail:{{ d.dismiss }}" title="Don't suggest these details again" aria-label="Don't suggest details for {{ d.role }} again">Dismiss</button></li>{% endfor %}
+      </ul>
+      {% endif %}
+      <button class="bordered-button primary" type="submit">Add Ticked Items</button>
+    </form>
+    {% endif %}
+
+    {% if document_finds.people %}
+    <section class="found-people" id="found-people">
+      <h3>People in Your Documents</h3>
+      <p class="field-help">Choose where each person belongs: a job's supervisor, your References, both, or neither. Nothing is added until you click.</p>
+      <ul class="person-list">{% for p in document_finds.people %}
+        <li class="person-card">
+          <div class="person-info">
+            <p class="ref-name"><strong>{{ p.name }}</strong>{% if p.title or p.company %} <span class="person-role">{{ [p.title, p.company]|select|join(', ') }}</span>{% endif %}</p>
+            {% if p.user_job %}<p class="field-help">{{ 'Your supervisor' if p.relationship == 'Supervisor' else 'Worked with you' }} when you were {{ p.user_job }}</p>{% endif %}
+            {% if p.phone or p.email %}<p class="ref-contact">{{ [p.phone, p.email]|select|join(' · ') }}</p>{% endif %}
+            <p class="field-help">From {{ p.source }}</p>
+            {% if p.supervisor_on or p.is_reference %}<p class="person-placed">{% if p.supervisor_on %}✓ Supervisor on {{ p.supervisor_on|join(', ') }}{% endif %}{% if p.supervisor_on and p.is_reference %} · {% endif %}{% if p.is_reference %}✓ In your References{% endif %}</p>{% endif %}
+          </div>
+          <div class="person-choices">
+            {% if profile and profile.work_history %}
+            <form method="post" action="{{ url_for('set_supervisor') }}" class="supervisor-form">
+              <input type="hidden" name="csrf" value="{{ csrf_token() }}" />
+              <div class="supervisor-row"><label>Supervisor for <select name="sup_job_{{ p.key }}"><option value="">Choose a job…</option>{% for w in profile.work_history %}<option value="{{ loop.index0 }}"{% if loop.index0 == p.job_index %} selected{% endif %}>{{ w.role }}{% if w.company %} at {{ w.company }}{% endif %}</option>{% endfor %}</select></label><button class="bordered-button" type="submit" name="person" value="suggestion:{{ p.key }}">Set as Supervisor</button></div>
+            </form>
+            {% endif %}
+            <div class="person-buttons">
+              {% if not p.is_reference %}
+              <form method="post" action="{{ url_for('add_suggested_reference') }}">
+                <input type="hidden" name="csrf" value="{{ csrf_token() }}" />
+                <button class="bordered-button" type="submit" name="key" value="{{ p.key }}">Add to References</button>
+              </form>
+              {% endif %}
+              <form method="post" action="{{ url_for('dismiss_suggestion') }}">
+                <input type="hidden" name="csrf" value="{{ csrf_token() }}" />
+                <button class="bordered-button quiet-button" type="submit" name="dismiss" value="reference:{{ p.dismiss }}" title="Stop showing {{ p.name }} here">{{ 'Done' if p.supervisor_on or p.is_reference else 'Ignore' }}</button>
+              </form>
+            </div>
+          </div>
+        </li>{% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+    <details class="name-edit"{% if missing %} open{% endif %}>
+      <summary class="bordered-button">Edit</summary>
+      <form method="post" action="{{ url_for('save_profile') }}">
+        <input type="hidden" name="profile_version" value="{{ profile_version }}" />
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}" />
+        <div class="ref-grid">
+          <label>First name <input name="first_name" value="{{ profile.first_name }}" maxlength="100" autocomplete="given-name" required /></label>
+          <label>Last name <input name="last_name" value="{{ profile.last_name }}" maxlength="100" autocomplete="family-name" required /></label>
+          <label>Home city, state <input name="home_location" value="{{ profile.home_location }}" maxlength="150" placeholder="{{ form_examples.home_location or '' }}" autocomplete="address-level2" /></label>
+          <label>Home ZIP <input name="home_zip" value="{{ profile.home_zip or '' }}" maxlength="5" inputmode="numeric" pattern="[0-9]{5}" placeholder="{{ form_examples.home_zip or '' }}" autocomplete="postal-code" /></label>
+          <label>LinkedIn profile <input name="linkedin_url" value="{{ profile.linkedin_url or '' }}" maxlength="255" inputmode="url" placeholder="e.g. linkedin.com/in/your-name" /></label>
+          <label>Portfolio or website <input name="portfolio_url" value="{{ profile.portfolio_url or '' }}" maxlength="255" inputmode="url" placeholder="e.g. yourname.com" /></label>
+          <label class="ref-notes">Primary job title <input id="pf-primary" name="primary_job_title" value="{{ profile.primary_job_title }}" maxlength="255" placeholder="e.g. Web Designer" data-title-suggest="single" /></label>
+          <label class="ref-notes">Other job titles to search for <span class="field-help">separate with commas</span>
+            <textarea id="pf-other-titles" name="other_titles" rows="2" data-title-suggest="list">{{ others|join(', ') }}</textarea></label>
+          <div class="ref-notes title-chips" data-title-chips="pf-other-titles" data-also-from="pf-primary" hidden><span class="field-help">Suggested:</span><div class="chip-row"></div></div>
+          <label class="ref-notes">Skills <span class="field-help">separate with commas</span>
+            <textarea name="skills" rows="3">{{ profile.skills|join(', ') }}</textarea></label>
+        </div>
+        {% set history = profile.work_history + [{'role': '', 'company': '', 'dates': '', 'description': ''}] %}
+        <input type="hidden" name="wh_count" value="{{ history|length }}" />
+        <h3 class="sub-heading">Work History</h3>
+        <p class="field-help">To remove a job, clear its title and company.</p>
+        {% for w in history %}{% set k = 'wh' ~ loop.index0 ~ '_' %}
+        <fieldset class="history-row{{ ' history-new' if loop.last }}">
+          <legend>{{ 'Add a Job' if loop.last else (w.role or w.company) }}</legend>
+          <div class="ref-grid">
+            <label>Job title <input id="{{ k }}role" name="{{ k }}role" value="{{ w.role }}" maxlength="150" placeholder="e.g. Web Designer" data-title-suggest="single" /></label>
+            <label>Company <input name="{{ k }}company" value="{{ w.company }}" maxlength="150" /></label>
+            <label class="ref-notes">Dates <input name="{{ k }}dates" value="{{ w.dates }}" maxlength="100" placeholder="{{ form_examples.work_dates or '' }}" /></label>
+            <label class="ref-notes">What you did <textarea name="{{ k }}description" rows="3" maxlength="3000">{{ w.description }}</textarea></label>
+          </div>
+          <details class="history-extra"{% if w.street or w.city or w.phone or w.supervisor_name %} open{% endif %}>
+            <summary>Location, Contact and Supervisor <span class="field-help">(optional, for applications that ask)</span></summary>
+            <div class="ref-grid history-extra-grid">
+              <label class="ref-notes">Street <input name="{{ k }}street" value="{{ w.street }}" maxlength="200" placeholder="{{ form_examples.work_street or '' }}" /></label>
+              <label>City <input name="{{ k }}city" value="{{ w.city }}" maxlength="100" placeholder="{{ form_examples.work_city or '' }}" /></label>
+              <label>State <input name="{{ k }}state" value="{{ w.state }}" maxlength="50" placeholder="{{ form_examples.work_state or '' }}" /></label>
+              <label>ZIP <input name="{{ k }}zip" value="{{ w.zip }}" maxlength="20" placeholder="{{ form_examples.work_zip or '' }}" /></label>
+              <label>Phone <input name="{{ k }}phone" value="{{ w.phone }}" maxlength="40" type="tel" placeholder="{{ form_examples.work_phone or '' }}" /></label>
+              <label class="ref-notes">Website <input name="{{ k }}website" value="{{ w.website }}" maxlength="255" placeholder="{{ form_examples.work_website or '' }}" /></label>
+              <label>Supervisor name <input name="{{ k }}supervisor_name" value="{{ w.supervisor_name }}" maxlength="150" /></label>
+              <label>Supervisor title <input name="{{ k }}supervisor_title" value="{{ w.supervisor_title }}" maxlength="150" /></label>
+              <label>Supervisor email <input name="{{ k }}supervisor_email" value="{{ w.supervisor_email }}" maxlength="255" type="email" /></label>
+              <label>Supervisor phone <input name="{{ k }}supervisor_phone" value="{{ w.supervisor_phone }}" maxlength="40" type="tel" placeholder="Their own number, if you have it" /></label>
+            </div>
+          </details>
+        </fieldset>
+        {% endfor %}
+        {% set schools = (profile.education or []) + [{'school': '', 'degree': '', 'major': '', 'minor': '', 'start_date': '', 'end_date': '', 'gpa': ''}] %}
+        <input type="hidden" name="ed_count" value="{{ schools|length }}" />
+        <h3 class="sub-heading">Education</h3>
+        <p class="field-help">To remove a school, clear its name. GPA and minor are optional.</p>
+        {% for e in schools %}{% set k = 'ed' ~ loop.index0 ~ '_' %}
+        <fieldset class="history-row{{ ' history-new' if loop.last }}">
+          <legend>{{ 'Add a School' if loop.last else e.school }}</legend>
+          <div class="ref-grid">
+            <label class="ref-notes">School <input name="{{ k }}school" value="{{ e.school }}" maxlength="200" placeholder="{{ form_examples.school or '' }}" /></label>
+            <label>Degree <select name="{{ k }}degree"><option value="">Choose…</option>{% for d in education_degrees %}<option value="{{ d }}"{% if e.degree == d %} selected{% endif %}>{{ d }}</option>{% endfor %}</select></label>
+            <label>GPA <span class="field-help">optional</span> <input name="{{ k }}gpa" value="{{ e.gpa }}" maxlength="10" placeholder="{{ form_examples.gpa or '' }}" /></label>
+            <label>Major <input name="{{ k }}major" value="{{ e.major }}" maxlength="150" placeholder="{{ form_examples.major or '' }}" /></label>
+            <label>Minor <span class="field-help">optional</span> <input name="{{ k }}minor" value="{{ e.minor }}" maxlength="150" /></label>
+            <label>Start month <input type="month" name="{{ k }}start_date" value="{{ e.start_date if e.start_date|length == 7 else '' }}" /></label>
+            <label>End month <input type="month" name="{{ k }}end_date" value="{{ e.end_date if e.end_date|length == 7 else '' }}" /></label>
+            <label class="ref-notes education-current"><input type="checkbox" name="{{ k }}current" value="1"{% if e.end_date == 'Present' %} checked{% endif %} /> Currently attending</label>
+          </div>
+        </fieldset>
+        {% endfor %}
+        <p class="field-help">Saved to your Job Finder profile, so both apps show the same thing. Search cities, photo and work preferences stay as they are.</p>
+        <button class="bordered-button primary" type="submit">Save</button>
+      </form>
+    </details>
+  {% endif %}
+</details>
+</section>
+
+
+{% macro reference_fields(r) %}
+  <div class="ref-grid">
+    <label>Name <input name="name" value="{{ r.name }}" autocomplete="off" placeholder="e.g. Sam Lee" /></label>
+    <label>Who they are to you <input name="relationship" value="{{ r.relationship }}" list="relationships" placeholder="e.g. Supervisor, CEO / Owner, Co-worker" /></label>
+    <label>Your job together <input name="user_job" value="{{ r.user_job }}" list="past-jobs" placeholder="e.g. Web Developer at Example Co" /></label>
+    <label>Their job title <input name="job_title" value="{{ r.job_title }}" placeholder="e.g. IT Director" data-title-suggest="single" /></label>
+    <label>Their company <input name="company" value="{{ r.company }}" placeholder="e.g. Example Co" /></label>
+    <label>Phone <input name="phone" value="{{ r.phone }}" type="tel" autocomplete="off" placeholder="e.g. (410) 555-0123" /></label>
+    <label>Email <input name="email" value="{{ r.email }}" type="email" autocomplete="off" placeholder="e.g. sam.lee@example.com" /></label>
+    <label class="ref-notes">Private notes <input name="notes" value="{{ r.notes }}" placeholder="e.g. asked 9/2026, prefers a text first" /></label>
+  </div>
+{% endmacro %}
+<section class="card wide" id="references">
+<details class="section-collapse" id="references-panel">
+  <summary><h2>References</h2><span class="summary-chevron" aria-hidden="true"></span></summary>
+  <p class="field-help">People who agreed to vouch for you. Kept only on this computer. When you ask, Claude Desktop adds the ones you choose as the last section of the résumé. Otherwise they stay off résumés, and never go in cover letters.</p>
+  <datalist id="relationships">{% for r in relationships %}<option value="{{ r }}">{% endfor %}</datalist>
+  <datalist id="past-jobs">{% for j in past_jobs %}<option value="{{ j }}">{% endfor %}</datalist>
+
+  {% if references %}
+  <ul class="ref-list">
+  {% for r in references %}
+    <li class="ref-entry">
+      <div class="ref-summary">
+        <p class="ref-name"><strong>{{ r.name or '(no name)' }}</strong>{% if r.relationship %} <span class="chip">{{ r.relationship }}</span>{% endif %}</p>
+        {% if r.job_title or r.company %}<p>{{ [r.job_title, r.company]|select|join(', ') }}</p>{% endif %}
+        {% if r.user_job %}<p class="ref-together">Your job together: {{ r.user_job }}</p>{% endif %}
+        <p class="ref-contact">
+          {% if r.phone %}<a href="tel:{{ r.phone }}">{{ r.phone }}</a>{% endif %}
+          {% if r.phone and r.email %} &middot; {% endif %}
+          {% if r.email %}<a href="mailto:{{ r.email }}">{{ r.email }}</a>{% endif %}
+        </p>
+        {% if r.notes %}<p class="field-help">Note: {{ r.notes }}</p>{% endif %}
+        {% set supervised = (profile.work_history if profile else [])|selectattr('supervisor_name', 'equalto', r.name)|list %}
+        {% if supervised %}<p class="ref-together">Supervisor on: {% for w in supervised %}{{ w.role }} at {{ w.company }}{{ ', ' if not loop.last }}{% endfor %}</p>{% endif %}
+        {% if profile and profile.work_history and r.name %}
+        <form method="post" action="{{ url_for('set_supervisor') }}" class="supervisor-form">
+          <input type="hidden" name="csrf" value="{{ csrf_token() }}" />
+          <div class="supervisor-row"><label>Supervisor for <select name="sup_job_{{ r.id }}"><option value="">Choose a job…</option>{% for w in profile.work_history %}<option value="{{ loop.index0 }}"{% if loop.index0 == reference_jobs.get(r.id, -1) %} selected{% endif %}>{{ w.role }}{% if w.company %} at {{ w.company }}{% endif %}</option>{% endfor %}</select></label><button class="dismiss-button" type="submit" name="person" value="reference:{{ r.id }}">Set as Supervisor</button></div>
+        </form>
+        {% endif %}
+      </div>
+      <div class="ref-actions">
+        <details class="ref-edit">
+          <summary class="bordered-button">Edit</summary>
+          <form method="post" action="{{ url_for('update_reference', ref_id=r.id) }}">
+            <input type="hidden" name="csrf" value="{{ csrf_token() }}" />
+            {{ reference_fields(r) }}
+            <button class="bordered-button primary" type="submit">Save changes</button>
+          </form>
+        </details>
+        <form method="post" action="{{ url_for('delete_reference', ref_id=r.id) }}"
+              onsubmit="return confirm('Delete this reference?');">
+          <input type="hidden" name="csrf" value="{{ csrf_token() }}" />
+          <button class="bordered-button danger" type="submit">Delete</button>
+        </form>
+      </div>
+    </li>
+  {% endfor %}
+  </ul>
+  {% else %}
+    <p>No references yet.</p>
+  {% endif %}
+
+  <details class="add-reference-panel"{% if not references %} open{% endif %}>
+    <summary class="bordered-button">Add a Reference</summary>
+    <form method="post" action="{{ url_for('add_reference') }}" class="reference add-box">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}" />
+      {{ reference_fields({}) }}
+      <button class="bordered-button primary" type="submit">Add reference</button>
+    </form>
+  </details>
+
+
+</details>
+</section>
+
+<section class="card wide" id="resume-rules">
+<details class="section-collapse" id="resume-rules-panel">
+  <summary><h2>Résumé Rules</h2><span class="summary-chevron" aria-hidden="true"></span></summary>
+  <p class="field-help">Your standing instructions for every résumé. Claude Desktop reads them before writing, and they win over its built-in rules. To change one for a single job, say so when you ask. Kept only on this computer.</p>
+  <p class="field-help rules-format"><strong>How to write them:</strong> put each rule on its own line, starting with a dash (-). A line without a dash is a heading that groups the rules under it. Leave a blank line between groups. Write them the way you would tell a person; no special symbols are needed.</p>
+  <form method="post" action="{{ url_for('save_writing_rules', kind='resume') }}" class="writing-rules-form">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}" />
+    <textarea name="rules" rows="18" aria-label="Résumé rules" placeholder="Technical Skills&#10;- Use a Technical Skills section instead of a Professional Summary.&#10;- Never invent metrics.">{{ resume_rules }}</textarea>
+    <button class="bordered-button primary" type="submit">Save Résumé Rules</button>
+  </form>
+</details>
+</section>
+
+<section class="card wide" id="cover-letter-rules">
+<details class="section-collapse" id="cover-letter-rules-panel">
+  <summary><h2>Cover Letter Rules</h2><span class="summary-chevron" aria-hidden="true"></span></summary>
+  <p class="field-help">Your standing instructions for every cover letter, including how to explain an employment gap. Claude Desktop reads them before writing. Kept only on this computer.</p>
+  <p class="field-help rules-format"><strong>How to write them:</strong> put each rule on its own line, starting with a dash (-). A line without a dash is a heading that groups the rules under it. Leave a blank line between groups. Write them the way you would tell a person; no special symbols are needed.</p>
+  <form method="post" action="{{ url_for('save_writing_rules', kind='cover_letter') }}" class="writing-rules-form">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}" />
+    <textarea name="rules" rows="14" aria-label="Cover letter rules" placeholder="Tone&#10;- Keep it short and low-key.&#10;- Use specific experience from the résumé.">{{ cover_letter_rules }}</textarea>
+    <button class="bordered-button primary" type="submit">Save Cover Letter Rules</button>
+  </form>
+</details>
+</section>
+
+<section class="card wide">
+  <h2>Saved Résumés and Cover Letters</h2>
+  <p class="field-help">Saved in <code>{{ output_dir }}</code></p>
+  {% if builds %}
+  <div class="table-wrapper"><table>
+    <thead><tr><th>File</th><th>Type</th><th>Job</th><th>Updated</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
+    <tbody>
+    {% for b in builds %}
+      <tr>
+        <td data-label="File">{{ b.pdf }}{% if not b.pdf_exists %} <span class="status-warn">(PDF missing)</span>{% endif %}</td>
+        <td data-label="Type">{{ 'Résumé' if b.kind == 'resume' else 'Cover letter' }}</td>
+        <td data-label="Job">{{ b.job_title }}{% if b.company %} at {{ b.company }}{% endif %}</td>
+        <td data-label="Updated">{{ b.updated.replace('T', ' ') }}</td>
+        <td class="actions">
+          <a class="bordered-button" href="{{ url_for('edit_build', filename=b.pdf) }}">Review &amp; edit</a>
+          <a class="bordered-button" href="{{ url_for('download', filename=b.pdf, download=1) }}">Download</a>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% else %}
+    <p>Nothing yet. Ask Claude Desktop to write one.</p>
+  {% endif %}
+</section>
+
+</div>
+<script>
+  // References and Résumé Design start closed and Profile starts open; remember each choice, and open them when the link points at them
+  // (adding or editing a reference, saving a design, or "Match My Portfolio").
+  (function () {
+    [["references-panel", "resumeBuilder.referencesOpen", "#references"], ["design-panel", "resumeBuilder.designOpen", "#design"],
+     ["profile-panel", "resumeBuilder.profileOpen", "#profile", true]]
+      .forEach(function (item) {
+        var panel = document.getElementById(item[0]);
+        if (!panel) return;
+        try { var saved = localStorage.getItem(item[1]); panel.open = saved === null ? Boolean(item[3]) : saved === "1"; } catch (e) {}
+        if (location.hash === item[2] || (item[2] === "#design" && /[?&]preset=/.test(location.search))) panel.open = true;
+        panel.addEventListener("toggle", function () {
+          try { localStorage.setItem(item[1], panel.open ? "1" : "0"); } catch (e) {}
+        });
+      });
+  })();
+</script>
+{% endblock %}

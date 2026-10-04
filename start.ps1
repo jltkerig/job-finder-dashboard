@@ -1,7 +1,7 @@
 $ErrorActionPreference = "Stop"
 
 $ProjectPath = Split-Path -Parent $MyInvocation.MyCommand.Path
-$PreferredPythonPath = "C:\Users\YourName\AppData\Local\Programs\Python\Python312\python.exe"
+. (Join-Path $ProjectPath "find-python.ps1")
 $DashboardPath = Join-Path $ProjectPath "dashboard.py"
 $RequirementsPath = Join-Path $ProjectPath "requirements.txt"
 $EnvPath = Join-Path $ProjectPath ".env"
@@ -102,14 +102,9 @@ function Stop-JobFinderDashboardProcesses {
 
 Write-StartupLog "Starting Job Finder v$ExpectedDashboardVersion"
 
-if (Test-Path $PreferredPythonPath) {
-    $PythonPath = $PreferredPythonPath
-} else {
-    $PythonCommand = Get-Command python.exe -ErrorAction SilentlyContinue
-    if (-not $PythonCommand) {
-        Fail-Startup "E5001" "Python was not found. Install Python 3.12+ and run Job Finder again."
-    }
-    $PythonPath = $PythonCommand.Source
+$PythonPath = Find-Python
+if (-not $PythonPath) {
+    Fail-Startup "E5001" "Python was not found. Install Python 3.12+ and run Job Finder again."
 }
 Write-StartupLog "Python: $PythonPath"
 

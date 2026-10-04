@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% set c = draft.content %}
+{% set l = draft.layout %}
+{% block title %}{{ draft.pdf }} | Résumé Builder | Job Finder{% endblock %}
+{% block header %}
+  <h1>{{ 'Résumé' if draft.kind == 'resume' else 'Cover Letter' }}{% if draft.job_title %}: {{ draft.job_title }}{% endif %}</h1>
+  <p>{{ draft.pdf }}{% if draft.company %} &middot; {{ draft.company }}{% endif %}</p>
+{% endblock %}
+{% block content %}
+<p><a href="{{ url_for('index') }}">&larr; Back to Résumé Builder</a></p>
+<div class="editor">
+<form method="post" class="card">
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}" />
+  <div class="form-actions">
+    <button class="bordered-button primary" type="submit">Save and redraw PDF</button>
+    <a class="bordered-button" href="{{ url_for('download', filename=draft.pdf, download=1) }}">Download PDF</a>
+  </div>
+
+  <details>
+    <summary>Layout</summary>
+    <div class="fields">
+      <label>Font <select name="font_family">{% for f in fonts %}<option {{ 'selected' if f == l.font_family }}>{{ f }}</option>{% endfor %}</select></label>
+      <input type="hidden" name="font_kind" value="{{ l.font_kind }}" />
+      <label>Text size <input name="body_size" type="number" step="0.5" min="7" max="14" value="{{ l.body_size }}" /></label>
+      <label>Name size <input name="name_size" type="number" step="0.5" min="10" max="40" value="{{ l.name_size }}" /></label>
+      <label>Heading size <input name="heading_size" type="number" step="0.5" min="8" max="24" value="{{ l.heading_size }}" /></label>
+      <label>Accent colour <input name="accent_color" type="color" value="{{ l.accent_color }}" /></label>
+      <label>Text colour <input name="text_color" type="color" value="{{ l.text_color }}" /></label>
+      <label>Name position <select name="name_align"><option value="left" {{ 'selected' if l.name_align == 'left' }}>Left</option><option value="center" {{ 'selected' if l.name_align == 'center' }}>Centred</option></select></label>
+      <label>Headings <select name="heading_case"><option value="upper" {{ 'selected' if l.heading_case == 'upper' }}>CAPITALS</option><option value="title" {{ 'selected' if l.heading_case == 'title' }}>As written</option></select></label>
+      <label>Margins (inches) <input name="margin_in" type="number" step="0.05" min="0.3" max="1.5" value="{{ l.margin_in }}" /></label>
+      <label class="check"><input name="heading_rule" type="checkbox" {{ 'checked' if l.heading_rule }} /> Line under headings</label>
+    </div>
+  </details>
+
+  <label>Full name <input name="full_name" value="{{ c.full_name }}" required /></label>
+  <label>Contact lines <span class="field-help">one per line</span>
+    <textarea name="contact" rows="3">{{ c.contact|join('\n') }}</textarea></label>
+
+{% if draft.kind == 'resume' %}
+  <label>Line under your name <input name="headline" value="{{ c.headline }}" /></label>
+  {% set sections = c.sections + [{'title': '', 'text': '', 'items': []}] %}
+  <input type="hidden" name="section_count" value="{{ sections|length }}" />
+  {% for s in sections %}{% set i = loop.index0 %}
+  <fieldset class="section">
+    <legend>{{ s.title or 'New section (leave empty to skip)' }}</legend>
+    <label>Heading <input name="s{{ i }}_title" value="{{ s.title }}" /></label>
+    <label>Paragraph <textarea name="s{{ i }}_text" rows="2">{{ s.text }}</textarea></label>
+    {% set items = s['items'] + [{'heading': '', 'subheading': '', 'location': '', 'dates': '', 'text': '', 'bullets': []}] %}
+    <input type="hidden" name="s{{ i }}_count" value="{{ items|length }}" />
+    {% for it in items %}{% set key = 's' ~ i ~ '_i' ~ loop.index0 ~ '_' %}
+    <div class="item{{ ' item-new' if loop.last }}">
+      {% if loop.last %}<p class="field-help">Add an entry (leave empty to skip). To remove an entry, clear all its boxes.</p>{% endif %}
+      <div class="row">
+        <label>Title <input name="{{ key }}heading" value="{{ it.heading }}" /></label>
+        <label>Employer / school <input name="{{ key }}subheading" value="{{ it.subheading }}" /></label>
+      </div>
+      <div class="row">
+        <label>Location <input name="{{ key }}location" value="{{ it.location }}" /></label>
+        <label>Dates <input name="{{ key }}dates" value="{{ it.dates }}" /></label>
+      </div>
+      <label>Paragraph <textarea name="{{ key }}text" rows="2">{{ it.text }}</textarea></label>
+      <label>Bullet points <span class="field-help">one per line</span>
+        <textarea name="{{ key }}bullets" rows="{{ [it.bullets|length + 1, 3]|max }}">{{ it.bullets|join('\n') }}</textarea></label>
+    </div>
+    {% endfor %}
+  </fieldset>
+  {% endfor %}
+  {% set ref_rows = c.references + [{'name': '', 'relationship': '', 'user_job': '', 'job_title': '', 'company': '', 'phone': '', 'email': ''}] %}
+  <fieldset class="section">
+    <legend>References (Printed Last)</legend>
+    <p class="field-help">Leave empty for no references section. To remove one, clear its name.</p>
+    <input type="hidden" name="ref_count" value="{{ ref_rows|length }}" />
+    {% for r in ref_rows %}{% set key = 'ref' ~ loop.index0 ~ '_' %}
+    <div class="item{{ ' item-new' if loop.last }}"{% if loop.last %} id="new-reference"{% endif %}>
+      {% if loop.last and saved_references %}
+      <label>Add one of your saved references
+        <select id="pick-reference">
+          <option value="">Choose…</option>
+          {% for s in saved_references %}<option value="{{ loop.index0 }}">{{ s.name }}{% if s.relationship %} ({{ s.relationship }}){% endif %}</option>{% endfor %}
+        </select></label>
+      {% endif %}
+      <div class="row">
+        <label>Name <input name="{{ key }}name" value="{{ r.name }}" /></label>
+        <label>Who they are to you <input name="{{ key }}relationship" value="{{ r.relationship }}" /></label>
+      </div>
+      <label>Your job together <input name="{{ key }}user_job" value="{{ r.user_job }}" /></label>
+      <div class="row">
+        <label>Their job title <input name="{{ key }}job_title" value="{{ r.job_title }}" /></label>
+        <label>Their company <input name="{{ key }}company" value="{{ r.company }}" /></label>
+      </div>
+      <div class="row">
+        <label>Phone <input name="{{ key }}phone" value="{{ r.phone }}" /></label>
+        <label>Email <input name="{{ key }}email" value="{{ r.email }}" /></label>
+      </div>
+    </div>
+    {% endfor %}
+  </fieldset>
+  <script type="application/json" id="saved-references">{{ saved_references|tojson }}</script>
+  <script>
+    (function () {
+      var pick = document.getElementById("pick-reference");
+      if (!pick) return;
+      var saved = JSON.parse(document.getElementById("saved-references").textContent);
+      pick.addEventListener("change", function () {
+        var ref = saved[pick.value];
+        if (!ref) return;
+        document.querySelectorAll("#new-reference input").forEach(function (input) {
+          var field = input.name.replace(/^ref\d+_/, "");
+          if (field in ref) input.value = ref[field];
+        });
+      });
+    })();
+  </script>
+{% else %}
+  <label>Date <span class="field-help">empty means today</span><input name="date" value="{{ c.date }}" /></label>
+  <label>Recipient <span class="field-help">one line each</span>
+    <textarea name="recipient" rows="3">{{ c.recipient|join('\n') }}</textarea></label>
+  <label>Greeting <input name="greeting" value="{{ c.greeting }}" /></label>
+  <label>Letter <span class="field-help">leave a blank line between paragraphs</span>
+    <textarea name="body" rows="18">{{ c.paragraphs|join('\n\n') }}</textarea></label>
+  <label>Closing <input name="closing" value="{{ c.closing }}" /></label>
+  <label>Signature <span class="field-help">empty means your full name</span><input name="signature" value="{{ c.signature }}" /></label>
+{% endif %}
+  <div class="form-actions">
+    <button class="bordered-button primary" type="submit">Save and redraw PDF</button>
+  </div>
+</form>
+
+<div class="preview card">
+  <iframe title="PDF preview" src="{{ url_for('download', filename=draft.pdf) }}#view=FitH"></iframe>
+  <form method="post" action="{{ url_for('delete_build', filename=draft.pdf) }}"
+        onsubmit="return confirm('Delete {{ draft.pdf }} and its draft? This cannot be undone.');">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}" />
+    <button class="bordered-button danger" type="submit">Delete this file</button>
+  </form>
+</div>
+</div>
+{% endblock %}
