@@ -38,6 +38,3 @@ resume-builder/data/
 *.docx
 *.rtf
 *.odt
-
-# Résumé Builder still has its own git repo; remove this line when it joins this repo
-resume-builder/

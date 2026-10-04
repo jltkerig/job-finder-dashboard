@@ -1,0 +1,8 @@
+flask
+mcp>=2.2
+mysql-connector-python
+pymupdf
+python-docx
+python-dotenv
+pywin32
+reportlab

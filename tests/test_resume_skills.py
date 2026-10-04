@@ -108,7 +108,7 @@ Springfield, MD
 2014 - 2015
 Education History
 State University
-Towson, MD
+Shelbyville, MD
 Bachelor of Science, Graphic Design
 """
 

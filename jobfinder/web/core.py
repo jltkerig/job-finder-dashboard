@@ -10,7 +10,7 @@ import secrets
 from dotenv import load_dotenv
 from flask import Flask, abort, jsonify, request, session
 
-from jobfinder import paths
+from jobfinder import form_examples, paths
 from jobfinder.records.capture_import import CAPTURE_SOURCES
 from jobfinder.sources.job_feeds import FEED_NAMES
 from jobfinder.sources.job_sites import JOB_SITE_NAMES
@@ -103,7 +103,8 @@ def inject_csrf_token():
     # Job sites (National Labor Exchange) list many employers' jobs like the remote feeds: shown as job-board
     # postings, and their domain is never offered for blocking.
     return {"csrf_token": get_csrf_token(), "app_version": app.config["APP_VERSION"], "feed_names": sorted(FEED_NAMES | JOB_SITE_NAMES),
-            "capture_sources": sorted(CAPTURE_SOURCES), "application_statuses": APPLICATION_STATUSES}
+            "capture_sources": sorted(CAPTURE_SOURCES), "application_statuses": APPLICATION_STATUSES,
+            "form_examples": form_examples.examples()}
 
 
 @app.before_request

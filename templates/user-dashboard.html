@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="csrf-token" content="{{ csrf_token }}" /><title>Dashboard | Job Finder</title><link rel="stylesheet" href="/static/css/style.css?v={{ app_version }}" /></head>
-<body data-page="dashboard">
+<body data-page="dashboard" data-form-examples="{{ form_examples|tojson|forceescape }}">
 <nav class="top-nav" aria-label="Main navigation">
   <div class="nav-inner"><a class="nav-link" href="/">Search</a><a class="nav-link active" href="/dashboard">Dashboard</a><a class="nav-link" href="http://127.0.0.1:5001/">Résumé Builder</a><a class="nav-link" href="/rejected-listings">Settings</a><a class="nav-link" href="/tuning">Tuning</a>
   </div>
@@ -33,9 +33,9 @@
             </div>
             <div class="form-field"><label for="last-name">Last Name</label><input id="last-name" name="last_name" type="text" value="{{ profile.last_name }}" />
             </div>
-            <div class="form-field"><label for="home-zip">Home ZIP</label><input id="home-zip" name="home_zip" type="text" inputmode="numeric" maxlength="5" pattern="[0-9]{5}" value="{{ profile.home_zip or '' }}" placeholder="e.g. 21009" autocomplete="postal-code" />
+            <div class="form-field"><label for="home-zip">Home ZIP</label><input id="home-zip" name="home_zip" type="text" inputmode="numeric" maxlength="5" pattern="[0-9]{5}" value="{{ profile.home_zip or '' }}" placeholder="{{ form_examples.home_zip or '' }}" autocomplete="postal-code" />
             </div>
-            <div class="form-field"><label for="home-location">Home City, State</label><input id="home-location" name="home_location" type="text" list="city-state-options" value="{{ profile.home_location or '' }}" placeholder="e.g. Baltimore, MD" autocomplete="off" /><input id="profile-state" name="state" type="hidden" value="{{ profile.state }}" />
+            <div class="form-field"><label for="home-location">Home City, State</label><input id="home-location" name="home_location" type="text" list="city-state-options" value="{{ profile.home_location or '' }}" placeholder="{{ form_examples.home_location or '' }}" autocomplete="off" /><input id="profile-state" name="state" type="hidden" value="{{ profile.state }}" />
             </div>
             <div class="form-field profile-link-field"><label for="linkedin-url">LinkedIn Profile</label><input id="linkedin-url" name="linkedin_url" type="text" inputmode="url" maxlength="255" value="{{ profile.linkedin_url or '' }}" placeholder="e.g. linkedin.com/in/your-name" autocomplete="url" />
             </div>

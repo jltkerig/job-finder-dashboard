@@ -9,7 +9,7 @@ from jobfinder.profiles.profile_tools import resume_suggestions
 
 class ResumeSuggestions(unittest.TestCase):
     def test_layout_text_keeps_name_and_month_based_work_history(self):
-        resume = """Jane Doe
+        resume = """Jane       Doe
 Professional Summary
 Web designer with HTML and CSS experience.
 Employment History
