@@ -18,9 +18,9 @@ class WorkHistoryDetails(unittest.TestCase):
         self.assertIn('"Supervisor"', script)
 
     def test_the_same_columns_as_resume_builder(self):
-        builder = ROOT.parent / "resume-builder" / "jobfinder_db.py"
+        builder = ROOT / "resume-builder" / "jobfinder_db.py"
         if not builder.exists():
-            self.skipTest("Résumé Builder is not next to Job Finder")
+            self.skipTest("Résumé Builder is not inside Job Finder")
         text = builder.read_text(encoding="utf-8")
         for column, size in WORK_DETAIL_COLUMNS:
             self.assertIn(f'"{column}": {size}', text)

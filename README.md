@@ -90,6 +90,7 @@ data/                   reference data shipped with Job Finder (O*NET, places, Z
 user-data/              YOURS: settings.json, block lists, watched employers, search records (updates never touch it)
 logs/                   dashboard and search logs
 user-builds/            résumés and cover letters from Résumé Builder
+resume-builder/         Résumé Builder (its own app and git repo; see its README). Not part of releases
 searxng/                Docker/SearXNG runtime configuration
 tests/                  python -m unittest discover -s tests -p "test_*.py" -t tests
 ```

@@ -33,9 +33,9 @@ class Education(unittest.TestCase):
         self.assertIn('"Currently attending"', script)
 
     def test_resume_builder_offers_the_same_degrees(self):
-        builder = ROOT.parent / "resume-builder" / "jobfinder_db.py"
+        builder = ROOT / "resume-builder" / "jobfinder_db.py"
         if not builder.exists():
-            self.skipTest("Résumé Builder is not next to Job Finder")
+            self.skipTest("Résumé Builder is not inside Job Finder")
         text = builder.read_text(encoding="utf-8")
         for degree in EDUCATION_DEGREES:
             self.assertIn(f'"{degree}"', text)
