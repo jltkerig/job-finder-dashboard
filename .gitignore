@@ -16,3 +16,5 @@ logs/
 search_scope.json
 watched_employers.before-*.json
 *.bak
+# Résumé Builder: its own git repo, and its data/ is personal; never in Job Finder releases
+resume-builder/

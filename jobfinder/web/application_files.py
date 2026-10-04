@@ -14,7 +14,7 @@ from flask import abort, send_from_directory
 from jobfinder.web.core import app
 from jobfinder.web.webfiles import BASE_DIR
 
-RESUME_BUILDER_DIR = Path(os.getenv("RESUME_BUILDER_DIR", BASE_DIR.parent / "resume-builder"))
+RESUME_BUILDER_DIR = Path(os.getenv("RESUME_BUILDER_DIR", BASE_DIR / "resume-builder"))
 DRAFTS_DIR = RESUME_BUILDER_DIR / "data" / "drafts"
 OUTPUT_DIR = Path(os.getenv("RESUME_OUTPUT_DIR", BASE_DIR / "user-builds"))
 RESUME_BUILDER_URL = os.getenv("RESUME_BUILDER_URL", "http://127.0.0.1:5001")

@@ -11,7 +11,7 @@ from jobfinder import paths
 
 BASE_DIR = paths.ROOT
 # Where the Resume Builder keeps the résumé you uploaded there (its text is read to suggest skills).
-RESUME_FOLDER = Path(os.getenv("RESUME_BUILDER_DIR", BASE_DIR.parent / "resume-builder")) / "data" / "current-resume"
+RESUME_FOLDER = Path(os.getenv("RESUME_BUILDER_DIR", BASE_DIR / "resume-builder")) / "data" / "current-resume"
 JOB_FINDER_PATH = BASE_DIR / "job_finder.py"
 BLOCKED_DOMAINS_FILE = paths.BLOCKED_DOMAINS_FILE
 BLOCKED_COMPANIES_FILE = paths.BLOCKED_COMPANIES_FILE

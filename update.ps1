@@ -15,7 +15,12 @@ $VolatileFiles = @("update.log", "dashboard.log", "dashboard-error.log", "job_fi
     ForEach-Object { Join-Path $ProjectDir $_ }
 # Everything in logs\ is also a log that keeps growing.
 $LogFolder = Join-Path $ProjectDir "logs"
-function Test-Volatile($item) { ($item.FullName -in $VolatileFiles) -or $item.FullName.StartsWith($LogFolder + "\") }
+# Résumé Builder lives in resume-builder\ (never in a release ZIP, so updates leave it alone); its logs keep growing too.
+$ResumeBuilderFolder = Join-Path $ProjectDir "resume-builder"
+function Test-Volatile($item) {
+    ($item.FullName -in $VolatileFiles) -or $item.FullName.StartsWith($LogFolder + "\") -or
+        ($item.FullName.StartsWith($ResumeBuilderFolder + "\") -and $item.Extension -eq ".log")
+}
 $backup = $null
 $backupVerified = $false
 $installationStarted = $false
