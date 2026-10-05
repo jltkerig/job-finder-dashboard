@@ -1975,3 +1975,7 @@ body[data-page="search"] #results-table .details-blocks .bordered-button { min-h
 .top-picks-why { display:block; margin-left:24px; color:#646c77; font-size:.85rem; }
 .top-picks-list a { margin-left:24px; font-size:.85rem; }
 .top-picks-actions { display:flex; justify-content:flex-end; align-items:center; gap:14px; flex-wrap:wrap; }
+/* "CA, CT, FL only" under Remote: its own line in the table, after a dot in compact rows */
+.remote-states { display:block; }
+#results-table.compact-rows .remote-states { display:inline; }
+#results-table.compact-rows .remote-states::before { content:" · "; }
