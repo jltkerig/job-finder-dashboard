@@ -101,3 +101,24 @@ def extension_file(name):
     if not EXTENSION_FILE.match(name):
         abort(404)
     return send_from_directory(extension_dist_dir(), name, mimetype="application/x-xpinstall")
+
+
+@app.route("/extension/profile-file")
+def extension_profile_file():
+    """"Export for Web Job Scraper" on the Dashboard: the fit profile plus your home's map point, as a file to load in
+    the extension (Load profile). The extension then works on its own, without asking Job Finder for anything."""
+    from datetime import datetime
+    from jobfinder.profiles.places import STATE_NAMES
+    from jobfinder.profiles.travel import zip_point
+    data = extension_fit_profile().get_json()
+    profile = profile_store.get_user_profile()
+    state = str(profile.get("state") or "").strip()
+    code = state.upper() if state.upper() in STATE_NAMES else next(
+        (key for key, name in STATE_NAMES.items() if name.casefold() == state.casefold()), "")
+    point = zip_point(profile.get("home_zip")) if profile.get("home_zip") else None
+    data.update({"source": "job-finder", "kind": "fit-profile", "exported_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+                 "home": {"zip": profile.get("home_zip") or "", "state": code,
+                          "lat": point[0] if point else None, "lon": point[1] if point else None}})
+    response = jsonify(data)
+    response.headers["Content-Disposition"] = 'attachment; filename="job-finder-profile.json"'
+    return response
