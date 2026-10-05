@@ -254,3 +254,63 @@ def delete_kept(company_id):
             connection.close()
 
     return redirect("/dashboard")
+
+
+@app.route("/top-picks/requirements", methods=["POST"])
+def top_pick_requirements():
+    """What each listing asks for that the profile doesn't show (degrees, years, clearance), for Top 10 Picks. A
+    listing's requirements are read once and kept in listing_details."""
+    import json
+
+    from jobfinder.profiles import requirements as reqs
+    from jobfinder.search.relevance import fetch_text
+    from jobfinder.web.profile_store import get_user_profile
+
+    data = request.get_json(silent=True) or {}
+    ids = []
+    for company_id in (data.get("company_ids") or [])[:30]:
+        try:
+            ids.append(int(company_id))
+        except (TypeError, ValueError):
+            continue
+    if not ids:
+        return jsonify({"status": "ok", "gaps": {}})
+    profile = get_user_profile() or {}
+    gaps = {}
+    connection = cursor = None
+    try:
+        connection = db.connect()
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute(f"SELECT id, career_url, source_url, listing_details FROM companies WHERE id IN "
+                       f"({','.join(['%s'] * len(ids))})", ids)
+        for row in cursor.fetchall():
+            try:
+                details = json.loads(row.get("listing_details") or "{}") or {}
+            except (TypeError, ValueError):
+                details = {}
+            found = details.get("requirements")
+            if found is None:
+                text = details.get("description") or ""
+                if len(text) < 200:
+                    for url in (row.get("career_url"), row.get("source_url")):
+                        page = fetch_text(url) if url else None
+                        if page and page.text:
+                            text = reqs.page_text(page.text)
+                            break
+                if not text:
+                    gaps[row["id"]] = {"unread": True, "items": []}
+                    continue
+                found = reqs.listing_requirements(text)
+                details["requirements"] = found
+                cursor.execute("UPDATE companies SET listing_details = %s WHERE id = %s",
+                               (json.dumps(details), row["id"]))
+                connection.commit()
+            gaps[row["id"]] = {"unread": False, "items": reqs.requirement_gaps(found, profile)}
+    except Error as error:
+        return api_error("E3230", f"Could not read listing requirements: {error}", 500)
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+    return jsonify({"status": "ok", "gaps": gaps})

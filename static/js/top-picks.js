@@ -22,35 +22,61 @@
   }
 
   function rank(row) {
-    const fit = number(row.dataset.jobFit);
+    const raw = number(row.dataset.jobFit);
+    // A fit found from only one or two skills says little, so it is pulled toward the middle until five are found.
+    const count = number(row.dataset.fitCount) || 0;
+    const fit = raw === null ? null : 50 + (raw - 50) * Math.min(1, count / 5);
     const career = number(row.dataset.careerCredibility) || 0;  // 0-10
     const usa = number(row.dataset.usaCredibility) || 0;  // 0-10
     const near = nearness(row);
     const score = (fit === null ? 50 : fit) * 0.4 + career * 10 * 0.25 + usa * 10 * 0.15 + near * 0.2;
     const reasons = [];
-    reasons.push(fit === null ? "skill fit unknown" : `${Math.round(fit)}% skill fit`);
+    reasons.push(raw === null ? "skill fit unknown" : `${Math.round(raw)}% skill fit (${count} skill${count === 1 ? "" : "s"} listed)`);
     if (row.dataset.workArrangement === "Remote") reasons.push("remote");
     else {
       const miles = number(row.dataset.distance);
       if (miles !== null && miles < 99999) reasons.push(`${Math.round(miles)} miles away`);
     }
     reasons.push(`credibility ${Math.round(career)}/10`);
-    return { row, score, reasons };
+    return { row, score, reasons, gaps: [] };
   }
 
   function shown(row) {
     return !row.hidden && row.style.display !== "none" && row.offsetParent !== null;
   }
 
+  const byScore = (a, b) => b.score - a.score;
+
   function pick() {
     const rows = Array.from(document.querySelectorAll("#results-table .result-row"))
       .filter((row) => shown(row) && row.dataset.status !== "closed");
-    return rows.map(rank).sort((a, b) => b.score - a.score).slice(0, PICKS);
+    return rows.map(rank).sort(byScore);
+  }
+
+  // Reads what the best 20 listings ask for (degrees, years, clearance) and moves down the ones the profile doesn't
+  // show: a hard gap (a required degree with no alternative, an active clearance) means likely not a fit.
+  async function checkRequirements(ranked) {
+    const top = ranked.slice(0, PICKS * 2);
+    const response = await fetch("/top-picks/requirements", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
+      body: JSON.stringify({ company_ids: top.map((pick) => pick.row.dataset.companyId) }),
+    });
+    if (!response.ok) throw new Error("Could not read the listings' requirements.");
+    const { gaps } = await response.json();
+    top.forEach((pick) => {
+      const found = gaps[pick.row.dataset.companyId];
+      if (!found) return;
+      if (found.unread) { pick.gaps = [{ text: "Couldn't read the requirements: check them yourself", hard: false }]; return; }
+      pick.gaps = found.items;
+      pick.score -= found.items.reduce((total, gap) => total + (gap.hard ? 100 : 15), 0);
+    });
+    return top.sort(byScore).concat(ranked.slice(PICKS * 2));
   }
 
   function render(picks) {
     list.replaceChildren();
-    picks.forEach(({ row, reasons }) => {
+    picks.forEach(({ row, reasons, gaps }) => {
       const item = document.createElement("li");
       const label = document.createElement("label");
       const box = document.createElement("input");
@@ -65,6 +91,13 @@
       why.className = "top-picks-why";
       why.textContent = reasons.join(" · ");
       label.append(box, " ", title, why);
+      gaps.forEach((gap) => {
+        const warning = document.createElement("span");
+        warning.className = "top-picks-gap" + (gap.hard ? " hard" : "");
+        warning.textContent = (gap.hard ? "Likely not a fit: " : "Check: ") + gap.text;
+        label.append(warning);
+      });
+      if (gaps.some((gap) => gap.hard)) box.checked = false;
       item.append(label);
       const link = row.querySelector("a.inline-action-link[href^='http']");
       if (link) {
@@ -79,9 +112,23 @@
     });
   }
 
-  button.addEventListener("click", () => {
-    const picks = pick();
+  button.addEventListener("click", async () => {
+    let ranked = pick();
     status.textContent = "";
+    panel.hidden = false;
+    if (ranked.length) {
+      list.replaceChildren();
+      status.textContent = "Reading each listing's requirements…";
+      button.disabled = true;
+      try {
+        ranked = await checkRequirements(ranked);
+        status.textContent = "";
+      } catch (error) {
+        status.textContent = `${error.message} Ranked by skills, distance and credibility only.`;
+      }
+      button.disabled = false;
+    }
+    const picks = ranked.slice(0, PICKS);
     if (!picks.length) {
       status.textContent = "No open results to pick from. Run a search or clear the filters.";
       list.replaceChildren();
@@ -89,7 +136,6 @@
       render(picks);
       if (picks.length < PICKS) status.textContent = `Only ${picks.length} open results to pick from.`;
     }
-    panel.hidden = false;
     panel.scrollIntoView({ behavior: "smooth", block: "start" });
   });
 

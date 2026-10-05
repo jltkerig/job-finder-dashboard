@@ -1973,6 +1973,8 @@ body[data-page="search"] #results-table .details-blocks .bordered-button { min-h
 .top-picks-list li { line-height:1.4; }
 .top-picks-list label { cursor:pointer; }
 .top-picks-why { display:block; margin-left:24px; color:#646c77; font-size:.85rem; }
+.top-picks-gap { display:block; margin-left:24px; color:#8a5a00; font-size:.85rem; }
+.top-picks-gap.hard { color:#b42318; font-weight:600; }
 .top-picks-list a { margin-left:24px; font-size:.85rem; }
 .top-picks-actions { display:flex; justify-content:flex-end; align-items:center; gap:14px; flex-wrap:wrap; }
 /* "CA, CT, FL only" under Remote: its own line in the table, after a dot in compact rows */
