@@ -153,11 +153,16 @@ def title_matches(text, limit=10):
     if len(key) < 2:
         return []
     words = key.split()
+    compact = key.replace(" ", "")
     starts, others = [], []
     for name, title in _title_names():
         title_words = name.split()
-        if all(any(w.startswith(typed) for w in title_words) for typed in words):
-            (starts if name.startswith(key) else others).append(title)
+        # Each typed word starts a word of the title; failing that, the typed words without spaces start a run of
+        # the title's words, so words written together or apart both match ("frontend" or "web site developer").
+        joined = ["".join(title_words[i:]) for i in range(len(title_words))]
+        each = all(any(run.startswith(typed) for run in joined) for typed in words)
+        if each or any(run.startswith(compact) for run in joined):
+            (starts if joined[0].startswith(compact) else others).append(title)
             if len(starts) >= limit:
                 break
     return [proper_title(title) for title in (starts + others)[:limit]]
