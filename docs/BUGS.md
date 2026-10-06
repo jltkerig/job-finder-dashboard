@@ -52,6 +52,9 @@ Each entry: what went wrong, why, the fix, and the check that would have caught 
 - **"Not Remote" read as Remote** (2026-10-06). Workday's `remoteType: "Not Remote"` contains "remote", so San Francisco
   jobs passed a Baltimore 20-mile search as remote jobs. Fix: `_arrangement` checks for not/non/no remote first.
   Check: any field read with `"remote" in text` must handle negatives.
+- **Workday page data says TELECOMMUTE for onsite and hybrid jobs** (2026-10-06): a New York job and a "Client
+  Site" job were saved as Remote. Fix: for myworkdayjobs.com, Workday's own `remoteType` (Office / Hybrid / Remote /
+  Not Remote) wins over the page's JobPosting data. Check: Remote rows from Workday should have remoteType Remote.
 - **Cities were not checked when added** (2026-10-06): "zzzzqq" or "Baltimre" were accepted and then searched as
   nowhere. Fix: Add looks the place up first (`/city-matches`).
 
@@ -61,6 +64,10 @@ Each entry: what went wrong, why, the fix, and the check that would have caught 
   (`/jobs/…-lawnstarter-…`), so 8 listings' links were switched to an aggregator. Fix: the company name must be in the
   employer's own domain or an applicant system's address; freehire and others added to `AGGREGATORS`.
   Check: after a search, list `company_site_url` hosts; none should be a job board.
+- **More aggregators with the company in the path** (2026-10-06): talents.vaia.com, designremotejobs.com. 19 listings
+  in all had their link switched to an aggregator; restored. The domain rule covers these without listing each one.
+- **Seniority words made different jobs match** (2026-10-06): "Senior Graphic Designer" matched "Senior Integrated
+  Designer". Fix: senior/lead/staff/… are ignored when comparing titles.
 - **A different role counted as the same job** (2026-10-06): "Web Designer, eCRM" matched a "Web Developer, eCRM" page.
   Fix: the typed title's role word must appear in the page's title.
 

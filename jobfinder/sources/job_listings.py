@@ -327,6 +327,12 @@ def extract_jobs(url, html, wanted):
             employer = _plain(node.get("hiringOrganization"))
             description = BeautifulSoup(_plain(node.get("description")), "html.parser").get_text(" ", strip=True)
             location_type = _plain(node.get("jobLocationType"))
+            if "myworkdayjobs.com" in direct:
+                from jobfinder.sources.posting_text import workday_remote_type  # here: it imports this module's users
+                remote_type = workday_remote_type(direct)
+                if remote_type:  # Workday marks many onsite jobs TELECOMMUTE in its page data
+                    location_type = remote_type
+                    remote = bool(re.search(r"\bremote\b", remote_type, re.I)) and not re.search(r"\b(?:not|non)\b", remote_type, re.I)
             arrangement = posting_arrangement(title, location, location_type, description, remote)
             evidence = ["JobPosting data", "title matches search", "direct listing link"]
             posted = _freshness(node.get("datePosted"))

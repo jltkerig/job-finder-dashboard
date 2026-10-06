@@ -28,6 +28,11 @@ class PostingTextTests(unittest.TestCase):
         with patch.object(pt, "_workday", side_effect=ValueError):
             self.assertEqual(pt.posting_text("https://acme.wd1.myworkdayjobs.com/x/job/y"), "")
 
+    def test_workday_remote_type_is_trusted_over_page_data(self):
+        with patch.object(pt, "_workday_info", return_value={"remoteType": "Office"}):
+            self.assertEqual(pt.workday_remote_type("https://acme.wd5.myworkdayjobs.com/Ext/job/X/Designer_R1"), "Office")
+        self.assertIsNone(pt.workday_remote_type("https://acme.com/jobs/1"))
+
 
 if __name__ == "__main__":
     unittest.main()

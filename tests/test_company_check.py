@@ -47,6 +47,9 @@ class AggregatorTests(unittest.TestCase):
         self.assertFalse(cc.company_in_url("LawnStarter", "https://freehire.me/jobs/analytics-manager-lawnstarter-j4tr7mug"))
         self.assertTrue(cc.company_in_url("LawnStarter", "https://www.lawnstarter.com/careers/42"))
 
+    def test_seniority_alone_is_not_a_title_match(self):
+        self.assertLess(cc.title_similarity("Senior Graphic Designer", "Senior Integrated Designer"), 0.6)
+
     def test_different_role_is_not_the_same_job(self):
         self.assertEqual(cc.title_similarity("Web Designer, eCRM", "Web Developer, eCRM"), 0.0)
 

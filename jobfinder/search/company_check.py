@@ -41,7 +41,9 @@ CLOSED = re.compile(r"no longer (?:accepting|available|open)|position has been f
 COMPANY_FILLER = {"inc", "llc", "ltd", "corp", "corporation", "company", "co", "the", "group", "holdings", "and", "of",
                   "services", "solutions", "international", "usa", "us", "na", "plc", "lp", "llp", "pc"}
 TITLE_FILLER = {"and", "or", "the", "a", "an", "of", "for", "to", "in", "at", "with", "remote", "hybrid", "onsite",
-                "i", "ii", "iii", "iv", "full", "time", "part", "contract", "temporary", "job", "position"}
+                "i", "ii", "iii", "iv", "full", "time", "part", "contract", "temporary", "job", "position",
+                # seniority: "Senior Graphic Designer" vs "Senior Integrated Designer" share only these
+                "senior", "sr", "junior", "jr", "lead", "principal", "staff", "associate", "mid", "level", "entry"}
 
 
 def _words(text):
