@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
-from jobfinder.profiles.requirements import listing_requirements, requirement_gaps
+from jobfinder.profiles.requirements import listing_requirements, requirement_gaps, skill_sections, weighted_fit
 import dashboard
 
 PROFILE = {"education": [], "skills": ["Figma"], "job_titles": ["Graphic Designer"],
@@ -47,15 +47,27 @@ class RequirementTests(unittest.TestCase):
         profile = dict(PROFILE, skills=["Figma", "Active Secret clearance"])
         self.assertEqual(gaps("Active Secret clearance required.", profile), [])
 
+    def test_skill_sections(self):
+        text = "We use Figma.\nRequirements:\nHTML and CSS\nNice to have:\nReact\nPhotoshop is a plus."
+        self.assertEqual(skill_sections(text, ["HTML", "CSS", "React", "Photoshop", "Figma"]),
+                         {"HTML": "required", "CSS": "required", "React": "preferred", "Photoshop": "preferred",
+                          "Figma": "other"})
+
+    def test_missing_nice_to_have_costs_less(self):
+        sections = {"HTML": "required", "React": "preferred"}
+        self.assertGreater(weighted_fit(["HTML"], sections)["score"], weighted_fit(["React"], sections)["score"])
+        self.assertEqual(weighted_fit(["React"], sections)["missing_required"], ["HTML"])
+
 
 class RouteTests(unittest.TestCase):
     def test_reads_page_once_and_keeps_requirements(self):
         cursor = MagicMock()
         cursor.fetchall.return_value = [{"id": 7, "career_url": "https://example.com/job", "source_url": "",
-                                         "listing_details": "{}"}]
+                                         "listing_details": "{}", "listing_skills": '["Figma", "HTML"]'}]
         connection = MagicMock()
         connection.cursor.return_value = cursor
-        page = MagicMock(text="<p>Active Top Secret clearance required.</p>")
+        page = MagicMock(text="<p>Active Top Secret clearance required.</p><h3>Requirements:</h3><p>HTML</p>"
+                                  "<h3>Nice to have:</h3><p>Figma</p>")
         client = dashboard.app.test_client()
         with client.session_transaction() as session:
             session["csrf_token"] = "t"
@@ -65,6 +77,8 @@ class RouteTests(unittest.TestCase):
             response = client.post("/top-picks/requirements", json={"company_ids": [7]}, headers={"X-CSRF-Token": "t"})
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.get_json()["gaps"]["7"]["items"][0]["hard"])
+        fit = response.get_json()["gaps"]["7"]["fit"]
+        self.assertEqual(fit["missing_required"], ["HTML"])
         fetch.assert_called_once()
         saved = json.loads(cursor.execute.call_args_list[-1][0][1][0])
         self.assertEqual(saved["requirements"]["clearance"]["level"], "Top Secret")

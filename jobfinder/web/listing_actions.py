@@ -263,6 +263,7 @@ def top_pick_requirements():
     import json
 
     from jobfinder.profiles import requirements as reqs
+    from jobfinder.profiles.profile_tools import normalize_skills
     from jobfinder.search.relevance import fetch_text
     from jobfinder.web.profile_store import get_user_profile
 
@@ -281,15 +282,19 @@ def top_pick_requirements():
     try:
         connection = db.connect()
         cursor = connection.cursor(dictionary=True)
-        cursor.execute(f"SELECT id, career_url, source_url, listing_details FROM companies WHERE id IN "
+        cursor.execute(f"SELECT id, career_url, source_url, listing_details, listing_skills FROM companies WHERE id IN "
                        f"({','.join(['%s'] * len(ids))})", ids)
         for row in cursor.fetchall():
             try:
                 details = json.loads(row.get("listing_details") or "{}") or {}
             except (TypeError, ValueError):
                 details = {}
+            try:
+                skills = json.loads(row.get("listing_skills") or "[]") or []
+            except (TypeError, ValueError):
+                skills = []
             found = details.get("requirements")
-            if found is None:
+            if found is None or "skill_sections" not in found:
                 text = details.get("description") or ""
                 if len(text) < 200:
                     for url in (row.get("career_url"), row.get("source_url")):
@@ -301,11 +306,13 @@ def top_pick_requirements():
                     gaps[row["id"]] = {"unread": True, "items": []}
                     continue
                 found = reqs.listing_requirements(text)
+                found["skill_sections"] = reqs.skill_sections(text, normalize_skills(skills))
                 details["requirements"] = found
                 cursor.execute("UPDATE companies SET listing_details = %s WHERE id = %s",
                                (json.dumps(details), row["id"]))
                 connection.commit()
-            gaps[row["id"]] = {"unread": False, "items": reqs.requirement_gaps(found, profile)}
+            gaps[row["id"]] = {"unread": False, "items": reqs.requirement_gaps(found, profile),
+                               "fit": reqs.weighted_fit(profile.get("skills") or [], found.get("skill_sections"))}
     except Error as error:
         return api_error("E3230", f"Could not read listing requirements: {error}", 500)
     finally:

@@ -21,11 +21,13 @@
     return Math.max(0, Math.min(100, 100 - (Math.max(0, miles - 10) * 2)));
   }
 
+  // A fit found from only one or two skills says little, so it is pulled toward the middle until five are found.
+  const weigh = (score, count) => 50 + (score - 50) * Math.min(1, count / 5);
+
   function rank(row) {
     const raw = number(row.dataset.jobFit);
-    // A fit found from only one or two skills says little, so it is pulled toward the middle until five are found.
     const count = number(row.dataset.fitCount) || 0;
-    const fit = raw === null ? null : 50 + (raw - 50) * Math.min(1, count / 5);
+    const fit = raw === null ? null : weigh(raw, count);
     const career = number(row.dataset.careerCredibility) || 0;  // 0-10
     const usa = number(row.dataset.usaCredibility) || 0;  // 0-10
     const near = nearness(row);
@@ -38,7 +40,7 @@
       if (miles !== null && miles < 99999) reasons.push(`${Math.round(miles)} miles away`);
     }
     reasons.push(`credibility ${Math.round(career)}/10`);
-    return { row, score, reasons, gaps: [] };
+    return { row, score, reasons, gaps: [], fitPart: (fit === null ? 50 : fit) * 0.4 };
   }
 
   function shown(row) {
@@ -68,8 +70,16 @@
       const found = gaps[pick.row.dataset.companyId];
       if (!found) return;
       if (found.unread) { pick.gaps = [{ text: "Couldn't read the requirements: check them yourself", hard: false }]; return; }
-      pick.gaps = found.items;
+      pick.gaps = found.items.slice();
       pick.score -= found.items.reduce((total, gap) => total + (gap.hard ? 100 : 15), 0);
+      // Skills under "Requirements" count fully, "Nice to have" ones much less: replace the plain skill fit.
+      if (found.fit) {
+        pick.score += weigh(found.fit.score, found.fit.required) * 0.4 - pick.fitPart;
+        pick.reasons[0] = `${found.fit.score}% skill fit, weighted by required skills`;
+        if (found.fit.missing_required.length) {
+          pick.gaps.push({ text: `Required skills you don't list: ${found.fit.missing_required.join(", ")}`, hard: false });
+        }
+      }
     });
     return top.sort(byScore).concat(ranked.slice(PICKS * 2));
   }

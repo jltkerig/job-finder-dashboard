@@ -197,3 +197,59 @@ def requirement_gaps(requirements, profile):
     if wanted and years and years < wanted:
         gaps.append({"text": f"Asks for {wanted}+ years of experience (your work history covers {years})", "hard": False})
     return gaps
+
+
+REQUIRED_HEADING = re.compile(r"\b(requirements?|required|qualifications?|must[\s-]haves?|what you(?:'ll)? (?:need|bring)|"
+                              r"you (?:have|bring|are)|who you are|skills|minimum|basic)\b", re.I)
+PREFERRED_HEADING = re.compile(r"\b(preferred|nice[\s-]to[\s-]haves?|bonus|pluses|a plus|extra credit|desired|ideal)\b", re.I)
+WEIGHTS = {"required": 1.0, "other": 0.75, "preferred": 0.35}
+
+
+def _is_heading(line):
+    return len(line) <= 70 and (line.endswith(":") or not re.search(r"[.!?]$", line)) and len(line.split()) <= 8
+
+
+def skill_sections(text, skills):
+    """{skill: "required" | "preferred" | "other"} for where each listing skill shows on the page. A skill under a
+    "Requirements" heading is required; under "Preferred" / "Nice to have", or in a line saying "a plus", preferred.
+    A skill found in both counts as required."""
+    from jobfinder.profiles.profile_tools import SKILL_ALIASES
+
+    patterns = {}
+    for skill in skills:
+        names = {skill}
+        for name, aliases in SKILL_ALIASES.items():
+            if skill.casefold() in {item.casefold() for item in [name, *aliases]}:
+                names.update([name, *aliases])
+        patterns[skill] = re.compile(r"(?<![\w])(?:" + "|".join(re.escape(name) for name in names) + r")(?![\w])", re.I)
+    rank = {"other": 0, "preferred": 1, "required": 2}
+    found = {}
+    section = "other"
+    for line in (part.strip() for part in re.split(r"\n+", text or "")):
+        if not line:
+            continue
+        if _is_heading(line):
+            section = ("preferred" if PREFERRED_HEADING.search(line) else
+                       "required" if REQUIRED_HEADING.search(line) else section)
+            if not any(pattern.search(line) for pattern in patterns.values()):
+                continue
+        for sentence in _sentences(line):
+            where = "preferred" if PREFERRED.search(sentence) else section
+            for skill, pattern in patterns.items():
+                if pattern.search(sentence) and rank[where] >= rank.get(found.get(skill), -1):
+                    found[skill] = where
+    return {skill: found.get(skill, "other") for skill in skills}
+
+
+def weighted_fit(user_skills, sections):
+    """{"score": 0-100, "required": n, "missing_required": [...]}: missing a required skill costs
+    more than missing a nice-to-have one. None when the listing has no skills."""
+    if not sections or not user_skills:
+        return None
+    user = {skill.casefold() for skill in user_skills}
+    total = sum(WEIGHTS[where] for where in sections.values())
+    have = sum(WEIGHTS[where] for skill, where in sections.items() if skill.casefold() in user)
+    return {"score": round(100 * have / total),
+            "required": sum(1 for where in sections.values() if where != "preferred"),
+            "missing_required": [skill for skill, where in sections.items()
+                                 if where == "required" and skill.casefold() not in user]}
