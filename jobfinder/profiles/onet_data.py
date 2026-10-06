@@ -177,5 +177,7 @@ def related_title_suggestions(title, limit=8):
     # Avoid very broad or oddly specific variations in the first suggestions.
     candidates.discard(key)
     tokens = set(key.split())
+    # O*NET's "UX Designer (User Experience Designer)" loses its brackets and reads as two titles run together.
+    candidates = {name for name in candidates if len(name.split()) <= 4}
     ranked = sorted(candidates, key=lambda name: (-len(tokens & set(name.split())), len(name), name))
     return [proper_title(name) for name in ranked[:limit]]
