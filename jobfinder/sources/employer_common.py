@@ -50,6 +50,8 @@ def _plain(html):
 
 def _arrangement(text):
     text = str(text or "").casefold().replace("_", " ")
+    if re.search(r"\b(?:not|non|no)[\s-]+remote\b", text):  # Workday's remoteType "Not Remote"
+        return "Onsite"
     if "hybrid" in text:
         return "Hybrid"
     if "remote" in text or "virtual" in text or "telecommut" in text:

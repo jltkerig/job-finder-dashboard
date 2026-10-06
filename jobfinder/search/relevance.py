@@ -4,6 +4,8 @@ import json
 from types import SimpleNamespace
 
 from mysql.connector import Error
+import re
+
 import requests
 
 from jobfinder.profiles.onet_data import related_title_suggestions
@@ -22,15 +24,32 @@ from jobfinder.sources.job_feeds import FEED_NAMES
 from jobfinder.sources.job_listings import excludes_us, matching_title as matching_job_title
 
 
+# Describing words for the digital and visual design work these searches are about: a related title made only of
+# these ("Interface Designer", "Website Designer") is kept even when it shares no word with the typed title.
+DIGITAL_WORDS = {"web", "website", "internet", "site", "digital", "interface", "experience", "ux", "ui", "user",
+                 "interaction", "visual", "graphic", "graphics", "computer", "multimedia", "media", "content", "front",
+                 "end", "frontend", "page", "online", "brand", "creative", "production", "art"}
+
+
+def _title_words(title):
+    return {word for word in re.split(r"[\s/&,()-]+", title.casefold()) if word}
+
+
 def expand_job_titles(titles):
-    """The typed titles plus up to two related O*NET titles for each."""
+    """The typed titles plus up to two related O*NET titles for each. A related title must keep the role ("Designer")
+    and share a describing word with one of the typed titles ("UX/UI Designer" for "UX Designer"); a bare role or an
+    unrelated kind ("Fur Designer", "Textile Designer") would match far too much."""
     expanded = list(titles)
     seen = {title.casefold() for title in titles}
     for title in titles:
         role = title.casefold().split()[-1]
+        describing = {word for typed in titles for word in _title_words(typed)} - {role}
         added = 0
         for suggestion in related_title_suggestions(title, limit=12):
-            if role in suggestion.casefold().split() and suggestion.casefold() not in seen:
+            words = _title_words(suggestion)
+            kind = words - {role}
+            if (role in words and kind and (kind & describing or kind <= DIGITAL_WORDS)
+                    and suggestion.casefold() not in seen):
                 expanded.append(suggestion)
                 seen.add(suggestion.casefold())
                 added += 1
