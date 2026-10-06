@@ -38,3 +38,6 @@ resume-builder/data/
 *.docx
 *.rtf
 *.odt
+
+# Local launcher
+/Job Finder.exe
