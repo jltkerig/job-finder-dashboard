@@ -20,7 +20,7 @@ from jobfinder.web import (application_files, auto_apply, blocklists, extension_
 from jobfinder.web.core import app
 
 # The version lives here, in one place. release.py raises it, update.ps1 and start.ps1 read it, and the pages show it.
-APP_VERSION = "1.1.204"
+APP_VERSION = "1.1.205"
 
 app.config.update(APP_VERSION=APP_VERSION)
 

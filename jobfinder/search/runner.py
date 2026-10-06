@@ -53,7 +53,8 @@ from jobfinder.search.refresh import (
     refresh_job_fit_quietly,
     update_existing_results,
 )
-from jobfinder.search.relevance import apply_link_closed, expand_job_titles
+from jobfinder.search.relevance import apply_link_closed, expand_job_titles, fetch_text
+from jobfinder.search import company_check
 from jobfinder.search.searching import brave_key, search_blocked_message, search_searxng
 from jobfinder.search.shared import (
     BLOCKED_COMPANIES,
@@ -924,6 +925,16 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
             f"Search exhausted after saving {companies_saved}/"
             f"{shared.MAX_SEARCH_RESULTS} viable companies."
         )
+
+    # While the search engine is still up: look for the employer's own posting of job-site and feed listings.
+    if not shared.stop_requested() and docker.check_searxng_timer():
+        print()
+        print("Checking company sites for job-site listings...", flush=True)
+        try:
+            found_on_site = company_check.check_listings(database, search_searxng, fetch_text)
+            print(f"Company-site check: found {found_on_site} on the employer's own site.", flush=True)
+        except Exception as error:
+            print(f"Company-site check stopped early: {error}", flush=True)
 
     database.close()
 
