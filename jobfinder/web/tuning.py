@@ -57,6 +57,8 @@ def apply_tuning_form(form, current):
         if not low <= value <= high:
             return None, f"{label} must be between {low} and {high}."
         updated[key] = int(value) if kind is int or float(value).is_integer() else value
+    if "brave_api_key" in form:  # blank clears it; Job Finder then uses SearXNG
+        updated["brave_api_key"] = str(form.get("brave_api_key", "")).strip()[:200]
     for key in TUNING_SWITCHES:
         updated[key] = form.get(key) == "on"
     return updated, None

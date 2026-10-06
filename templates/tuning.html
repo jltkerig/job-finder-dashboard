@@ -66,6 +66,11 @@
       <input id="tune-{{ key }}" name="{{ key }}" type="number" step="{{ '1' if spec[2].__name__ == 'int' else '0.5' }}" min="{{ spec[3] }}" max="{{ spec[4] }}" value="{{ values.get(key, spec[5]) }}" required />
         </div>
     {% endfor %}
+    <div class="form-field"><label for="tune-brave_api_key">Brave Search API key</label>
+      <p class="field-help">With a key, the web search uses Brave Search instead of SearXNG and Docker. Job Finder sets no limit; if Brave refuses (your plan's monthly quota), the search switches to SearXNG. Leave blank to use SearXNG.
+          </p>
+      <input id="tune-brave_api_key" name="brave_api_key" type="password" autocomplete="off" spellcheck="false" value="{{ values.get('brave_api_key', '') }}" />
+        </div>
     {% for key, spec in switches.items() %}
     <div class="form-field"><label class="switch-row"><input type="checkbox" name="{{ key }}" {% if values.get(key, spec[2]) %}checked{% endif %} /> {{ spec[0] }}</label>
       <p class="field-help">{{ spec[1] }}

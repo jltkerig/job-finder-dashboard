@@ -18,6 +18,8 @@ from jobfinder.search.shared import (
 )
 
 searxng_start_time = None
+# True while Brave Search does the web search, so no SearXNG container is expected to be running.
+brave_mode = False
 docker_started_by_program = False
 stop_announced = False
 
@@ -276,7 +278,7 @@ def check_searxng_timer():
 
         return False
 
-    if not searxng_is_running():
+    if not brave_mode and not searxng_is_running():
         print()
         print("SearXNG has stopped.")
 

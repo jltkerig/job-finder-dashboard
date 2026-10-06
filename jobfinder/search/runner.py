@@ -54,7 +54,7 @@ from jobfinder.search.refresh import (
     update_existing_results,
 )
 from jobfinder.search.relevance import apply_link_closed, expand_job_titles
-from jobfinder.search.searching import search_blocked_message, search_searxng
+from jobfinder.search.searching import brave_key, search_blocked_message, search_searxng
 from jobfinder.search.shared import (
     BLOCKED_COMPANIES,
     BLOCKED_DOMAINS,
@@ -617,8 +617,15 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
     # for the other. The web search begins only after both have finished.
     employer_thread = threading.Thread(target=search_known_employers, daemon=True)
     employer_thread.start()
-    docker_up = False if shared.stop_requested() else docker.start_docker_desktop()
-    searxng_up = docker_up and docker.start_searxng()
+    if brave_key() and not shared.stop_requested():
+        # Brave Search needs no Docker; SearXNG starts only if Brave refuses partway through.
+        print("Searching the web with Brave Search.")
+        docker.brave_mode = True
+        docker.searxng_start_time = time.time()
+        docker_up = searxng_up = True
+    else:
+        docker_up = False if shared.stop_requested() else docker.start_docker_desktop()
+        searxng_up = docker_up and docker.start_searxng()
     employer_thread.join()
 
     if shared.stop_requested():
