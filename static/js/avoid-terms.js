@@ -7,6 +7,22 @@
   const add = document.getElementById("add-avoid-term");
   if (!field || !list || !input || !add) return;
   const terms = field.value.split(",").map((term) => term.trim()).filter(Boolean);
+  const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || "";
+
+  // On the Search page the list saves itself; on the Dashboard it goes with the profile form.
+  async function save() {
+    if (!field.dataset.autosave) return;
+    try {
+      const response = await fetch("/avoid-terms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
+        body: JSON.stringify({ terms }),
+      });
+      if (!response.ok) throw new Error();
+    } catch {
+      window.showToast?.("Could not save the Ignore list.", "danger");
+    }
+  }
 
   function render() {
     list.replaceChildren();
@@ -19,7 +35,7 @@
       remove.type = "button";
       remove.textContent = "×";
       remove.setAttribute("aria-label", `Remove ${term}`);
-      remove.addEventListener("click", () => { terms.splice(index, 1); render(); });
+      remove.addEventListener("click", () => { terms.splice(index, 1); render(); save(); });
       chip.append(label, remove);
       list.append(chip);
     });
@@ -33,6 +49,7 @@
     });
     input.value = "";
     render();
+    save();
   }
 
   add.addEventListener("click", addTyped);

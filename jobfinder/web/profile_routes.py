@@ -138,3 +138,13 @@ def job_title_suggestions():
 def skill_related():
     """Skills that go with the one being typed on the Dashboard ("HTML" -> CSS, Responsive Design ...)."""
     return jsonify({"skills": related_skills_for((request.args.get("q") or "").strip()[:80])})
+
+
+@app.route("/avoid-terms", methods=["POST"])
+def save_avoid_terms():
+    """The Ignore list on the Search page: the same list as Avoid in Job Postings on the Dashboard."""
+    terms = (request.get_json(silent=True) or {}).get("terms")
+    if not isinstance(terms, list):
+        return jsonify({"status": "error", "message": "Invalid list."}), 400
+    profile_store.save_avoid_terms(terms)
+    return jsonify({"status": "ok"})

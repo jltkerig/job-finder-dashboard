@@ -48,6 +48,12 @@
           <div id="search-city-list" class="city-list city-list-below">
           </div>
         </div>
+        <div class="form-field avoid-terms-field"><label for="new-avoid-term">Ignore</label>
+          <small class="field-help">Work you can't or don't want to do. Same list as Avoid in Job Postings on your Dashboard; saved as you change it.</small>
+          <input type="hidden" id="avoid-terms-field" data-autosave="1" value="{{ (profile_avoid_terms or [])|join(', ') }}" />
+          <div class="skill-add-row"><input id="new-avoid-term" type="text" maxlength="80" placeholder="Add something to ignore" aria-label="Add something to ignore" /><button class="bordered-button secondary-action" id="add-avoid-term" type="button">Add Term</button></div>
+          <div id="avoid-term-list" class="skill-chip-list"></div>
+        </div>
         <input id="search-state" name="state" type="hidden" value="{{ profile_state }}" />
         <datalist id="city-state-options">
         </datalist>
@@ -224,4 +230,5 @@
   <script src="/static/js/columns.js?v={{ app_version }}"></script>
   <script src="/static/js/top-picks.js?v={{ app_version }}"></script>
   <script src="/static/js/listing-preview.js?v={{ app_version }}"></script>
+  <script src="/static/js/avoid-terms.js?v={{ app_version }}"></script>
 </body></html>

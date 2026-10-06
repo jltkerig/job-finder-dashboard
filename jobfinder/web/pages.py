@@ -72,6 +72,7 @@ def home():
         profile_job_titles=profile.get("job_titles", []),
         profile_state=profile.get("state", ""),
         profile_work_preferences=profile.get("work_preferences", []),
+        profile_avoid_terms=profile.get("avoid_terms", []),
     )
 
 
