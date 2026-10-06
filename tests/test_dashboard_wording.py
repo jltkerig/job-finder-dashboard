@@ -81,7 +81,7 @@ class DashboardWording(unittest.TestCase):
         for label_id, text in (("job-titles", "Separate titles with commas."),):
             self.assertRegex(dash, r'<label for="' + label_id + r'">[^<]*</label>\s*<p class="field-help">' + re.escape(text))
         search = read("templates", "index.html")
-        for label_id, text in (("job-title", "Separate multiple titles"), ("search-city-input", "Add a city for a radius search")):
+        for label_id, text in (("job-title", "Separate multiple titles"), ("search-city-input", "A city searches around it")):
             self.assertRegex(search, r'(?s)<label for="' + label_id + r'">[^<]*</label>(?:(?!</div>).)*?<p [^>]*class="field-help"[^>]*>\s*' + re.escape(text))
         # the compact filter row keeps its one explanation as the box's hover tip
         self.assertIn('<label for="result-min-credibility" title="Only individual openings', search)

@@ -34,14 +34,14 @@
         </div>
       </div>
       <form id="job-search-form" class="job-search-form">
-        <div class="form-field"><label for="job-title">Job Titles</label>
-          <p class="field-help">Separate multiple titles with commas. Related titles appear automatically after you pause typing.
+        <div class="form-field job-title-field"><label for="job-title">Job Titles</label>
+          <p class="field-help">Separate multiple titles with commas. Related titles appear as you type.
           </p><input id="job-title" name="job_title" type="text" data-title-suggest="list" placeholder="e.g. Web Designer, UI Designer" value="{{ profile_job_titles|join(', ') }}" required />
           <div id="job-title-suggestions" class="job-title-suggestions" hidden aria-live="polite">
           </div>
         </div>
         <div class="form-field city-search-field"><label for="search-city-input">City, Zip, Country, State</label>
-          <p class="field-help">Add a city for a radius search, or enter a full state name for a statewide search. Statewide searches ignore the radius.
+          <p class="field-help">A city searches around it; a full state name searches the whole state.
           </p>
           <div class="city-add-row"><input id="search-city-input" type="text" list="city-state-options" placeholder="e.g. Wilmington, DE" autocomplete="off" /><select id="search-city-radius" aria-label="Radius"><option value="5">5 miles</option><option value="10">10 miles</option><option value="15">15 miles</option><option value="20">20 miles</option><option value="30">30 miles</option><option value="50" selected>50 miles</option></select><button id="add-search-city" class="bordered-button secondary-action city-add-button" type="button">Add Location</button>
           </div>
@@ -49,7 +49,7 @@
           </div>
         </div>
         <div class="form-field avoid-terms-field"><label for="new-avoid-term">Ignore</label>
-          <small class="field-help">Work you can't or don't want to do. Same list as Avoid in Job Postings on your Dashboard; saved as you change it.</small>
+          <p class="field-help">Shared with Avoid in Job Postings on your Dashboard. Saves as you go.</p>
           <input type="hidden" id="avoid-terms-field" data-autosave="1" value="{{ (profile_avoid_terms or [])|join(', ') }}" />
           <div class="skill-add-row"><input id="new-avoid-term" type="text" maxlength="80" placeholder="Add something to ignore" aria-label="Add something to ignore" /><button class="bordered-button secondary-action" id="add-avoid-term" type="button">Add Term</button></div>
           <div id="avoid-term-list" class="skill-chip-list"></div>

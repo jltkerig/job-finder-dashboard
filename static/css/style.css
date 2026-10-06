@@ -2009,3 +2009,19 @@ body[data-page="search"] #results-table .details-blocks .bordered-button { min-h
 .job-posting-full summary { cursor:pointer; color:#2a4a7a; font-weight:600; }
 .job-posting-text { white-space:pre-line; max-height:260px; overflow:auto; margin-top:8px; padding:10px 12px; border:1px solid #e3e6ea; border-radius:6px; background:#fafbfc; line-height:1.45; }
 .job-posting-loading::before { content:""; display:inline-block; width:12px; height:12px; margin-right:8px; vertical-align:-1px; border:2px solid #c9ced6; border-top-color:#2a4a7a; border-radius:50%; animation:top-picks-spin .8s linear infinite; }
+
+/* Search for Jobs: titles across the top, locations and the Ignore list side by side below */
+.job-search-form { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:4px 28px; max-width:1100px; }
+.job-search-form > .form-field { margin:0 0 16px; min-width:0; }
+.job-search-form > .job-title-field, .job-search-form > .form-error { grid-column:1 / -1; }
+.job-search-form > .city-search-field { grid-column:auto; }
+.job-search-form > .city-search-field > .field-help { margin:2px 0 8px; }
+.job-search-form .form-field > label { font-weight:700; }
+.job-search-form .field-help { margin:2px 0 8px; font-size:.84rem; }
+.job-search-form #job-title { width:100%; box-sizing:border-box; }
+.job-search-form .city-add-row { grid-template-columns:minmax(0, 1fr) 118px max-content; }
+.job-search-form .skill-add-row { display:grid; grid-template-columns:minmax(0, 1fr) max-content; }
+.job-search-form .city-add-row input, .job-search-form .skill-add-row input { width:100%; box-sizing:border-box; }
+.job-search-form .skill-chip-list:empty, .job-search-form .city-list:empty { display:none; }
+.job-search-form .skill-chip-list { margin:10px 0 0; }
+@media (max-width: 820px) { .job-search-form { grid-template-columns:1fr; } .job-search-form .city-add-row { grid-template-columns:1fr; } }
