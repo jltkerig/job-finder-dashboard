@@ -284,7 +284,7 @@ class CaptureImport:
 def import_captures():
     """--import-captures: filter and save the jobs in web-job-scraper\\searches that changed since the last import."""
     # Like Refresh, the import runs without the search engine: page downloads (the company-website check) must not
-    # wait for SearXNG, which is not running.
+    # wait for the web search, which is not running.
     shared.update_existing_mode = True
     print()
     print("================================")

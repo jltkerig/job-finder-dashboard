@@ -7,7 +7,7 @@ from urllib.parse import urljoin, urlparse
 from bs4 import BeautifulSoup
 import requests
 
-from jobfinder.search import docker
+from jobfinder.search import session
 from jobfinder.search import fetching
 from jobfinder.search import shared
 from jobfinder.search.company_names import _JOB_TITLE_WORDS, extract_company_name
@@ -281,7 +281,7 @@ def discover_robots_links(homepage):
     root = f"{parsed.scheme}://{parsed.netloc}"
     robots_url = urljoin(root + "/", "robots.txt")
 
-    if not shared.update_existing_mode and not docker.check_searxng_timer():
+    if not shared.update_existing_mode and not session.web_search_ok():
         return []
 
     try:

@@ -177,7 +177,7 @@ try {
     $movedModules = @("db", "db_schema", "job_listings", "job_sites", "job_feeds", "remote_ok", "remote_states", "employer_jobs", "employer_site",
         "ats_discovery", "ats_feeds", "ats_lookup", "closed_jobs", "profile_tools", "onet_data", "places", "travel",
         "board_health", "search_skips", "search_debug", "capture_import", "job_retention") | ForEach-Object { "$_.py" }
-    foreach ($obsolete in (@("test_database.py", "searxng\settings.json", ".update-in-progress", "recommended_domains.txt") + $movedModules)) {
+    foreach ($obsolete in (@("test_database.py", "searxng\settings.json", "searxng\docker-compose.yml", "searxng\settings.yml", "jobfinder\search\docker.py", ".update-in-progress", "recommended_domains.txt") + $movedModules)) {
         Remove-Item (Join-Path $ProjectDir $obsolete) -Recurse -Force -ErrorAction SilentlyContinue
     }
 

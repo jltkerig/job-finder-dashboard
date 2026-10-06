@@ -12,7 +12,7 @@ from jobfinder.sources.job_listings import canonical_url
 from jobfinder.search import company_site
 from jobfinder.search import company_names
 from jobfinder.search import fetching
-from jobfinder.search import docker
+from jobfinder.search import session
 from jobfinder.search import shared
 
 
@@ -61,7 +61,7 @@ class Prefetch(unittest.TestCase):
 
     def test_a_failed_download_is_remembered_so_it_is_not_retried(self):
         urls = ['https://down.example/a', 'https://down.example/b']
-        with patch.object(fetching, 'safe_request', lambda url: None), patch.object(docker, 'check_searxng_timer', lambda: True), \
+        with patch.object(fetching, 'safe_request', lambda url: None), patch.object(session, 'web_search_ok', lambda: True), \
                 patch.object(shared, 'update_existing_mode', False):
             fetching.prefetch_pages(urls)
         self.assertTrue(all(shared._page_cache[canonical_url(url)] is None for url in urls))

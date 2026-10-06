@@ -1,1 +1,1 @@
-"""The job search: settings, Docker/SearXNG, fetching pages, reading postings and saving results."""
+"""The job search: settings, Brave Search, fetching pages, reading postings and saving results."""

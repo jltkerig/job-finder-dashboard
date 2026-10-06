@@ -22,13 +22,13 @@ def _no_real_database(*args, **kwargs):
 mysql.connector.connect = _no_real_database
 
 
-# Tests must not start, stop or talk to Docker either: the Docker/SearXNG helpers run their commands through this one
-# function, so it is replaced here. A test of those helpers patches it again with its own fake.
-from jobfinder.search import docker  # noqa: E402
+# Tests must not spend Brave Search queries either: every Brave call goes through this one function, so it is
+# replaced here. A test of the Brave search patches it again with its own fake.
+from jobfinder.search import searching  # noqa: E402
 
 
-def _no_real_commands(*args, **kwargs):
-    raise RuntimeError("tests have no Docker or other programs to run")
+def _no_real_search(*args, **kwargs):
+    raise RuntimeError("tests have no Brave Search")
 
 
-docker.run_command = _no_real_commands
+searching._brave_get = _no_real_search

@@ -1,50 +1,36 @@
-"""Asking a search engine for pages, one query at a time: Brave Search when an API key is saved on the Tuning page,
-otherwise SearXNG in Docker. Job Finder sets no query limit of its own; if Brave refuses (plan quota, bad key), the
-search switches to SearXNG and carries on."""
+"""Asking Brave Search for pages, one query at a time. The API key is saved on the Tuning page. Job Finder sets no
+query limit of its own; when Brave refuses (plan quota used up, bad key) the web search stops for this run."""
 
 import time
 
 import requests
 
-from jobfinder.search import docker
+from jobfinder.search import session
 from jobfinder.search import shared
-from jobfinder.search.shared import SEARXNG_URL, USA_ONLY, timed
-
-_last_search_time = 0.0
-# Engines SearXNG said it could not use on its most recent search, e.g. ["duckduckgo: CAPTCHA"].
-last_search_health = {"unresponsive": []}
-
-
-def search_blocked_message(empty_queries):
-    engines = ", ".join(last_search_health["unresponsive"][:4]) or "no engine gave a reason"
-    return (f"Search engines returned nothing for {empty_queries} queries in a row ({engines}). "
-            "They are probably rate-limiting Job Finder; try again in about an hour.")
-
+from jobfinder.search.shared import USA_ONLY, timed
 
 BRAVE_URL = "https://api.search.brave.com/res/v1/web/search"
+_last_search_time = 0.0
 
 
 def brave_key():
     return str(shared.settings.get("brave_api_key") or "").strip()
 
 
-def search_searxng(query, page=1):
+def search_blocked_message(empty_queries):
+    return (f"Brave Search returned nothing for {empty_queries} queries in a row. Try again later, or try more job "
+            "titles or a larger area.")
+
+
+def search_web(query, page=1):
     with timed("Search engine queries (including polite pauses)"):
-        if docker.brave_mode:
-            results = _search_brave(query, page)
-            if results is not None:
-                return results
-            if not switch_to_searxng():
-                return []
-        return _search_searxng(query, page)
-
-
-def switch_to_searxng():
-    """Brave refused: start Docker and SearXNG and use them for the rest of the search."""
-    docker.brave_mode = False
-    print()
-    print("Switching to SearXNG for the rest of this search.")
-    return docker.start_docker_desktop() and docker.start_searxng()
+        if session.engine_refused or not session.web_search_ok():
+            return []
+        results = _search_brave(query, page)
+        if results is None:
+            session.engine_refused = True
+            return []
+        return results
 
 
 def _brave_get(params):
@@ -53,8 +39,7 @@ def _brave_get(params):
 
 
 def _search_brave(query, page=1):
-    """One page of Brave results shaped like SearXNG's ({url, title, content}), [] when there are none, or None
-    when Brave refused and the search should switch engines."""
+    """One page of results as [{url, title, content}], [] when there are none, or None when Brave refused."""
     global _last_search_time
     if shared.stop_requested():
         return []
@@ -66,7 +51,7 @@ def _search_brave(query, page=1):
     try:
         response = _brave_get(params)
         if response.status_code == 429:
-            time.sleep(2)  # may just be the per-second rate: wait and try once more before giving up on Brave
+            time.sleep(2)  # may just be the per-second rate: wait and try once more
             response = _brave_get(params)
         if response.status_code in (401, 402, 403, 429):
             print()
@@ -83,60 +68,3 @@ def _search_brave(query, page=1):
         _last_search_time = time.monotonic()
     return [{"url": item["url"], "title": item.get("title") or "", "content": item.get("description") or ""}
             for item in (data.get("web") or {}).get("results") or [] if item.get("url")]
-
-
-def _search_searxng(query, page=1):
-    global _last_search_time
-    if not docker.check_searxng_timer():
-        return []
-
-    # Spacing requests out keeps engines like DuckDuckGo from answering with a CAPTCHA.
-    wait = shared.QUERY_DELAY - (time.monotonic() - _last_search_time)
-    if wait > 0:
-        time.sleep(wait)
-
-    if USA_ONLY:
-        search_query = f"{query} United States"
-
-    else:
-        search_query = query
-
-    params = {
-        "q": search_query,
-        "format": "json",
-        "language": "en-US",
-        "pageno": page,
-    }
-
-    try:
-        response = requests.get(
-            SEARXNG_URL,
-            params=params,
-            timeout=30,
-        )
-
-        response.raise_for_status()
-
-        data = response.json()
-
-        last_search_health["unresponsive"] = [
-            f"{item[0]}: {item[1]}" for item in data.get("unresponsive_engines", []) if len(item) >= 2]
-
-        return data.get("results", [])
-
-    except requests.RequestException as error:
-        print()
-        print("Could not search SearXNG.")
-
-        print(error)
-
-        return []
-
-    except ValueError:
-        print()
-        print("SearXNG did not return JSON.")
-
-        return []
-
-    finally:
-        _last_search_time = time.monotonic()

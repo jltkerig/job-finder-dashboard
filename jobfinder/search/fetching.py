@@ -8,7 +8,7 @@ from urllib.parse import urlparse
 
 import requests
 
-from jobfinder.search import docker
+from jobfinder.search import session
 from jobfinder.search import shared
 from jobfinder.search.shared import (
     BLOCKED_COUNTRY_DOMAINS,
@@ -89,7 +89,7 @@ def prefetch_pages(urls, workers=None):
     def fetch(url):
         try:
             response = safe_request(url)
-            if response is None and docker.check_searxng_timer():
+            if response is None and session.web_search_ok():
                 remember_page(canonical_url(url), None)
         except Exception:
             pass
@@ -104,7 +104,7 @@ def safe_request(url):
 
 
 def _safe_request(url):
-    if not shared.update_existing_mode and not docker.check_searxng_timer():
+    if not shared.update_existing_mode and not session.web_search_ok():
         return None
 
     if not is_valid_url(url) or is_pdf_url(url):

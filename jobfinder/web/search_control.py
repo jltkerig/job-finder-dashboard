@@ -63,15 +63,9 @@ def _finish_graceful_stop(process):
     try:
         process.wait(timeout=GRACEFUL_STOP_SECONDS)
     except subprocess.TimeoutExpired:
-        log_error_code("E2106", "Job Finder did not stop in time; forcing it and stopping SearXNG.")
+        log_error_code("E2106", "Job Finder did not stop in time; forcing it.")
         process.kill()
         process.wait(timeout=10)
-        # The killed process could not run its own cleanup.
-        try:
-            subprocess.run(["docker", "stop", "searxng"], capture_output=True, timeout=60,
-                           creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
-        except (OSError, subprocess.TimeoutExpired) as error:
-            log_error_code("E2106", f"Could not stop SearXNG: {error}")
     finally:
         webfiles.STOP_REQUEST_FILE.unlink(missing_ok=True)
 
@@ -85,7 +79,7 @@ def stop_search():
             scraper_mode = None
             return jsonify({"status": "stopped", "message": "No Job Finder process was running."})
         if scraper_mode in ("search", "replacement"):
-            # Searches own SearXNG and Docker, so let them shut those down themselves.
+            # Let a search finish its current step and save what it has.
             if not scraper_stopping:
                 scraper_stopping = True
                 try:

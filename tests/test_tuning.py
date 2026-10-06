@@ -12,7 +12,7 @@ from jobfinder.web import tuning
 import time
 from jobfinder.records import board_health
 import dashboard
-from jobfinder.search import docker
+from jobfinder.search import session
 from jobfinder.search import shared
 from jobfinder.web import webfiles
 from jobfinder.records.board_health import BoardHealth, classify_error, read_health
@@ -30,7 +30,7 @@ class Settings(unittest.TestCase):
         self.assertEqual((updated['searxng_timeout_minutes'], updated['search_query_delay_seconds']), (45, 2.5))
         self.assertEqual(updated['remote_feeds'], {'Remotive': False})
         self.assertTrue(updated['start_mysql_automatically'])
-        self.assertFalse(updated['stop_docker_when_finished'])  # an unchecked box turns the option off
+        self.assertFalse(updated['exclude_internships'])  # an unchecked box turns the option off
 
     def test_out_of_range_and_non_numeric_values_are_refused(self):
         for key, value in (('searxng_timeout_minutes', '0'), ('parallel_page_fetches', '99'), ('max_search_results', 'lots')):
@@ -91,17 +91,17 @@ class Health(unittest.TestCase):
 class StopReasons(unittest.TestCase):
     def test_reasons_say_what_to_change(self):
         with patch.object(shared, 'stop_requested', lambda: False), patch.object(shared, 'MAX_SEARCH_RESULTS', 10), \
-                patch.object(docker, 'check_searxng_timer', lambda: True):
-            self.assertIn('More job titles'.lower(), docker.search_stop_reason(3, None).lower())
-            self.assertEqual(docker.search_stop_reason(10, None), '10 of 10 distinct jobs found')
-            self.assertEqual(docker.search_stop_reason(3, 'rate-limited'), 'rate-limited')
-            with patch.object(docker, 'searxng_start_time', 0), patch.object(time, 'time', lambda: 10 ** 9):
-                self.assertIn('Tuning page', docker.search_stop_reason(3, None))
+                patch.object(session, 'web_search_ok', lambda: True):
+            self.assertIn('More job titles'.lower(), session.search_stop_reason(3, None).lower())
+            self.assertEqual(session.search_stop_reason(10, None), '10 of 10 distinct jobs found')
+            self.assertEqual(session.search_stop_reason(3, 'rate-limited'), 'rate-limited')
+            with patch.object(session, 'start_time', 0), patch.object(time, 'time', lambda: 10 ** 9):
+                self.assertIn('Tuning page', session.search_stop_reason(3, None))
         with patch.object(shared, 'stop_requested', lambda: False), patch.object(shared, 'MAX_SEARCH_RESULTS', 10), \
-                patch.object(docker, 'check_searxng_timer', lambda: False), patch.object(docker, 'searxng_start_time', None):
-            self.assertIn('Docker', docker.search_stop_reason(3, None))
+                patch.object(session, 'engine_refused', True), patch.object(session, 'start_time', None):
+            self.assertIn('Brave Search refused', session.search_stop_reason(3, None))
         with patch.object(shared, 'stop_requested', lambda: True):
-            self.assertEqual(docker.search_stop_reason(3, None), 'Stopped by user')
+            self.assertEqual(session.search_stop_reason(3, None), 'Stopped by user')
 
 
 if __name__ == '__main__':

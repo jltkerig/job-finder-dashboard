@@ -64,7 +64,7 @@ from jobfinder.sources.job_feeds import FEEDS, FEED_NAMES
 from jobfinder.sources.job_listings import canonical_url, extract_jobs, looks_like_not_a_job, matching_title as matching_job_title
 from jobfinder.sources.job_sites import JOB_SITE_NAMES, job_site_for
 from jobfinder.search import company_check
-from jobfinder.search.searching import _search_brave, brave_key
+from jobfinder.search.searching import brave_key, search_web
 
 SEARCH_SCOPE_FILE = paths.SEARCH_SCOPE_FILE
 RESTORABLE_REASONS = ("wrong_role", "wrong_location")
@@ -210,7 +210,7 @@ def refresh_job_fit_quietly(database):
 
 
 def update_existing_results(company_ids=None):
-    """Recheck existing rows without starting Docker or the search engine."""
+    """Recheck existing rows without running the web search."""
     shared.update_existing_mode = True
     print()
     print("================================")
@@ -685,10 +685,10 @@ def update_existing_results(company_ids=None):
             print(f"Deleted {expired} job(s) closed for more than {CLOSED_KEEP_DAYS} days (saved jobs are kept).")
     except Error as error:
         print(f"Could not tidy closed jobs: {error}")
-    # With Brave Search (no Docker needed), a refresh also looks for employers' own postings of job-site listings.
+    # With a Brave Search key, a refresh also looks for employers' own postings of job-site listings.
     if brave_key() and not shared.stop_requested():
         try:
-            found = company_check.check_listings(database, lambda query: _search_brave(query) or [], fetch_text)
+            found = company_check.check_listings(database, lambda query: search_web(query), fetch_text)
             print(f"Company-site check: found {found} on the employer's own site.")
         except Exception as error:
             print(f"Company-site check stopped early: {error}")

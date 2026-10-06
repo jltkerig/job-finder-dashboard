@@ -1,4 +1,3 @@
-import json
 import sys
 import unittest
 from pathlib import Path
@@ -9,9 +8,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import time
-import requests
 from jobfinder.search import searching
-from jobfinder.search import docker
+from jobfinder.search import session
 from jobfinder.search import shared
 from test_search_flow import run_search
 
@@ -20,16 +18,14 @@ class BlockedEngines(unittest.TestCase):
     def search(self, fake_search, limit):
         debug = []
         saved = run_search({}, 'https://example.com', 'Web Designer', debug_out=debug,
-                           extra={'search_searxng': fake_search, 'EMPTY_QUERY_LIMIT': limit})
+                           extra={'search_web': fake_search, 'EMPTY_QUERY_LIMIT': limit})
         return saved, debug[0]['runs'][-1]
 
     def test_search_stops_early_and_says_why_when_every_query_is_empty(self):
-        searching.last_search_health['unresponsive'] = ['duckduckgo: CAPTCHA', 'brave: timeout']
         saved, run = self.search(lambda *args: [], 3)
         self.assertEqual(saved, set())
         self.assertEqual(len(run['queries']), 3)
         self.assertIn('returned nothing for 3 queries in a row', run['stop_reason'])
-        self.assertIn('duckduckgo: CAPTCHA', run['stop_reason'])
         self.assertTrue(run['summary']['search_engines_blocking'])
 
     def test_a_query_with_results_resets_the_count(self):
@@ -46,15 +42,14 @@ class BlockedEngines(unittest.TestCase):
 
 
 class Pacing(unittest.TestCase):
-    def call(self, clock, sleeps, unresponsive=()):
-        payload = {'results': [], 'unresponsive_engines': [list(item) for item in unresponsive]}
-        response = SimpleNamespace(raise_for_status=lambda: None, json=lambda: payload)
-        with patch.object(docker, 'check_searxng_timer', lambda: True), \
-                patch.object(requests, 'get', lambda *args, **kw: response), \
+    def call(self, clock, sleeps):
+        response = SimpleNamespace(status_code=200, raise_for_status=lambda: None, json=lambda: {'web': {'results': []}})
+        with patch.object(session, 'web_search_ok', lambda: True), patch.object(session, 'engine_refused', False), \
+                patch.object(searching, '_brave_get', lambda params: response), \
                 patch.object(time, 'monotonic', lambda: clock[0]), \
                 patch.object(time, 'sleep', lambda seconds: sleeps.append(round(seconds, 2))), \
                 patch.object(shared, 'QUERY_DELAY', 3):
-            return searching.search_searxng('web designer jobs')
+            return searching.search_web('web designer jobs')
 
     def test_requests_are_spaced_out(self):
         sleeps, clock = [], [100.0]
@@ -63,12 +58,6 @@ class Pacing(unittest.TestCase):
             clock[0] = 101.0
             self.call(clock, sleeps)      # only 1 second has passed, so wait 2 more
         self.assertEqual(sleeps, [2.0])
-
-    def test_engines_that_did_not_answer_are_remembered(self):
-        with patch.object(searching, '_last_search_time', 0.0):
-            self.call([500.0], [], unresponsive=[('duckduckgo', 'CAPTCHA'), ('brave', 'timeout')])
-        self.assertEqual(searching.last_search_health['unresponsive'], ['duckduckgo: CAPTCHA', 'brave: timeout'])
-        self.assertIn('duckduckgo: CAPTCHA, brave: timeout', searching.search_blocked_message(8))
 
 
 if __name__ == '__main__':

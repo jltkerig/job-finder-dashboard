@@ -11,7 +11,7 @@ from jobfinder.search import fetching
 from jobfinder.search import geo
 from jobfinder.search.company_site import ATS_DOMAINS, DIRECTORY_MARKETPLACE_DOMAINS, SOCIAL_DOMAINS, score_career_page
 from jobfinder.search.fetching import has_blocked_country_domain, is_blocked_domain, is_valid_url, wait_for_host
-from jobfinder.search.searching import search_searxng
+from jobfinder.search.searching import search_web
 from jobfinder.search.shared import HEADERS, TIMEOUT, USA_ONLY, is_internship
 from jobfinder.search.usa_location import selected_state_codes
 from jobfinder.sources.ats_discovery import identify as identify_board
@@ -219,6 +219,6 @@ def fetch_text(url, max_bytes=6_000_000):
 def find_employer_site(name, job_title, job_url, page_html, titles, location_hint="", allow_search=True, notes=None):
     return resolve_employer_site(
         name, job_title, job_url, page_html, titles, fetch=fetching.safe_request,
-        search=search_searxng if allow_search else None, score_page=score_career_page,
+        search=search_web if allow_search else None, score_page=score_career_page,
         is_excluded=is_excluded_employer_host, location_hint=location_hint,
         allow_search=allow_search, notes=notes, fetch_raw=fetch_text)

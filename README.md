@@ -1,10 +1,10 @@
 # Job Finder
 
-Personal job discovery project using Python, MySQL, Flask, Docker, SearXNG, Remote OK, USAJOBS and Adzuna (optional free API keys), local O*NET occupation data, and OpenStreetMap Nominatim. The version number is shown in the dashboard footer and set in `dashboard.py` (`APP_VERSION`); the sections below are a history by version.
+Personal job discovery project using Python, MySQL, Flask, Brave Search API, Remote OK, USAJOBS and Adzuna (optional free API keys), local O*NET occupation data, and OpenStreetMap Nominatim. The version number is shown in the dashboard footer and set in `dashboard.py` (`APP_VERSION`); the sections below are a history by version.
 
 ## What Job Finder does
 
-Job Finder searches the web locally for employer career pages and job listings, checks each result for career and United States location evidence, and saves the findings to MySQL. It uses a local SearXNG instance in Docker for new searches. Results are suggestions to review: a credibility score does not guarantee a company, opening, or application is legitimate.
+Job Finder searches the web locally for employer career pages and job listings, checks each result for career and United States location evidence, and saves the findings to MySQL. New searches use the Brave Search API (add your key on the Tuning page). Results are suggestions to review: a credibility score does not guarantee a company, opening, or application is legitimate.
 
 ## Later versions (v1.1.66 – v1.1.120)
 
@@ -80,7 +80,7 @@ jobfinder/              the code
   db.py                 the one place that opens a database connection
   web/                  the pages and buttons, one module per kind of page (see the list in dashboard.py)
   search/               the search itself: runner.py is the search, the others are its parts
-                        (shared settings, docker, fetching, company_site, usa_location, geo, relevance ...)
+                        (shared settings, session, searching, fetching, company_site, usa_location, geo, relevance ...)
   sources/              where jobs come from: job sites, feeds, employer career boards (Workday, Greenhouse ...)
   profiles/             your profile's helpers: skills and Job Fit, O*NET titles, places, drive times
   records/              what Job Finder remembers: skipped pages, board health, imported captures, retention
@@ -91,7 +91,6 @@ user-data/              YOURS: settings.json, block lists, watched employers, se
 logs/                   dashboard and search logs
 user-builds/            résumés and cover letters from Résumé Builder
 resume-builder/         Résumé Builder (its own app on port 5001; see its README). Not part of releases yet
-searxng/                Docker/SearXNG runtime configuration
 tests/                  python -m unittest discover -s tests -p "test_*.py" -t tests
 ```
 
@@ -141,7 +140,7 @@ Refresh Results shows a visible loading indicator and confirms after the current
 
 ## v1.1.50
 
-Update Existing Results checks known sites directly without starting Docker or SearXNG. The popup reports the current listing and elapsed time. Clicking any Career Credibility or USA Credibility value opens the score explanation.
+Update Existing Results checks known sites directly; with a Brave key it also looks for employers' own postings. The popup reports the current listing and elapsed time. Clicking any Career Credibility or USA Credibility value opens the score explanation.
 
 ## v1.1.51
 

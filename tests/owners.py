@@ -1,7 +1,7 @@
 """Which module a name must be patched in: the one that defines it (functions) or reads it (settings and state).
 
 The search code is split over jobfinder/search/*.py. A test that replaces a function has to replace it in the module that
-defines it, because every other module calls it through that module (docker.check_searxng_timer(), fetching.safe_request()).
+defines it, because every other module calls it through that module (session.web_search_ok(), fetching.safe_request()).
 """
 import importlib
 import pkgutil

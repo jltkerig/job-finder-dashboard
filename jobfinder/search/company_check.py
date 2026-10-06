@@ -170,7 +170,7 @@ def candidate_urls(results, listing, limit=5):
 
 
 def find_company_posting(listing, search, fetch):
-    """The employer's own page for this listing, or None. search(query) gives SearXNG-shaped results; fetch(url) gives
+    """The employer's own page for this listing, or None. search(query) gives [{url, title, content}] results; fetch(url) gives
     an object with .url and .text, or None."""
     company, title = listing["company"], listing["title"]
     if not company_words(company) or company.casefold() == "unknown employer":

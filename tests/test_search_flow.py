@@ -13,7 +13,7 @@ from jobfinder.search import runner
 import job_finder as finder
 from jobfinder.search import usa_location
 from owners import holders
-from jobfinder.search import docker
+from jobfinder.search import session
 from jobfinder.search import shared
 
 
@@ -39,10 +39,9 @@ def run_search(pages, search_url, job_title, *, cities_json='[]', max_new=2, loc
     patches = {
         'connect_database': lambda: Database(), 'ensure_database_schema': lambda db: True,
         'rejected_posting_urls': lambda db: set(), 'prepare_city_targets': lambda db, state, cities: list(city_targets),
-        'start_docker_desktop': lambda: True, 'start_searxng': lambda: True,
-        'stop_searxng': lambda: None, 'stop_docker_desktop': lambda: None,
-        'check_searxng_timer': lambda: True, 'FEEDS': (), 'JOB_SITES': (), 'load_employers': lambda: [], 'company_board_posting': lambda name, title: None, 'fetch_text': lambda *a, **k: None,
-        'search_searxng': lambda *args: [{'title': 'Result', 'url': search_url}],
+        'brave_key': lambda: 'test-key',
+        'web_search_ok': lambda: True, 'FEEDS': (), 'JOB_SITES': (), 'load_employers': lambda: [], 'company_board_posting': lambda name, title: None, 'fetch_text': lambda *a, **k: None,
+        'search_web': lambda *args: [{'title': 'Result', 'url': search_url}],
         'safe_request': lambda url: SimpleNamespace(url=url, text=pages[url]) if url in pages else None,
         'analyze_usa_location': location,
         'save_company': save,
@@ -281,7 +280,7 @@ class DebugFile(unittest.TestCase):
         def crash(*args):
             raise RuntimeError('boom')
         with self.assertRaises(RuntimeError):
-            run_search({}, 'https://example.com', 'Web Designer', debug_out=debug, extra={'search_searxng': crash})
+            run_search({}, 'https://example.com', 'Web Designer', debug_out=debug, extra={'search_web': crash})
         self.assertIn('RuntimeError: boom', debug[0]['runs'][-1]['stop_reason'])
 
 
@@ -324,19 +323,15 @@ class StopRequest(unittest.TestCase):
             stop_file = Path(directory) / '.stop-requested'
             stop_file.touch()
             with patch.object(shared, 'STOP_REQUEST_FILE', stop_file):
-                self.assertFalse(docker.check_searxng_timer())
+                self.assertFalse(session.web_search_ok())
 
-    def test_crash_mid_search_still_stops_searxng(self):
-        stopped = []
-        def crash(*args):
-            raise RuntimeError('boom')
-        with self.assertRaises(RuntimeError):
-            run_search({}, 'https://example.com', 'Web Designer', extra={
-                'search_searxng': crash,
-                'stop_searxng': lambda: stopped.append('searxng'),
-                'stop_docker_desktop': lambda: stopped.append('docker'),
-            })
-        self.assertEqual(stopped, ['searxng', 'docker'])
+    def test_no_brave_key_skips_the_web_search(self):
+        searched = []
+        debug = []
+        run_search({}, 'https://example.com', 'Web Designer', debug_out=debug,
+                   extra={'brave_key': lambda: '', 'search_web': lambda *args: searched.append(args) or []})
+        self.assertEqual(searched, [])
+        self.assertIn('No Brave Search API key', debug[0]['runs'][-1]['stop_reason'])
 
 
 if __name__ == '__main__':

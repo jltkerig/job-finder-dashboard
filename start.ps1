@@ -118,7 +118,6 @@ Set-Location $ProjectPath
 
 if (-not (Test-Path $EnvPath)) {
     try {
-        $SearxSecret = ([guid]::NewGuid().ToString("N") + [guid]::NewGuid().ToString("N"))
         $FlaskSecret = ([guid]::NewGuid().ToString("N") + [guid]::NewGuid().ToString("N"))
         @"
 DB_HOST=127.0.0.1
@@ -126,7 +125,6 @@ DB_PORT=3306
 DB_USER=root
 DB_PASSWORD=
 DB_NAME=job_finder
-SEARXNG_SECRET=$SearxSecret
 FLASK_SECRET_KEY=$FlaskSecret
 "@ | Set-Content -Path $EnvPath -Encoding UTF8
         Write-Host "Created a private local .env file."

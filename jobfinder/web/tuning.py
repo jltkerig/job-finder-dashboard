@@ -30,8 +30,6 @@ TUNING_SWITCHES = {
     "usa_only": ("U.S. jobs only", "Skip jobs that are outside the United States or unverified.", True),
     "exclude_internships": ("Skip internships and co-ops", "Leave out jobs titled intern, internship or co-op.", True),
     "related_titles": ("Also match closely related titles", "Recognise titles such as Multimedia Designer or Production Artist when you typed Designer or Production Specialist.", True),
-    "start_docker_automatically": ("Start Docker automatically", "Starts Docker Desktop for the web search.", True),
-    "stop_docker_when_finished": ("Stop Docker when finished", "Closes Docker Desktop after the search.", True),
 }
 
 
@@ -57,7 +55,7 @@ def apply_tuning_form(form, current):
         if not low <= value <= high:
             return None, f"{label} must be between {low} and {high}."
         updated[key] = int(value) if kind is int or float(value).is_integer() else value
-    if "brave_api_key" in form:  # blank clears it; Job Finder then uses SearXNG
+    if "brave_api_key" in form:  # blank clears it; the web search is then skipped
         updated["brave_api_key"] = str(form.get("brave_api_key", "")).strip()[:200]
     for key in TUNING_SWITCHES:
         updated[key] = form.get(key) == "on"

@@ -54,7 +54,6 @@ def record_skip(reason, url, title=""):
     debug_skip(reason, url, title)
 
 
-SEARXNG_COMPOSE_FILE = BASE_DIR / "searxng" / "docker-compose.yml"
 
 
 def load_settings():
@@ -95,9 +94,8 @@ settings = load_settings()
 BLOCKED_DOMAINS = load_domain_file(BLOCKED_DOMAINS_FILE)
 BLOCKED_COMPANIES = load_domain_file(BLOCKED_COMPANIES_FILE)
 BLOCKED_COUNTRY_DOMAINS = load_domain_file(BLOCKED_COUNTRY_DOMAINS_FILE)
-SEARXNG_URL = "http://localhost:8080/search"
-SEARXNG_CONTAINER = "searxng"
-SEARXNG_MAX_RUNTIME = settings["searxng_timeout_minutes"] * 60
+# The search time limit (Tuning page). The setting keeps its old name so saved settings still work.
+SEARCH_MAX_RUNTIME = settings["searxng_timeout_minutes"] * 60
 MAX_SEARCH_RESULTS = settings["max_search_results"]
 MAX_SEARCH_PAGES = settings.get("max_search_pages", 20)
 REQUEST_DELAY = settings["request_delay_seconds"]
@@ -106,16 +104,6 @@ QUERY_DELAY = settings.get("search_query_delay_seconds", 2)
 PREFETCH_WORKERS = settings.get("parallel_page_fetches", 6)
 EMPTY_QUERY_LIMIT = settings.get("stop_after_empty_queries", 8)
 TIMEOUT = settings["website_timeout_seconds"]
-
-START_DOCKER_AUTOMATICALLY = settings.get(
-    "start_docker_automatically",
-    True,
-)
-
-STOP_DOCKER_WHEN_FINISHED = settings.get(
-    "stop_docker_when_finished",
-    True,
-)
 
 USA_ONLY = settings.get(
     "usa_only",

@@ -7,7 +7,6 @@ from datetime import datetime, timezone
 import json
 import re
 import sys
-import threading
 import time
 from urllib.parse import urljoin
 
@@ -20,7 +19,7 @@ from jobfinder.records.board_health import HEALTH_FILE as BOARD_HEALTH_FILE
 from jobfinder.records.capture_import import add_also_on, match_key, page_html as capture_page_html
 from jobfinder.records.search_debug import DebugRun
 from jobfinder.records.search_skips import cached_skip, latest_decisions, record_decision
-from jobfinder.search import docker
+from jobfinder.search import session
 from jobfinder.search import fetching
 from jobfinder.search import geo
 from jobfinder.search import judging
@@ -55,7 +54,7 @@ from jobfinder.search.refresh import (
 )
 from jobfinder.search.relevance import apply_link_closed, expand_job_titles, fetch_text
 from jobfinder.search import company_check
-from jobfinder.search.searching import brave_key, search_blocked_message, search_searxng
+from jobfinder.search.searching import brave_key, search_blocked_message, search_web
 from jobfinder.search.shared import (
     BLOCKED_COMPANIES,
     BLOCKED_DOMAINS,
@@ -102,11 +101,7 @@ from jobfinder.sources.job_listings import (
 )
 from jobfinder.sources.job_sites import JOB_SITES, SiteBlocked, search_places
 
-web_search_started = False
-
-
 def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
-    global web_search_started
     _page_cache.clear()
     _skip_decisions.clear()
     _skip_decisions.update(latest_decisions(SEARCH_SKIPS_FILE))
@@ -614,39 +609,22 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
         except Exception as error:
             print(f"Job site search stopped early: {error}", flush=True)
 
-    # Employer boards are searched while Docker and SearXNG start (starting them takes a while), so neither waits
-    # for the other. The web search begins only after both have finished.
-    employer_thread = threading.Thread(target=search_known_employers, daemon=True)
-    employer_thread.start()
-    if brave_key() and not shared.stop_requested():
-        # Brave Search needs no Docker; SearXNG starts only if Brave refuses partway through.
-        print("Searching the web with Brave Search.")
-        docker.brave_mode = True
-        docker.searxng_start_time = time.time()
-        docker_up = searxng_up = True
-    else:
-        docker_up = False if shared.stop_requested() else docker.start_docker_desktop()
-        searxng_up = docker_up and docker.start_searxng()
-    employer_thread.join()
+    # Employer boards and job sites first; they need no search engine.
+    search_known_employers()
 
     if shared.stop_requested():
         print("Stop requested before the web search started.")
-        if docker_up:
-            docker.stop_searxng()
-            docker.stop_docker_desktop()
         database.close()
         return
-
-    # The remote feed works without Docker. Search it first so a Docker failure
-    # does not prevent independent API results from being saved.
-    if not docker_up:
+    if not brave_key():
+        print()
+        print("No Brave Search API key, so the web search was skipped. Add one on the Tuning page.", flush=True)
+        if shared._debug_run is not None:
+            shared._debug_run.stop_reason = "No Brave Search API key: web search skipped"
         database.close()
         return
-    if not searxng_up:
-        database.close()
-        docker.stop_docker_desktop()
-        return
-    web_search_started = True
+    print("Searching the web with Brave Search.")
+    session.start()
 
     # Only the titles you typed are searched on the company-board sites (every board found is then read in full).
     search_queries = [f'site:{site} "{title}"' for title in selected_titles for site in shared.JOB_BOARD_SITES]
@@ -682,7 +660,7 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
     blocked_message = None
 
     for search_query in search_queries:
-        if companies_saved >= shared.MAX_SEARCH_RESULTS or blocked_message or not docker.check_searxng_timer():
+        if companies_saved >= shared.MAX_SEARCH_RESULTS or blocked_message or not session.web_search_ok():
             break
 
         print()
@@ -695,10 +673,10 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
 
         query_pages = SITE_QUERY_PAGES if search_query.startswith("site:") else shared.MAX_SEARCH_PAGES
         for page in range(1, query_pages + 1):
-            if companies_saved >= shared.MAX_SEARCH_RESULTS or not docker.check_searxng_timer():
+            if companies_saved >= shared.MAX_SEARCH_RESULTS or not session.web_search_ok():
                 break
 
-            results = search_searxng(search_query, page)
+            results = search_web(search_query, page)
             if shared._debug_run is not None:
                 shared._debug_run.query_page(len(results or []))
             if page == 1:
@@ -747,7 +725,7 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
                             and not cached_skip(_skip_decisions, url)][:24])
 
             for result in web_results:
-                if companies_saved >= shared.MAX_SEARCH_RESULTS or not docker.check_searxng_timer():
+                if companies_saved >= shared.MAX_SEARCH_RESULTS or not session.web_search_ok():
                     break
                 candidate_number += 1
                 title = str(result.get("title") or "")
@@ -794,7 +772,7 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
                 for board_url in pending[:10]:
                     pending.extend(public_board_links(board_url, job_titles))
                 checked = set()
-                while pending and len(checked) < 18 and companies_saved < shared.MAX_SEARCH_RESULTS and docker.check_searxng_timer():
+                while pending and len(checked) < 18 and companies_saved < shared.MAX_SEARCH_RESULTS and session.web_search_ok():
                     page_url = pending.pop(0)
                     if page_url != url:
                         discover_board(page_url, company_name)
@@ -927,11 +905,11 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
         )
 
     # While the search engine is still up: look for the employer's own posting of job-site and feed listings.
-    if not shared.stop_requested() and docker.check_searxng_timer():
+    if not shared.stop_requested() and session.web_search_ok():
         print()
         print("Checking company sites for job-site listings...", flush=True)
         try:
-            found_on_site = company_check.check_listings(database, search_searxng, fetch_text)
+            found_on_site = company_check.check_listings(database, search_web, fetch_text)
             print(f"Company-site check: found {found_on_site} on the employer's own site.", flush=True)
         except Exception as error:
             print(f"Company-site check stopped early: {error}", flush=True)
@@ -942,7 +920,7 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
     print("=" * 60)
     print("SEARCH COMPLETE")
     print()
-    stop_reason = docker.search_stop_reason(companies_saved, blocked_message)
+    stop_reason = session.search_stop_reason(companies_saved, blocked_message)
     print(f"Stop reason: {stop_reason}")
     if shared._debug_run is not None:
         shared._debug_run.stop_reason = stop_reason
@@ -974,8 +952,6 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
 
 
 def main(job_title=None, state=None, cities_json=None, max_new=None):
-    global web_search_started
-    web_search_started = False
     clear_employer_cache()
     clear_ats_cache()
     _board_health.clear()
@@ -986,10 +962,6 @@ def main(job_title=None, state=None, cities_json=None, max_new=None):
         shared._debug_run.stop_reason = f"stopped by {type(error).__name__}: {error}"
         raise
     finally:
-        # Also runs after a crash or stop request, so SearXNG and Docker are not left running.
-        if web_search_started:
-            docker.stop_searxng()
-            docker.stop_docker_desktop()
         shared._debug_run.finish(shared._debug_run.stop_reason or "ended early (setup failed or a stop was requested)")
         shared._debug_run = None
         _board_health.write(BOARD_HEALTH_FILE, "replacement" if max_new == 1 else "search")
