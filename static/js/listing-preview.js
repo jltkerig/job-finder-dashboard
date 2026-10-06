@@ -45,6 +45,8 @@
     }
   }
 
+  window.renderJobPosting = render; // Top 10's own Details drop-down uses the same layout
+
   async function load(section) {
     const id = section.dataset.previewId;
     if (!id || loaded.has(id)) return;

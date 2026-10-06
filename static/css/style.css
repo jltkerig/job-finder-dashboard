@@ -2041,3 +2041,6 @@ body[data-page="search"] #results-table .details-blocks .bordered-button { min-h
 .apply-queue-list { list-style: none; margin: .75rem 0 0; padding: 0; display: grid; gap: .5rem; }
 .apply-queue-item { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem; padding: .5rem 0; border-top: 1px solid var(--border, #ddd); }
 .apply-queue-actions { display: flex; flex-wrap: wrap; gap: .4rem; }
+
+/* Top 10 pick's own Details drop-down */
+.top-pick-details { grid-column:1 / -1; margin-top:4px; padding-top:10px; border-top:1px solid #e3e6ea; }

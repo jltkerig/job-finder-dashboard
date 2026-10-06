@@ -338,20 +338,33 @@
         });
         buttons.append(keep);
       }
-      // Details opens the row's own details (with the Job Posting preview) and scrolls to it.
-      const rowDetails = row.querySelector(".details-action");
-      if (rowDetails) {
-        const details = document.createElement("button");
-        details.type = "button";
-        details.className = "bordered-button";
-        details.textContent = "Details";
-        details.addEventListener("click", () => {
-          const panel = document.getElementById(rowDetails.dataset.detailsTarget);
-          if (panel?.hidden) rowDetails.click();
-          row.scrollIntoView({ behavior: "smooth", block: "start" });
-        });
-        buttons.append(details);
-      }
+      // Details drops down under the pick: the posting's requirements, duties and text, read the first time.
+      const details = document.createElement("button");
+      details.type = "button";
+      details.className = "bordered-button top-pick-details-button";
+      details.textContent = "Details";
+      details.setAttribute("aria-expanded", "false");
+      const drop = document.createElement("div");
+      drop.className = "top-pick-details";
+      drop.hidden = true;
+      details.addEventListener("click", async () => {
+        drop.hidden = !drop.hidden;
+        details.setAttribute("aria-expanded", String(!drop.hidden));
+        details.textContent = drop.hidden ? "Details" : "Hide Details";
+        if (drop.hidden || drop.dataset.loaded) return;
+        drop.dataset.loaded = "1";
+        drop.replaceChildren(Object.assign(document.createElement("p"), { className: "field-help job-posting-loading", textContent: "Reading the posting…" }));
+        try {
+          const response = await fetch(`/listing-preview/${encodeURIComponent(row.dataset.companyId)}`, { cache: "no-store" });
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.message || "Could not read the posting.");
+          window.renderJobPosting(drop, data);
+        } catch (error) {
+          delete drop.dataset.loaded;
+          drop.replaceChildren(Object.assign(document.createElement("p"), { className: "field-help", textContent: error.message || "Could not read the posting." }));
+        }
+      });
+      buttons.append(details);
       const reject = document.createElement("button");
       reject.type = "button";
       reject.className = "bordered-button destructive-action";
@@ -390,7 +403,7 @@
         ratings.append(button);
       });
       actions.append(buttons, ratings);
-      item.append(actions);
+      item.append(actions, drop);
       list.append(item);
     });
   }
