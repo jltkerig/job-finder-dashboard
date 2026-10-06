@@ -60,7 +60,7 @@
         <div id="search-form-error" class="form-error" hidden role="alert">
         </div>
       </form>
-      <div class="search-controls"><button id="start-search" class="bordered-button primary-action" type="button">Start Job Finder</button><button id="refresh-search" class="bordered-button secondary-action" type="button">Refresh Results</button>
+      <div class="search-controls"><button id="start-search" class="bordered-button primary-action" type="button">Start Job Finder</button><button id="refresh-search" class="bordered-button secondary-action" type="button">Refresh Results</button><button id="top-picks-button" class="bordered-button" type="button" title="Rank the results shown and pick the 10 best to apply to">Top 10 Picks</button><button id="clear-results-button" class="bordered-button destructive-action" type="button" title="Delete every result you haven't saved, queued or applied to">Clear Results</button>
         <div id="searching-status" class="searching-status" hidden aria-live="polite"><span class="searching-dot"></span><span id="activity-label">Searching</span><span class="searching-ellipsis" aria-hidden="true"></span>
         </div>
       </div>
@@ -109,8 +109,6 @@
         </div>
       </div>
       </details>
-      <button id="top-picks-button" class="bordered-button" type="button" title="Rank the results shown and pick the 10 best to apply to">Top 10 Picks</button>
-      <button id="clear-results-button" class="bordered-button destructive-action" type="button" title="Delete every result you haven't saved, queued or applied to">Clear Results</button>
       <div class="results-count" id="results-count">{{ companies|length }} results
       </div>
     </section>
