@@ -33,13 +33,13 @@
     const near = nearness(row);
     const score = (fit === null ? 50 : fit) * 0.4 + career * 10 * 0.25 + usa * 10 * 0.15 + near * 0.2;
     const reasons = [];
-    reasons.push(raw === null ? "skill fit unknown" : `${Math.round(raw)}% skill fit (${count} skill${count === 1 ? "" : "s"} listed)`);
-    if (row.dataset.workArrangement === "Remote") reasons.push("remote");
+    reasons.push(raw === null ? "Skill fit unknown" : `${Math.round(raw)}% skill fit · ${count} skill${count === 1 ? "" : "s"}`);
+    if (row.dataset.workArrangement === "Remote") reasons.push("Remote");
     else {
       const miles = number(row.dataset.distance);
       if (miles !== null && miles < 99999) reasons.push(`${Math.round(miles)} miles away`);
     }
-    reasons.push(`credibility ${Math.round(career)}/10`);
+    reasons.push(`Credibility ${Math.round(career)}/10`);
     return { row, score, reasons, gaps: [], fitPart: (fit === null ? 50 : fit) * 0.4 };
   }
 
@@ -69,13 +69,13 @@
     top.forEach((pick) => {
       const found = gaps[pick.row.dataset.companyId];
       if (!found) return;
-      if (found.unread) { pick.gaps = [{ text: "Couldn't read the requirements: check them yourself", hard: false }]; return; }
+      if (found.unread) { pick.gaps = [{ text: "Couldn't read the requirements, so check them yourself", hard: false }]; return; }
       pick.gaps = found.items.slice();
       pick.score -= found.items.reduce((total, gap) => total + (gap.hard ? 100 : 15), 0);
       // Skills under "Requirements" count fully, "Nice to have" ones much less: replace the plain skill fit.
       if (found.fit) {
         pick.score += weigh(found.fit.score, found.fit.required) * 0.4 - pick.fitPart;
-        pick.reasons[0] = `${found.fit.score}% skill fit, weighted by required skills`;
+        pick.reasons[0] = `${found.fit.score}% fit on required skills`;
         if (found.fit.missing_required.length) {
           pick.gaps.push({ text: `Required skills you don't list: ${found.fit.missing_required.join(", ")}`, hard: false });
         }
@@ -86,32 +86,55 @@
 
   function render(picks) {
     list.replaceChildren();
-    picks.forEach(({ row, reasons, gaps }) => {
+    picks.forEach(({ row, reasons, gaps }, index) => {
+      const hard = gaps.some((gap) => gap.hard);
       const item = document.createElement("li");
-      const label = document.createElement("label");
+      item.className = "top-pick" + (hard ? " not-a-fit" : "");
+      const rankNumber = document.createElement("span");
+      rankNumber.className = "top-pick-rank";
+      rankNumber.textContent = index + 1;
       const box = document.createElement("input");
       box.type = "checkbox";
-      box.checked = true;
+      box.checked = !hard;
       box.value = row.dataset.companyId;
       box.dataset.job = row.dataset.job || "";
       box.dataset.company = row.dataset.company || "";
-      const title = document.createElement("strong");
-      title.textContent = [row.dataset.job, row.dataset.company].filter(Boolean).join(" at ") || `Job #${row.dataset.companyId}`;
-      const why = document.createElement("span");
-      why.className = "top-picks-why";
-      why.textContent = reasons.join(" · ");
-      label.append(box, " ", title, why);
-      gaps.forEach((gap) => {
-        const warning = document.createElement("span");
-        warning.className = "top-picks-gap" + (gap.hard ? " hard" : "");
-        warning.textContent = (gap.hard ? "Likely not a fit: " : "Check: ") + gap.text;
-        label.append(warning);
+      box.id = `top-pick-${row.dataset.companyId}`;
+      box.setAttribute("aria-label", `Include ${row.dataset.job || "this job"}`);
+      const body = document.createElement("div");
+      body.className = "top-pick-body";
+      const title = document.createElement("label");
+      title.className = "top-pick-title";
+      title.htmlFor = box.id;
+      title.textContent = row.dataset.job || `Job #${row.dataset.companyId}`;
+      const company = document.createElement("span");
+      company.className = "top-pick-company";
+      company.textContent = row.dataset.company || "";
+      const chips = document.createElement("div");
+      chips.className = "top-pick-chips";
+      reasons.forEach((reason) => {
+        const chip = document.createElement("span");
+        chip.className = "top-pick-chip";
+        chip.textContent = reason;
+        chips.append(chip);
       });
-      if (gaps.some((gap) => gap.hard)) box.checked = false;
-      item.append(label);
+      body.append(title, company, chips);
+      if (gaps.length) {
+        const warnings = document.createElement("ul");
+        warnings.className = "top-pick-gaps";
+        gaps.forEach((gap) => {
+          const warning = document.createElement("li");
+          warning.className = gap.hard ? "hard" : "";
+          warning.textContent = (gap.hard ? "Likely not a fit: " : "") + gap.text;
+          warnings.append(warning);
+        });
+        body.append(warnings);
+      }
+      item.append(rankNumber, box, body);
       const link = row.querySelector("a.inline-action-link[href^='http']");
       if (link) {
         const open = document.createElement("a");
+        open.className = "top-pick-open";
         open.href = link.href;
         open.target = "_blank";
         open.rel = "noopener noreferrer";

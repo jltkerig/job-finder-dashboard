@@ -1969,13 +1969,20 @@ body[data-page="search"] #results-table .details-blocks .bordered-button { min-h
 .top-picks { margin:16px 0; padding:18px 20px; border:1px solid #ddd; border-radius:8px; background:#fff; }
 .top-picks-head { display:flex; justify-content:space-between; align-items:center; gap:12px; }
 .top-picks-head h2 { margin:0; font-size:1.15rem; }
-.top-picks-list { margin:12px 0; padding-left:22px; display:grid; gap:10px; }
-.top-picks-list li { line-height:1.4; }
-.top-picks-list label { cursor:pointer; }
-.top-picks-why { display:block; margin-left:24px; color:#646c77; font-size:.85rem; }
-.top-picks-gap { display:block; margin-left:24px; color:#8a5a00; font-size:.85rem; }
-.top-picks-gap.hard { color:#b42318; font-weight:600; }
-.top-picks-list a { margin-left:24px; font-size:.85rem; }
+.top-picks-list { list-style:none; margin:14px 0; padding:0; display:grid; gap:8px; }
+.top-pick { display:grid; grid-template-columns:28px 20px 1fr auto; gap:10px; align-items:start; padding:12px 14px; border:1px solid #e3e6ea; border-radius:8px; background:#fafbfc; }
+.top-pick.not-a-fit { opacity:.6; }
+.top-pick-rank { width:26px; height:26px; border-radius:50%; background:#e8eef7; color:#2a4a7a; font-weight:700; font-size:.85rem; display:flex; align-items:center; justify-content:center; }
+.top-pick input { margin-top:5px; }
+.top-pick-title { display:block; font-weight:600; cursor:pointer; line-height:1.3; }
+.top-pick-company { display:block; color:#646c77; font-size:.9rem; }
+.top-pick-chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+.top-pick-chip { padding:2px 8px; border-radius:999px; background:#eef0f3; color:#3d4550; font-size:.78rem; }
+.top-pick-gaps { margin:8px 0 0; padding:0; list-style:none; font-size:.82rem; color:#8a5a00; }
+.top-pick-gaps li::before { content:"⚠ "; }
+.top-pick-gaps li.hard { color:#b42318; font-weight:600; }
+.top-pick-open { font-size:.85rem; white-space:nowrap; margin-top:3px; }
+@media (max-width: 640px) { .top-pick { grid-template-columns:26px 20px 1fr; } .top-pick-open { grid-column:3; } }
 .top-picks-actions { display:flex; justify-content:flex-end; align-items:center; gap:14px; flex-wrap:wrap; }
 /* "CA, CT, FL only" under Remote: its own line in the table, after a dot in compact rows */
 .remote-states { display:block; }

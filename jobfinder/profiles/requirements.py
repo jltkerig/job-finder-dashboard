@@ -13,8 +13,11 @@ from bs4 import BeautifulSoup
 
 DEGREE_WORDS = (r"(?:bachelor'?s?|baccalaureate|b\.?f\.?a\.?|b\.?a\.?|b\.?s\.?|associate'?s?|master'?s?|m\.?f\.?a\.?|"
                 r"degree|diploma)")
-DEGREE_FIELD = re.compile(DEGREE_WORDS + r"(?:\s+degree)?(?:\s+or\s+higher)?\s+(?:in|from)\s+(?:an?\s+)?"
+DEGREE_FIELD = re.compile(r"(?<![\w.])" + DEGREE_WORDS + r"(?:\s+degree)?(?:\s+or\s+higher)?\s+(?:in|from)\s+(?:an?\s+)?"
                           r"(?:accredited\s+)?(?:\d-year\s+)?([a-z][a-z &/,\-]{2,80})", re.I)
+# Bump when the reading changes so saved results are read again.
+VERSION = 2
+FOREIGN = re.compile(r"\b(?:outside\s+(?:of\s+)?the\s+(?:united\s+states|u\.?s\.?)|foreign|evaluat\w+|equivalency)\b", re.I)
 FASHION_SCHOOL = re.compile(r"\b(fashion|design|art|culinary|architecture|nursing|law|medical)\s+school\b", re.I)
 DEGREE_ANY = re.compile(r"\b" + DEGREE_WORDS + r"\b", re.I)
 YEARS = re.compile(r"(\d{1,2})\s*\+?\s*(?:(?:-|–|to)\s*\d{1,2}\s*)?\+?\s*(?:years?|yrs?)\b", re.I)
@@ -98,6 +101,8 @@ def listing_requirements(text):
             obtainable = bool(CLEARANCE_OBTAIN.search(sentence)) and not re.search(r"\bactive\b|\bcurrent\b", sentence, re.I)
             if clearance is None or (clearance["obtainable"] and not obtainable):
                 clearance = {"level": level, "obtainable": obtainable}
+        if FOREIGN.search(sentence) and DEGREE_ANY.search(sentence):
+            continue  # notes about how foreign degrees are evaluated, not a requirement
         alternative = bool(EQUIVALENT.search(sentence))
         found_degree = False
         for match in DEGREE_FIELD.finditer(sentence):
@@ -127,7 +132,7 @@ def listing_requirements(text):
                 words = _words((area.group(1) or "") + " " + (area.group(2) or ""))
                 if words:
                     experience.append({"years": number, "area": " ".join(words)})
-    return {"degrees": degrees, "years": years, "experience": experience, "clearance": clearance}
+    return {"degrees": degrees, "years": years, "experience": experience, "clearance": clearance, "version": VERSION}
 
 
 def _history_years(work_history):
@@ -186,7 +191,8 @@ def requirement_gaps(requirements, profile):
             gaps.append({"text": f"Must be able to get {what}", "hard": False})
         else:
             gaps.append({"text": f"Requires an active {what[2:] if what.startswith('a ') else what}", "hard": True})
-    seen = set()
+    seen = {gap["text"] for gap in gaps}
+    gaps = [gap for n, gap in enumerate(gaps) if gap["text"] not in {g["text"] for g in gaps[:n]}]
     for item in requirements.get("experience") or []:
         area = item.get("area") or ""
         if area in seen or _shows(area, known):

@@ -294,7 +294,7 @@ def top_pick_requirements():
             except (TypeError, ValueError):
                 skills = []
             found = details.get("requirements")
-            if found is None or "skill_sections" not in found:
+            if found is None or found.get("version") != reqs.VERSION:
                 text = details.get("description") or ""
                 if len(text) < 200:
                     for url in (row.get("career_url"), row.get("source_url")):
