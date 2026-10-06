@@ -113,6 +113,10 @@
     } catch {}
   }
 
+  function savedCount() {
+    try { return (JSON.parse(localStorage.getItem(SAVED_KEY) || "null")?.picks || []).length; } catch { return 0; }
+  }
+
   function savedPicks() {
     try {
       const saved = JSON.parse(localStorage.getItem(SAVED_KEY) || "null");
@@ -323,7 +327,10 @@
     button.click();
   } else {
     const restored = savedPicks();
-    if (restored.length) {
+    // Some saved picks have since closed, been rejected or left the results: rank again rather than show a short list.
+    if (restored.length && restored.length < savedCount()) {
+      button.click();
+    } else if (restored.length) {
       current = restored;
       render(restored);
       panel.hidden = false;

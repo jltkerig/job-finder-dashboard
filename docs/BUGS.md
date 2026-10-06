@@ -95,6 +95,9 @@ Each entry: what went wrong, why, the fix, and the check that would have caught 
 
 ## Top 10
 
+- **Only 5 picks after a page refresh** (2026-10-06). The saved Top 10 was restored minus picks that had since closed.
+  Fix: when any saved pick is gone, Top 10 ranks again instead. Check: after closing/rejecting jobs, reload and
+  count the picks.
 - **Apply hidden behind Details on result cards** (2026-10-06). Keep has fixed/100% widths and the card cell is forced
   to `display:block`, so Apply was pushed off the card. Fix: stronger flex rules for the Save and action cells.
 - **Closed LinkedIn jobs stayed in Top 10** (2026-10-06): Kee Group and 5 others said "No longer accepting
