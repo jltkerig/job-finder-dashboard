@@ -152,6 +152,7 @@
     if (ranked.length) {
       list.replaceChildren();
       status.textContent = "Reading each listing's requirements…";
+      status.classList.add("loading");
       button.disabled = true;
       try {
         ranked = await checkRequirements(ranked);
@@ -159,6 +160,7 @@
       } catch (error) {
         status.textContent = `${error.message} Ranked by skills, distance and credibility only.`;
       }
+      status.classList.remove("loading");
       button.disabled = false;
     }
     const picks = ranked.slice(0, PICKS);
