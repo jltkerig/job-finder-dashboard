@@ -233,6 +233,32 @@
     status.textContent = next === "none" ? "Rating cleared." : "Thanks. Top 10 will use that next time.";
   }
 
+  // Apply queue: queued jobs are kept on the Dashboard, where Apply opens them. After a daily search, Top 10 runs by
+  // itself and queues the strong picks: no hard gaps and a score of at least AUTO_QUEUE_SCORE.
+  const AUTO_QUEUE_SCORE = 65;
+  let autoQueue = panel.dataset.autoQueue === "1";
+
+  async function queue(ids, extra = {}) {
+    const response = await fetch("/apply-queue", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
+      body: JSON.stringify({ company_ids: ids, queued: true, ...extra }),
+    });
+    if (!response.ok) throw new Error("Could not add to the Apply queue.");
+  }
+
+  async function queueStrongPicks(picks) {
+    const strong = picks.filter((pick) => !pick.gaps.some((gap) => gap.hard) && pick.score >= AUTO_QUEUE_SCORE);
+    try {
+      await queue(strong.map((pick) => pick.row.dataset.companyId), { auto: true });
+      status.textContent = strong.length
+        ? `Daily search done: queued ${strong.length} strong ${strong.length === 1 ? "pick" : "picks"} on your Dashboard to apply to.`
+        : "Daily search done: no strong picks to queue today.";
+    } catch (error) {
+      status.textContent = error.message;
+    }
+  }
+
   function render(picks) {
     list.replaceChildren();
     picks.forEach((pick, index) => {
@@ -319,6 +345,22 @@
       reject.title = "Reject this listing; Top 10 marks down jobs like it from now on.";
       reject.addEventListener("click", () => turnDown(pick, reject));
       buttons.append(reject);
+      const queueButton = document.createElement("button");
+      queueButton.type = "button";
+      queueButton.className = "bordered-button";
+      queueButton.textContent = "Queue";
+      queueButton.title = "Add to the Apply queue on your Dashboard";
+      queueButton.addEventListener("click", async () => {
+        queueButton.disabled = true;
+        try {
+          await queue([row.dataset.companyId]);
+          queueButton.textContent = "Queued";
+        } catch (error) {
+          status.textContent = error.message;
+          queueButton.disabled = false;
+        }
+      });
+      buttons.append(queueButton);
       const ratings = document.createElement("div");
       ratings.className = "top-pick-rating";
       const up = document.createElement("button");
@@ -366,8 +408,14 @@
       render(picks);
       if (picks.length < PICKS) status.textContent = `Only ${picks.length} open results to pick from.`;
     }
+    if (autoQueue) {
+      autoQueue = false;
+      await queueStrongPicks(picks);
+    }
     panel.scrollIntoView({ behavior: "smooth", block: "start" });
   });
+
+  if (autoQueue) button.click();
 
   document.getElementById("top-picks-close")?.addEventListener("click", () => { panel.hidden = true; });
 

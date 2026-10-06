@@ -21,10 +21,12 @@ TUNING_FIELDS = {
     "search_query_delay_seconds": ("Pause between search-engine queries (seconds)", "Too low can get the engines to rate-limit Job Finder.", float, 0, 10, 2),
     "website_timeout_seconds": ("Wait for a slow page (seconds)", "A page that has not answered by then is skipped.", int, 5, 60, 15),
     "parallel_page_fetches": ("Pages downloaded at once", "More is faster but uses more of your connection.", int, 1, 12, 6),
+    "auto_search_hour": ("Daily search starts after (hour, 0–23)", "Used when the daily search is on. 8 means 8 a.m.", int, 0, 23, 8),
     "stop_after_empty_queries": ("Stop after this many empty queries in a row", "Many empty queries usually mean the engines are refusing us.", int, 2, 30, 8),
 }
 
 TUNING_SWITCHES = {
+    "daily_auto_search": ("Search every day and queue the best jobs", "Reruns your last search once a day while Job Finder is open. Top 10 then queues its strong picks on the Dashboard to apply to. Nothing is submitted for you.", False),
     "usa_only": ("U.S. jobs only", "Skip jobs that are outside the United States or unverified.", True),
     "exclude_internships": ("Skip internships and co-ops", "Leave out jobs titled intern, internship or co-op.", True),
     "related_titles": ("Also match closely related titles", "Recognise titles such as Multimedia Designer or Production Artist when you typed Designer or Production Specialist.", True),
@@ -43,7 +45,10 @@ def read_tuning_settings():
 def apply_tuning_form(form, current):
     """Return (new settings, error). Only the known options change; every other key in the file is kept."""
     updated = dict(current)
-    for key, (label, _, kind, low, high, _default) in TUNING_FIELDS.items():
+    for key, (label, _, kind, low, high, default) in TUNING_FIELDS.items():
+        if key not in form:  # an older form without this option keeps what's saved
+            updated[key] = current.get(key, default)
+            continue
         raw = str(form.get(key, "")).strip()
         try:
             value = kind(raw)

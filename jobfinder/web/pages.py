@@ -10,7 +10,7 @@ from flask import render_template, request
 from jobfinder.profiles.profile_tools import resume_skill_suggestions, parse_work_history, uploaded_resume
 from jobfinder.records.search_skips import TTL_HOURS, latest_decisions
 from jobfinder.sources.job_listings import is_pdf_url
-from jobfinder.web import blocklists
+from jobfinder.web import auto_apply, blocklists
 from jobfinder.web.application_files import RESUME_BUILDER_URL, add_application_files
 from jobfinder.web import listing_queries
 from jobfinder.web import profile_store
@@ -83,6 +83,7 @@ def home():
                         and company.get("career_job_title")],
         turned_down_titles=turned_down_titles(),
         liked_titles=liked_titles(),
+        auto_queue=auto_apply.auto_queue_pending(auto_apply.read_tuning_settings()),
     )
 
 
@@ -106,6 +107,7 @@ def user_dashboard():
     return render_template(
         "user-dashboard.html",
         companies=companies,
+        apply_queue=auto_apply.get_apply_queue(),
         profile=profile,
         resume_builder_url=RESUME_BUILDER_URL,
         profile_version=profile_store.profile_version(profile),

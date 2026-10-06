@@ -158,6 +158,18 @@
     <p id="dashboard-refresh-status" class="field-help" role="status" hidden>
     </p>
 
+{% if apply_queue %}
+    <section id="apply-queue" class="apply-queue" aria-labelledby="apply-queue-heading">
+      <h2 id="apply-queue-heading">Apply Queue <span class="field-help">({{ apply_queue|length }})</span></h2>
+      <p class="field-help">Apply opens the posting. Fill it in and press Submit yourself, then mark it Applied.</p>
+      <ul class="apply-queue-list">{% for job in apply_queue %}
+        <li class="apply-queue-item" data-company-id="{{ job.id }}"><span class="apply-queue-job"><strong>{{ job.career_job_title or 'Unknown Job' }}</strong> <span class="summary-company">{{ job.name or '' }}</span></span>
+          <span class="apply-queue-actions">{% if job.url %}<a class="bordered-button primary-action" href="{{ job.url }}" target="_blank" rel="noopener noreferrer">Apply</a>{% endif %}<button class="bordered-button apply-queue-applied" type="button">Mark Applied</button><button class="bordered-button secondary-action apply-queue-remove" type="button">Remove</button></span>
+        </li>{% endfor %}
+      </ul>
+      <p id="apply-queue-status" class="field-help" role="status"></p>
+    </section>
+{% endif %}
 {% if companies %}
     <div class="saved-job-grid">{% for company in companies %}{% set listing_status = (company.job_open_status or 'Unknown')|lower %}{% set domain_url = company.domain if company.domain and '://' in company.domain else ('https://' ~ company.domain ~ '/' if company.domain else '') %}
       <article class="saved-job-card" id="job-{{ company.id }}" data-company-id="{{ company.id }}">
@@ -270,4 +282,5 @@
     </div>
   </div>
 </footer>
-<script src="/static/js/charts.js?v={{ app_version }}"></script><script src="/static/js/avoid-terms.js?v={{ app_version }}"></script></body></html>
+<script src="/static/js/charts.js?v={{ app_version }}"></script><script src="/static/js/avoid-terms.js?v={{ app_version }}"></script>  <script src="/static/js/apply-queue.js?v={{ app_version }}"></script>
+</body></html>
