@@ -14,6 +14,7 @@ from bs4 import BeautifulSoup
 from jobfinder.profiles.requirements import page_text
 from jobfinder.search.company_site import is_directory_or_marketplace_result
 from jobfinder.search.fetching import get_domain
+from jobfinder.sources.posting_text import posting_text
 
 CHECK_LIMIT = 15        # listings checked per run, so a search doesn't spend all its queries here
 RECHECK_DAYS = 7        # a listing with no company posting found is tried again after this long
@@ -224,10 +225,14 @@ def check_listings(database, search, fetch, limit=CHECK_LIMIT, today=None):
             break
         checked += 1
         board_url = row.get("source_url") or row.get("career_url")
-        board_page = fetch(board_url) if board_url else None
+        description = details.get("description") or ""
+        if not description and board_url:
+            description = posting_text(board_url)  # NLX, Workday, Oracle pages build themselves with JavaScript
+        if not description and board_url:
+            board_page = fetch(board_url)
+            description = board_page.text if board_page else ""
         listing = {"company": row.get("name") or "", "title": row.get("career_job_title") or "",
-                   "location": details.get("location") or "",
-                   "description": page_text(board_page.text) if board_page else ""}
+                   "location": details.get("location") or "", "description": page_text(description)}
         print(f"Company-site check {checked}: {listing['title']} — {listing['company']}", flush=True)
         try:
             match = find_company_posting(listing, search, fetch)

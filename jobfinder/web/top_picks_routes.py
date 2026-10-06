@@ -6,10 +6,11 @@ from flask import jsonify, request
 from mysql.connector import Error
 
 from jobfinder import db
+from jobfinder.sources.posting_text import posting_text
 from jobfinder.web.core import api_error, app
 
 
-MIN_POSTING_TEXT = 300  # less than this is a page shell (menus, "Privacy Policy"), not the posting
+MIN_POSTING_TEXT = 600  # less than this is a page shell (menus, "Privacy Policy"), not the posting
 
 
 def posting_urls(url):
@@ -52,8 +53,10 @@ def _requirements_for(row, cursor, connection):
     if len(text) < MIN_POSTING_TEXT:
         text = ""
         for url in [link for base in (row.get("career_url"), row.get("source_url")) for link in posting_urls(base)]:
-            page = fetch_text(url)
-            body = reqs.page_text(page.text) if page and page.text else ""
+            body = reqs.page_text(posting_text(url))  # Workday, Oracle, NLX: from their data service
+            if len(body) < MIN_POSTING_TEXT:
+                page = fetch_text(url)
+                body = reqs.page_text(page.text) if page and page.text else ""
             if len(body) >= MIN_POSTING_TEXT:
                 text = body
                 break

@@ -529,7 +529,8 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
         details = {"posted": listing["posted"], "location": listing["location"], "matched_title": matched_title,
                    "evidence": [f"{site.name} listing", "title matches search"], "external_id": listing["guid"],
                    "remote_limited_to": sorted(outcome["remote_limited_to"]),
-                   "verification": f"Listed on the {site.name}; the company site was not checked"}
+                   "verification": f"Listed on the {site.name}; the company site was not checked",
+                   "description": (listing.get("description") or "")[:20000]}
         inserted = storage.save_company(database, company, title, outcome["detail_score"], site.domain, job_url, job_url,
                                 outcome["country"], str(outcome["state_name"] or "")[:100] or None,
                                 outcome["location"]["score"], city=outcome["city"], latitude=outcome["lat"],

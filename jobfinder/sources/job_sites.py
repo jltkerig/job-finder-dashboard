@@ -96,6 +96,17 @@ class NationalLaborExchange:
                 break
         return listings
 
+    def description(self, url):
+        """The posting's text from the service (its web page builds itself with JavaScript), or "" if unavailable."""
+        guid = self.guid_from(url)
+        if not guid:
+            return ""
+        try:
+            jobs = self._get({"q": f"guid:{guid}"}).get("jobs") or []
+        except (requests.RequestException, ValueError, SiteBlocked):
+            return ""
+        return self._listing(jobs[0])["description"] if jobs else ""
+
     def status(self, url):
         """'Open' while the job is still listed, 'Closed' once it is gone, 'Unknown' if the site can't be asked."""
         guid = self.guid_from(url)
