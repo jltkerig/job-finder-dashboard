@@ -268,6 +268,7 @@ def ensure_profile_tables():
             ("primary_job_title", "VARCHAR(255) NOT NULL DEFAULT ''"),
             ("avatar_data", "MEDIUMTEXT NULL"),
             ("work_preferences", "TEXT NULL"),
+            ("avoid_terms", "TEXT NULL"),
         ):
             cursor.execute(f"ALTER TABLE user_profile ADD COLUMN IF NOT EXISTS {column} {definition}")
         cursor.execute("""CREATE TABLE IF NOT EXISTS user_profile_skills (

@@ -52,6 +52,13 @@ class RequirementTests(unittest.TestCase):
         self.assertIn("Built around fashion work", gaps(text)[0]["text"])
         self.assertEqual(gaps(text, dict(PROFILE, skills=["Fashion illustration"])), [])
 
+    def test_avoided_work(self):
+        profile = dict(PROFILE, avoid_terms=["video editing", "audio"])
+        found = gaps("You will handle Video  Editing and audio mixing for our podcasts.", profile)
+        self.assertEqual([gap["text"] for gap in found if gap.get("avoid")],
+                         ["Mentions video editing, which you avoid", "Mentions audio, which you avoid"])
+        self.assertEqual(gaps("Audiophile welcome.", profile), [])
+
     def test_skill_sections(self):
         text = "We use Figma.\nRequirements:\nHTML and CSS\nNice to have:\nReact\nPhotoshop is a plus."
         self.assertEqual(skill_sections(text, ["HTML", "CSS", "React", "Photoshop", "Figma"]),

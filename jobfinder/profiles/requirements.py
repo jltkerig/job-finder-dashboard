@@ -16,7 +16,7 @@ DEGREE_WORDS = (r"(?:bachelor'?s?|baccalaureate|b\.?f\.?a\.?|b\.?a\.?|b\.?s\.?|a
 DEGREE_FIELD = re.compile(r"(?<![\w.])" + DEGREE_WORDS + r"(?:\s+degree)?(?:\s+or\s+higher)?\s+(?:in|from)\s+(?:an?\s+)?"
                           r"(?:accredited\s+)?(?:\d-year\s+)?([a-z][a-z &/,\-]{2,80})", re.I)
 # Bump when the reading changes so saved results are read again.
-VERSION = 3
+VERSION = 4
 # Areas of work a listing can be built around. When a listing keeps coming back to one (3+ mentions) and the profile
 # never mentions it, the job likely wants background you don't show ("brand" all through a brand designer listing).
 FOCUS_AREAS = {
@@ -150,7 +150,7 @@ def listing_requirements(text):
         if count >= 3:
             focus[area] = count
     return {"degrees": degrees, "years": years, "experience": experience, "clearance": clearance, "focus": focus,
-            "version": VERSION}
+            "text": (text or "")[:20000], "version": VERSION}
 
 
 def _history_years(work_history):
@@ -214,6 +214,11 @@ def requirement_gaps(requirements, profile):
             gaps.append({"text": f"Built around {area} work (mentioned {count} times); your profile doesn't mention it",
                          "hard": False})
     seen = {gap["text"] for gap in gaps}
+    text = requirements.get("text") or ""
+    for term in profile.get("avoid_terms") or []:
+        pattern = r"(?<![\w])" + r"\s+".join(re.escape(word) for word in str(term).split()) + r"(?![\w])"
+        if term and re.search(pattern, text, re.I):
+            gaps.append({"text": f"Mentions {term}, which you avoid", "hard": False, "avoid": True})
     gaps = [gap for n, gap in enumerate(gaps) if gap["text"] not in {g["text"] for g in gaps[:n]}]
     for item in requirements.get("experience") or []:
         area = item.get("area") or ""

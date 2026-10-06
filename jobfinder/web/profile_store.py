@@ -112,7 +112,7 @@ def get_user_profile():
         "first_name": "",
         "last_name": "",
         "state": "",
-        "home_location": "", "home_zip": "", "linkedin_url": "", "portfolio_url": "", "primary_job_title": "", "avatar_data": "", "skills": [], "work_history": [], "education": [], "work_preferences": [],
+        "home_location": "", "home_zip": "", "linkedin_url": "", "portfolio_url": "", "primary_job_title": "", "avatar_data": "", "skills": [], "work_history": [], "education": [], "work_preferences": [], "avoid_terms": [],
         "job_titles": [],
         "cities": [],
     }
@@ -121,7 +121,7 @@ def get_user_profile():
         connection = db.connect()
         cursor = connection.cursor(dictionary=True)
         cursor.execute("""
-            SELECT first_name, last_name, state, home_location, home_zip, linkedin_url, portfolio_url, primary_job_title, avatar_data, work_preferences
+            SELECT first_name, last_name, state, home_location, home_zip, linkedin_url, portfolio_url, primary_job_title, avatar_data, work_preferences, avoid_terms
             FROM user_profile
             WHERE id = 1
         """)
@@ -132,6 +132,10 @@ def get_user_profile():
                 profile["work_preferences"] = json.loads(row.get("work_preferences") or "[]")
             except ValueError:
                 profile["work_preferences"] = []
+            try:
+                profile["avoid_terms"] = json.loads(row.get("avoid_terms") or "[]")
+            except ValueError:
+                profile["avoid_terms"] = []
 
         cursor.execute("""
             SELECT job_title
@@ -305,3 +309,19 @@ def profile_version(profile):
                                                  "portfolio_url", "primary_job_title", "job_titles", "skills", "work_history",
                                                  "education")}
     return hashlib.sha1(json.dumps(shared, sort_keys=True, default=str).encode("utf-8")).hexdigest()[:16]
+
+
+def save_avoid_terms(terms):
+    """The words a job posting can mention that rule it out for you ("motion graphics", "video editing")."""
+    cleaned = list(dict.fromkeys(str(term).strip()[:80] for term in terms if str(term).strip()))[:60]
+    connection = cursor = None
+    try:
+        connection = db.connect()
+        cursor = connection.cursor()
+        cursor.execute("UPDATE user_profile SET avoid_terms = %s WHERE id = 1", (json.dumps(cleaned),))
+        connection.commit()
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()

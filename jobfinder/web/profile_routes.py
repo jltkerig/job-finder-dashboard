@@ -62,6 +62,8 @@ def save_profile():
                       avatar_data=avatar if "avatar_data" in request.form else None,
                       work_preferences=[value for value in request.form.getlist("work_preferences")
                                         if value in {"Part-time", "Full-time", "Contract", "Freelance / Gig", "Remote", "Hybrid", "Onsite"}])
+    if "avoid_terms" in request.form:
+        profile_store.save_avoid_terms(re.split(r"[,\n]+", request.form.get("avoid_terms", "")[:5000]))
     # Changed skills: the percentages on the pages follow at once (they are worked out on each load); listings saved
     # earlier are re-read so they also list skills the current skills list recognizes.
     if {str(skill).casefold() for skill in read_list("skills_json")} != previous_skills:

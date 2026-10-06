@@ -83,7 +83,7 @@
       if (!found) return;
       if (found.unread) { pick.gaps.push({ text: "Couldn't read the requirements, so check them yourself", hard: false }); return; }
       pick.gaps = pick.gaps.concat(found.items);
-      pick.score -= found.items.reduce((total, gap) => total + (gap.hard ? 100 : 15), 0);
+      pick.score -= found.items.reduce((total, gap) => total + (gap.hard ? 100 : gap.avoid ? 30 : 15), 0);
       // Skills under "Requirements" count fully, "Nice to have" ones much less: replace the plain skill fit.
       if (found.fit) {
         pick.score += weigh(found.fit.score, found.fit.required) * 0.4 - pick.fitPart;
