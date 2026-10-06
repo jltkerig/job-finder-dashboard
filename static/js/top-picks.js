@@ -338,6 +338,20 @@
         });
         buttons.append(keep);
       }
+      // Details opens the row's own details (with the Job Posting preview) and scrolls to it.
+      const rowDetails = row.querySelector(".details-action");
+      if (rowDetails) {
+        const details = document.createElement("button");
+        details.type = "button";
+        details.className = "bordered-button";
+        details.textContent = "Details";
+        details.addEventListener("click", () => {
+          const panel = document.getElementById(rowDetails.dataset.detailsTarget);
+          if (panel?.hidden) rowDetails.click();
+          row.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+        buttons.append(details);
+      }
       const reject = document.createElement("button");
       reject.type = "button";
       reject.className = "bordered-button destructive-action";
