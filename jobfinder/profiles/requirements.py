@@ -16,7 +16,7 @@ DEGREE_WORDS = (r"(?:bachelor'?s?|baccalaureate|b\.?f\.?a\.?|b\.?a\.?|b\.?s\.?|a
 DEGREE_FIELD = re.compile(r"(?<![\w.])" + DEGREE_WORDS + r"(?:\s+degree)?(?:\s+or\s+higher)?\s+(?:in|from)\s+(?:an?\s+)?"
                           r"(?:accredited\s+)?(?:\d-year\s+)?([a-z][a-z &/,\-]{2,80})", re.I)
 # Bump when the reading changes so saved results are read again.
-VERSION = 4
+VERSION = 5
 # Areas of work a listing can be built around. When a listing keeps coming back to one (3+ mentions) and the profile
 # never mentions it, the job likely wants background you don't show ("brand" all through a brand designer listing).
 FOCUS_AREAS = {
@@ -28,6 +28,8 @@ FOCUS_AREAS = {
     "e-commerce": r"e-?commerce", "gaming": r"gaming|video\s+games?", "cybersecurity": r"cyber\s?security|security\s+teams?",
     "engineering": r"civil\s+engineering|sewer|highway|structural", "teaching": r"teaching|faculty|students?|curriculum",
     "industrial design": r"industrial\s+design|product\s+development|factory|factories|sourcing",
+    "writing": r"writ(?:e|es|ing|er|ers|ten)|copywrit\w*|ux\s+writ\w*|content\s+strateg\w*|microcopy|"
+               r"voice\s+and\s+tone|editorial\s+style",
 }
 FOREIGN = re.compile(r"\b(?:outside\s+(?:of\s+)?the\s+(?:united\s+states|u\.?s\.?)|foreign|evaluat\w+|equivalency)\b", re.I)
 FASHION_SCHOOL = re.compile(r"\b(fashion|design|art|culinary|architecture|nursing|law|medical)\s+school\b", re.I)
@@ -209,8 +211,10 @@ def requirement_gaps(requirements, profile):
             gaps.append({"text": f"Must be able to get {what}", "hard": False})
         else:
             gaps.append({"text": f"Requires an active {what[2:] if what.startswith('a ') else what}", "hard": True})
+    # "Worked with copywriters" is working alongside writers, not writing.
+    own_work = re.sub(r"\b(?:copy)?writers\b", " ", known)
     for area, count in sorted((requirements.get("focus") or {}).items(), key=lambda item: -item[1])[:2]:
-        if not re.search(r"\b(?:" + FOCUS_AREAS.get(area, re.escape(area)) + r")\b", known, re.I):
+        if not re.search(r"\b(?:" + FOCUS_AREAS.get(area, re.escape(area)) + r")\b", own_work, re.I):
             gaps.append({"text": f"Built around {area} work (mentioned {count} times); your profile doesn't mention it",
                          "hard": False})
     seen = {gap["text"] for gap in gaps}
