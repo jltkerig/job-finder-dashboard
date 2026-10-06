@@ -78,6 +78,13 @@
     if (BAIT_TITLE.test(row.dataset.job || "")) found.push({ text: "Title reads like a mass-hiring ad: check the company before applying", hard: false });
     if (/anywhere in the world|worldwide/i.test(row.dataset.state || "")) found.push({ text: "Open to anywhere in the world: may not be a US employer", hard: false });
     if (usa < 6) found.push({ text: `Low USA credibility (${Math.round(usa)}/10)`, hard: false });
+    // The employer's own site was checked and this job isn't there: often a repost, sometimes a scam using the name.
+    // LinkedIn posts usually come from the employer itself (their careers sites often hide jobs from a plain download),
+    // so only a third-party board's copy is flagged.
+    const host = (() => { try { return new URL(row.querySelector("a.inline-action-link[href^='http']")?.href || "").hostname; } catch { return ""; } })();
+    if (/not listed there|no matching posting found/i.test(row.dataset.verification || "") && !/(^|\.)linkedin\.com$/.test(host)) {
+      found.push({ text: `Not on ${row.dataset.company || "the company"}'s own careers site: could be a repost or a scam, so check before applying`, hard: false, weight: 30 });
+    }
     return found;
   }
 
@@ -100,7 +107,7 @@
     }
     reasons.push(`Credibility ${Math.round(career)}/10`);
     const gaps = warnings(row, usa);
-    let penalty = gaps.reduce((total, gap) => total + (gap.hard ? 100 : 15), 0);
+    let penalty = gaps.reduce((total, gap) => total + (gap.hard ? 100 : gap.weight || 15), 0);
     const match = titleMatch(row.dataset.job);
     if (match !== null && match < 40) {
       gaps.push({ text: "The title doesn't match your job titles", hard: false });

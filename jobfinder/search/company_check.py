@@ -29,7 +29,7 @@ AGGREGATORS = {
     "usajobs.gov", "builtin.com", "wellfound.com", "remotive.com", "weworkremotely.com", "remoteok.com", "himalayas.app",
     "jobgether.com", "learn4good.com", "salary.com", "snagajob.com", "getwork.com", "recruit.net", "jobilize.com",
     "theladders.com", "flexjobs.com", "workingnomads.com", "dailyremote.com", "jobleads.com", "careerjet.com",
-    "whatjobs.com", "joblist.com", "freehire.me", "jobsora.com", "jobtoday.com", "hiring.cafe", "jobs.lever.co.uk", "teal.com", "tealhq.com", "bebee.com", "trabajo.org", "governmentjobs.com",
+    "whatjobs.com", "joblist.com", "freehire.me", "thecreativeloft.com", "jobleads.com", "builtinnyc.com", "jobright.ai", "jobsora.com", "jobtoday.com", "hiring.cafe", "jobs.lever.co.uk", "teal.com", "tealhq.com", "bebee.com", "trabajo.org", "governmentjobs.com",
 }
 # Applicant systems host employers' own postings, usually under the employer's name.
 ATS_HOSTS = ("myworkdayjobs.com", "greenhouse.io", "lever.co", "ashbyhq.com", "workable.com", "smartrecruiters.com",

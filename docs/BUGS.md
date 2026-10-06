@@ -64,6 +64,14 @@ Each entry: what went wrong, why, the fix, and the check that would have caught 
 
 ## Company-site check
 
+- **A third-party repost ranked #3 although the employer's site didn't have it** (2026-10-06, Charter Global via
+  thecreativeloft.com; Charter Global's site warns about recruiter scams). The verification said "this job is not
+  listed there" but Top 10 ignored it. Fix: a third-party board's copy that the employer's site doesn't list gets a
+  warning and a 30-point penalty (LinkedIn employer posts excepted). Check: Top 10 picks whose link isn't the
+  employer's domain should show where the job was verified.
+- **Known issue: wrong employer-site guesses** ("domain guess"): Collins + Co. → rtx.com, Catalyst Mobility →
+  calstart.org, Freedom Technology Solutions → freedom.com. The "not listed there" result is then meaningless.
+
 - **Job aggregators counted as the employer's site** (2026-10-06). freehire.me addresses name the company in the path
   (`/jobs/…-lawnstarter-…`), so 8 listings' links were switched to an aggregator. Fix: the company name must be in the
   employer's own domain or an applicant system's address; freehire and others added to `AGGREGATORS`.
