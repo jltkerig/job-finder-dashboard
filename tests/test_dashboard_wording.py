@@ -13,10 +13,14 @@ def read(*parts):
 
 
 class ApplyButton(unittest.TestCase):
-    def test_each_listing_has_an_apply_button_that_names_the_job_for_claude_desktop(self):
-        self.assertIn('class="bordered-button apply-action" type="button" data-job-id="{{ company.id }}"', read("templates", "index.html"))
-        script = read("static", "js", "charts.js")
-        self.assertIn("Job Finder job #${jobId}", script)  # Résumé Builder's get_job reads this id
+    def test_each_listing_has_an_apply_button_that_adds_it_to_the_apply_queue(self):
+        page = read("templates", "index.html")
+        self.assertIn('class="bordered-button apply-action" type="button" data-company-id="{{ company.id }}"', page)
+        self.assertIn('fetch("/apply-queue"', read("static", "js", "charts.js"))
+
+    def test_top_10_build_still_asks_resume_builder(self):
+        script = read("static", "js", "top-picks.js")
+        self.assertIn("Job Finder job #${box.value}", script)  # Résumé Builder's get_job reads this id
         self.assertIn("read my writing rules", script)
         self.assertIn('window.location.href = "claude://"', script)
 

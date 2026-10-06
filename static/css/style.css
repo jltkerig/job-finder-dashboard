@@ -2046,3 +2046,7 @@ body[data-page="search"] #results-table .details-blocks .bordered-button { min-h
 .top-pick-details { grid-column:1 / -1; margin-top:4px; padding-top:10px; border-top:1px solid #e3e6ea; }
 
 .top-pick-details-open { display:inline-block; margin-top:10px; }
+
+/* Keep and Apply side by side on each result */
+.result-row td[data-label="Save"] { white-space:nowrap; }
+.result-row td[data-label="Save"] .bordered-button + .bordered-button { margin-left:6px; }

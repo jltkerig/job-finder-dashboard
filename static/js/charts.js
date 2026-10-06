@@ -76,15 +76,17 @@ document.addEventListener("DOMContentLoaded", () => {
   }));
 
   // Apply: copy a ready-made request for Résumé Builder's Claude Desktop connector, then open Claude Desktop to paste it.
+  // Apply adds the job to the Apply queue on the Dashboard (and keeps it), the same as Apply on a Top 10 pick.
   $$(".apply-action").forEach((button) => button.addEventListener("click", async () => {
-    const { jobId, jobTitle, companyName } = button.dataset;
-    const job = [jobTitle, companyName].filter(Boolean).join(" at ");
-    const request = `Using Résumé Builder, read my writing rules, then tailor my résumé and write a cover letter for Job Finder job #${jobId}${job ? ` (${job})` : ""}. Read the whole listing first, and save both as PDFs.`;
-    const label = button.textContent;
-    try { await navigator.clipboard.writeText(request); button.textContent = "Copied - paste in Claude"; }
-    catch { window.prompt("Copy this request, then paste it into Claude Desktop:", request); }
-    setTimeout(() => { button.textContent = label; }, 4000);
-    window.location.href = "claude://";
+    const companyId = button.dataset.companyId; if (!companyId || button.disabled) return;
+    button.disabled = true;
+    try {
+      const response = await fetch("/apply-queue", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken }, body: JSON.stringify({ company_ids: [companyId], queued: true }) });
+      if (!response.ok) throw new Error();
+      button.textContent = "Added to Apply";
+      const row = button.closest(".result-row"); if (row) row.dataset.queued = "1";
+      const keep = row?.querySelector(".keep-action"); if (keep) { keep.textContent = "Saved"; keep.classList.add("is-saved"); }
+    } catch { button.disabled = false; button.textContent = "Try again"; }
   }));
 
   $$(".history-cities").forEach((el) => { try { const items = JSON.parse(el.dataset.cities || "[]"); el.textContent = items.map((x) => `${x.city} · ${x.radius ?? x.radius_miles ?? 50} miles`).join(" • "); } catch { el.textContent = ""; } });

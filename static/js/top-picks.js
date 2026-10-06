@@ -256,12 +256,15 @@
           await queue([row.dataset.companyId]);
           queueButton.textContent = "Added to Apply";
           row.dataset.queued = "1";
+          const rowApply = row.querySelector(".apply-action");
+          if (rowApply) { rowApply.textContent = "Added to Apply"; rowApply.disabled = true; }
         } catch (error) {
           status.textContent = error.message;
           queueButton.disabled = false;
         }
       });
-      buttons.append(queueButton);
+      const keepButton = buttons.querySelector(".keep-action-pick");
+      if (keepButton) keepButton.after(queueButton); else buttons.prepend(queueButton);  // Keep and Apply together
       const ratings = document.createElement("div");
       ratings.className = "top-pick-rating";
       const up = document.createElement("button");
