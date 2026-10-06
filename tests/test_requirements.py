@@ -94,7 +94,7 @@ class RouteTests(unittest.TestCase):
                                          "listing_details": "{}", "listing_skills": '["Figma", "HTML"]'}]
         connection = MagicMock()
         connection.cursor.return_value = cursor
-        about = "<p>" + "We build friendly tools for small teams and care about clear, accessible design. " * 4 + "</p>"
+        about = "<p>" + "We build friendly tools for small teams and care about clear, accessible design. " * 8 + "</p>"
         page = MagicMock(text=about + "<p>Active Top Secret clearance required.</p><h3>Requirements:</h3><p>HTML</p>"
                                   "<h3>Nice to have:</h3><p>Figma</p>")
         client = dashboard.app.test_client()
