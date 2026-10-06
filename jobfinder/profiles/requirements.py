@@ -16,7 +16,19 @@ DEGREE_WORDS = (r"(?:bachelor'?s?|baccalaureate|b\.?f\.?a\.?|b\.?a\.?|b\.?s\.?|a
 DEGREE_FIELD = re.compile(r"(?<![\w.])" + DEGREE_WORDS + r"(?:\s+degree)?(?:\s+or\s+higher)?\s+(?:in|from)\s+(?:an?\s+)?"
                           r"(?:accredited\s+)?(?:\d-year\s+)?([a-z][a-z &/,\-]{2,80})", re.I)
 # Bump when the reading changes so saved results are read again.
-VERSION = 2
+VERSION = 3
+# Areas of work a listing can be built around. When a listing keeps coming back to one (3+ mentions) and the profile
+# never mentions it, the job likely wants background you don't show ("brand" all through a brand designer listing).
+FOCUS_AREAS = {
+    "brand": r"brand(?:ing|s|ed)?", "fashion": r"fashion|apparel|garments?|footwear|textiles?", "enterprise": r"enterprise",
+    "B2B / SaaS": r"b2b|saas", "healthcare": r"health\s?care|clinical|patients?|medical", "finance": r"financial|fintech|banking",
+    "retail": r"retail|merchandis\w+", "packaging": r"packaging", "motion": r"motion\s+(?:design|graphics)|animation",
+    "video": r"video(?:graphy)?|film", "3D": r"3d|three-dimensional", "UX research": r"user\s+research|ux\s+research",
+    "advertising": r"advertising|ad\s+campaigns?|agency", "editorial": r"editorial|publications?|journalism",
+    "e-commerce": r"e-?commerce", "gaming": r"gaming|video\s+games?", "cybersecurity": r"cyber\s?security|security\s+teams?",
+    "engineering": r"civil\s+engineering|sewer|highway|structural", "teaching": r"teaching|faculty|students?|curriculum",
+    "industrial design": r"industrial\s+design|product\s+development|factory|factories|sourcing",
+}
 FOREIGN = re.compile(r"\b(?:outside\s+(?:of\s+)?the\s+(?:united\s+states|u\.?s\.?)|foreign|evaluat\w+|equivalency)\b", re.I)
 FASHION_SCHOOL = re.compile(r"\b(fashion|design|art|culinary|architecture|nursing|law|medical)\s+school\b", re.I)
 DEGREE_ANY = re.compile(r"\b" + DEGREE_WORDS + r"\b", re.I)
@@ -132,7 +144,13 @@ def listing_requirements(text):
                 words = _words((area.group(1) or "") + " " + (area.group(2) or ""))
                 if words:
                     experience.append({"years": number, "area": " ".join(words)})
-    return {"degrees": degrees, "years": years, "experience": experience, "clearance": clearance, "version": VERSION}
+    focus = {}
+    for area, pattern in FOCUS_AREAS.items():
+        count = len(re.findall(r"\b(?:" + pattern + r")\b", text or "", re.I))
+        if count >= 3:
+            focus[area] = count
+    return {"degrees": degrees, "years": years, "experience": experience, "clearance": clearance, "focus": focus,
+            "version": VERSION}
 
 
 def _history_years(work_history):
@@ -191,6 +209,10 @@ def requirement_gaps(requirements, profile):
             gaps.append({"text": f"Must be able to get {what}", "hard": False})
         else:
             gaps.append({"text": f"Requires an active {what[2:] if what.startswith('a ') else what}", "hard": True})
+    for area, count in sorted((requirements.get("focus") or {}).items(), key=lambda item: -item[1])[:2]:
+        if not re.search(r"\b(?:" + FOCUS_AREAS.get(area, re.escape(area)) + r")\b", known, re.I):
+            gaps.append({"text": f"Built around {area} work (mentioned {count} times); your profile doesn't mention it",
+                         "hard": False})
     seen = {gap["text"] for gap in gaps}
     gaps = [gap for n, gap in enumerate(gaps) if gap["text"] not in {g["text"] for g in gaps[:n]}]
     for item in requirements.get("experience") or []:
