@@ -105,11 +105,15 @@
             </div>
           </section>
           <section class="profile-subsection">
-            <h3><label for="profile-avoid-terms">Avoid in Job Postings</label>
+            <h3><label for="new-avoid-term">Avoid in Job Postings</label>
             </h3>
-            <p class="field-help">Work you can't or don't want to do, separated by commas. Top 10 Picks moves down any listing that asks for it.
+            <p class="field-help">Work you can't or don't want to do. Top 10 Picks moves down any listing that mentions it.
             </p>
-            <textarea id="profile-avoid-terms" name="avoid_terms" rows="2" placeholder="Motion graphics, video editing, audio production">{{ (profile.avoid_terms or [])|join(', ') }}</textarea>
+            <input type="hidden" name="avoid_terms" id="avoid-terms-field" value="{{ (profile.avoid_terms or [])|join(', ') }}" />
+            <div id="avoid-term-list" class="skill-chip-list"></div>
+            <div class="skill-add-row"><input id="new-avoid-term" type="text" maxlength="80" placeholder="Add something to avoid" aria-label="Add something to avoid" />
+              <button class="bordered-button secondary-action" id="add-avoid-term" type="button">Add Term</button>
+            </div>
           </section>
           <section class="profile-subsection">
             <h3><label for="profile-city-input">Locations</label>
@@ -266,4 +270,4 @@
     </div>
   </div>
 </footer>
-<script src="/static/js/charts.js?v={{ app_version }}"></script></body></html>
+<script src="/static/js/charts.js?v={{ app_version }}"></script><script src="/static/js/avoid-terms.js?v={{ app_version }}"></script></body></html>
