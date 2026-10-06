@@ -269,8 +269,11 @@ def _requirements_for(row, cursor, connection):
     import json
 
     from jobfinder.profiles import requirements as reqs
-    from jobfinder.profiles.profile_tools import normalize_skills
+    import re
+
+    from jobfinder.profiles.profile_tools import detect_skills, normalize_skills
     from jobfinder.search.relevance import fetch_text
+    from jobfinder.web.profile_store import get_user_profile
 
     try:
         details = json.loads(row.get("listing_details") or "{}") or {}
@@ -293,9 +296,15 @@ def _requirements_for(row, cursor, connection):
     if not text:
         return None
     found = reqs.listing_requirements(text)
-    found["skill_sections"] = reqs.skill_sections(text, normalize_skills(skills))
+    # Skills from the posting text too: many job-board listings were saved without any, so their fit was unknown.
+    # Your own skills are looked for by name as well, since not all of them are in the built-in skills list.
+    own = (get_user_profile() or {}).get("skills") or []
+    named = [skill for skill in own if re.search(r"(?<![\w])" + re.escape(skill) + r"(?![\w])", text, re.I)]
+    all_skills = normalize_skills(list(skills) + detect_skills(text) + named)
+    found["skill_sections"] = reqs.skill_sections(text, all_skills)
     details["requirements"] = found
-    cursor.execute("UPDATE companies SET listing_details = %s WHERE id = %s", (json.dumps(details), row["id"]))
+    cursor.execute("UPDATE companies SET listing_details = %s, listing_skills = %s WHERE id = %s",
+                   (json.dumps(details), json.dumps(all_skills), row["id"]))
     connection.commit()
     return found
 
@@ -311,7 +320,7 @@ def top_pick_requirements():
 
     data = request.get_json(silent=True) or {}
     ids = []
-    for company_id in (data.get("company_ids") or [])[:30]:
+    for company_id in (data.get("company_ids") or [])[:50]:
         try:
             ids.append(int(company_id))
         except (TypeError, ValueError):

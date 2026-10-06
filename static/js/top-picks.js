@@ -130,10 +130,10 @@
     return rows.map(rank).sort(byScore);
   }
 
-  // Reads what the best 20 listings ask for (degrees, years, clearance) and moves down the ones the profile doesn't
+  // Reads what the best 40 listings ask for (degrees, years, clearance) and moves down the ones the profile doesn't
   // show: a hard gap (a required degree with no alternative, an active clearance) means likely not a fit.
   async function checkRequirements(ranked) {
-    const top = ranked.slice(0, PICKS * 2);
+    const top = ranked.slice(0, PICKS * 4);
     const response = await fetch("/top-picks/requirements", {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
@@ -149,16 +149,16 @@
       pick.score -= found.items.reduce((total, gap) => total + (gap.hard ? 100 : gap.weight || (gap.avoid ? 30 : 15)), 0);
       // Skills under "Requirements" count fully, "Nice to have" ones much less: replace the plain skill fit.
       if (found.fit) {
-        pick.score += weigh(found.fit.score, found.fit.required) * 0.4 - pick.fitPart;
+        pick.score += weigh(found.fit.score, found.fit.required || found.fit.listed) * 0.4 - pick.fitPart;
         pick.reasons[0] = found.fit.required
           ? `${found.fit.have} of ${found.fit.required} required skill${found.fit.required === 1 ? "" : "s"}`
-          : `${found.fit.score}% skill fit (nice-to-haves only)`;
+          : `${found.fit.have_listed} of ${found.fit.listed} listed skills (none required)`;
         if (found.fit.missing_required.length) {
           pick.gaps.push({ text: `Required skills you don't list: ${found.fit.missing_required.join(", ")}`, hard: false });
         }
       }
     });
-    return top.sort(byScore).concat(ranked.slice(PICKS * 2));
+    return top.sort(byScore).concat(ranked.slice(PICKS * 4));
   }
 
   let current = [];  // every ranked listing from the last click, best first

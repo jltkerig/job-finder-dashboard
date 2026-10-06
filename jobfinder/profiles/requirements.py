@@ -16,7 +16,7 @@ DEGREE_WORDS = (r"(?:bachelor'?s?|baccalaureate|b\.?f\.?a\.?|b\.?a\.?|b\.?s\.?|a
 DEGREE_FIELD = re.compile(r"(?<![\w.])" + DEGREE_WORDS + r"(?:\s+degree)?(?:\s+or\s+higher)?\s+(?:in|from)\s+(?:an?\s+)?"
                           r"(?:accredited\s+)?(?:\d-year\s+)?([a-z][a-z &/,\-]{2,80})", re.I)
 # Bump when the reading changes so saved results are read again.
-VERSION = 7
+VERSION = 8
 # Areas of work a listing can be built around. When a listing keeps coming back to one (3+ mentions) and the profile
 # never mentions it, the job likely wants background you don't show ("brand" all through a brand designer listing).
 FOCUS_AREAS = {
@@ -24,7 +24,7 @@ FOCUS_AREAS = {
     "B2B / SaaS": r"b2b|saas", "healthcare": r"health\s?care|clinical|patients?|medical", "finance": r"financial|fintech|banking",
     "retail": r"retail|merchandis\w+", "packaging": r"packaging", "motion": r"motion\s+(?:design|graphics)|animation",
     "video": r"video(?:graphy)?|film", "3D": r"3d|three-dimensional", "UX research": r"user\s+research|ux\s+research",
-    "advertising": r"advertising|ad\s+campaigns?|agency", "editorial": r"editorial|publications?|journalism",
+    "advertising": r"advertising|ad\s+campaigns?|ad\s+agency|creative\s+agency", "editorial": r"editorial|publications?|journalism",
     "e-commerce": r"e-?commerce", "gaming": r"gaming|video\s+games?", "cybersecurity": r"cyber\s?security|security\s+teams?",
     "engineering": r"civil\s+engineering|sewer|highway|structural", "teaching": r"teaching|faculty|students?|curriculum",
     "industrial design": r"industrial\s+design|product\s+development|factory|factories|sourcing",
@@ -122,8 +122,12 @@ def listing_requirements(text):
         alternative = bool(EQUIVALENT.search(sentence))
         found_degree = False
         for match in DEGREE_FIELD.finditer(sentence):
-            fields = [_field(part) for part in re.split(r",|\s+or\s+|/", _field(match.group(1)))]
-            fields = [field for field in fields if _words(field)]
+            if re.match(r"[A-Z][a-z]+(?:\s[A-Z][a-z]+)?,?\s+(?:[A-Z]{2}\b|Maryland|Virginia|Delaware|DC)", match.group(1)):
+                continue  # "...in Baltimore, MD": a place, not a field of study
+            fields =[_field(part) for part in re.split(r",|\s+or\s+|/", _field(match.group(1)))]
+            # "...in Baltimore, MD" is a place, not a field of study.
+            fields = [field for field in fields if _words(field)
+                      and not re.search(re.escape(field) + r",?\s+(?:[A-Z]{2}\b|Maryland|Virginia|Delaware|DC)", text or "")]
             if fields:
                 degrees.append({"fields": fields, "level": match.group(0).split()[0].lower(), "alternative": alternative})
                 found_degree = True
@@ -282,18 +286,26 @@ def skill_sections(text, skills):
 
 
 def weighted_fit(user_skills, sections):
-    """{"score": 0-100, "required": n, "have": n, "missing_required": [...]}: missing a required skill costs
-    more than missing a nice-to-have one. None when the listing has no skills."""
+    """{"score": 0-100, "required": n, "have": n, "listed": n, "have_listed": n, "missing_required": [...]}.
+
+    With skills under a Requirements heading, missing one of those costs more than missing a nice-to-have. A listing
+    whose skills are all nice-to-haves or just mentioned has no skill requirement: having them only helps (from 50
+    up to 100), and missing them doesn't count against you. None when the listing has no skills."""
     if not sections or not user_skills:
         return None
     user = {skill.casefold() for skill in user_skills}
-    total = sum(WEIGHTS[where] for where in sections.values())
-    have = sum(WEIGHTS[where] for skill, where in sections.items() if skill.casefold() in user)
-    return {"score": round(100 * have / total),
-            "required": sum(1 for where in sections.values() if where != "preferred"),
-            "have": sum(1 for skill, where in sections.items() if where != "preferred" and skill.casefold() in user),
-            "missing_required": [skill for skill, where in sections.items()
-                                 if where == "required" and skill.casefold() not in user]}
+    required = [skill for skill, where in sections.items() if where == "required"]
+    listed_have = [skill for skill in sections if skill.casefold() in user]
+    if required:
+        total = sum(WEIGHTS[where] for where in sections.values())
+        have = sum(WEIGHTS[where] for skill, where in sections.items() if skill.casefold() in user)
+        score = round(100 * have / total)
+    else:
+        score = round(50 + 50 * len(listed_have) / len(sections))
+    return {"score": score, "required": len(required),
+            "have": sum(1 for skill in required if skill.casefold() in user),
+            "listed": len(sections), "have_listed": len(listed_have),
+            "missing_required": [skill for skill in required if skill.casefold() not in user]}
 
 
 DUTIES_HEADING = re.compile(r"\b(responsibilities|what you(?:'ll| will) do|the role|duties|day[\s-]to[\s-]day|"
@@ -306,15 +318,17 @@ def key_lines(text, per_section=8):
     sections = {"Requirements": [], "Responsibilities": [], "Nice to Have": []}
     current = None
     for raw in re.split(r"\n+", text or ""):
-        bullet = bool(re.match(r"\s*[•·\-–*�]", raw))
-        line = re.sub(r"\s+", " ", raw.replace("�", " ")).strip(" •·-–*\t")
+        bullet = bool(re.match(r"\s*[•·\-–*+�]", raw))
+        line = re.sub(r"\s+", " ", raw.replace("�", " ")).strip(" •·-–*+\t")
         if not line:
             continue
         if not bullet and _is_heading(line):
             kind = ("Nice to Have" if PREFERRED_HEADING.search(line) else
                     "Responsibilities" if DUTIES_HEADING.search(line) else
                     "Requirements" if REQUIRED_HEADING.search(line) else None)
-            if kind or line.endswith(":") or not current:
+            title_case = len(line.split()) <= 5 and all(word[:1].isupper() or word.lower() in {"and", "of", "&", "the", "to", "for"}
+                                                         for word in line.split())
+            if kind or line.endswith(":") or title_case or not current:
                 current = kind
                 continue
         if current and 12 <= len(line) <= 400 and len(sections[current]) < per_section and line not in sections[current]:
