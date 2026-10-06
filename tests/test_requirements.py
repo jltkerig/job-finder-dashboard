@@ -95,7 +95,7 @@ class RouteTests(unittest.TestCase):
         client = dashboard.app.test_client()
         with client.session_transaction() as session:
             session["csrf_token"] = "t"
-        with patch("jobfinder.web.listing_actions.db.connect", return_value=connection), \
+        with patch("jobfinder.web.top_picks_routes.db.connect", return_value=connection), \
                 patch("jobfinder.search.relevance.fetch_text", return_value=page) as fetch, \
                 patch("jobfinder.web.profile_store.get_user_profile", return_value=PROFILE):
             response = client.post("/top-picks/requirements", json={"company_ids": [7]}, headers={"X-CSRF-Token": "t"})

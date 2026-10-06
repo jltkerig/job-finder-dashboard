@@ -13,7 +13,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
-from jobfinder.sources import employer_jobs
+from jobfinder.sources import employer_common, employer_jobs
 from jobfinder.sources.employer_jobs import Employer
 
 FIXTURE = json.loads((Path(__file__).resolve().parent / 'fixtures' / 'real_pages.json').read_text(encoding='utf-8'))
@@ -48,7 +48,7 @@ def openings(name):
     recorded = FIXTURE[name]
     employer = Employer(recorded['config'])
     # The recordings were made with one results page and two postings read per search.
-    with patch.object(employer_jobs, 'MAX_PAGES', 1), patch.object(employer_jobs, 'MAX_DETAILS', 2):
+    with patch.object(employer_common, 'MAX_PAGES', 1), patch.object(employer_jobs, 'MAX_DETAILS', 2):
         return employer, employer.find_openings(TITLES[name], Replay(recorded['tape']))
 
 
