@@ -33,7 +33,11 @@
   const GENERIC_TITLE_WORDS = new Set(["senior", "sr", "junior", "jr", "staff", "lead", "principal", "mid", "level", "entry",
     "i", "ii", "iii", "iv", "remote", "hybrid", "onsite", "site", "contract", "full", "time", "part", "temporary", "the",
     "and", "of", "for", "with", "to", "in", "at", "a", "an", "us", "usa"]);
-  const titleWords = (text) => (text || "").toLowerCase()
+  // Job boards dress titles up: "Charter Global is hiring: Graphic Designer in Baltimore" is a Graphic Designer.
+  const cleanTitle = (text) => (text || "").replace(/^.*?\bis hiring:?\s*/i, "")
+    .replace(/\s+in\s+[A-Z][a-zA-Z]+(?:[\s,]+[A-Z][a-zA-Z]*)*\s*$/, "").replace(/\s+[-–|]\s+[^-–|]+$/, (tail) =>
+      (/designer|developer|producer|specialist|manager|artist/i.test(tail) ? tail : ""));
+  const titleWords = (text) => cleanTitle(text).toLowerCase()
     .replace(/front[\s-]+end/g, "frontend").replace(/back[\s-]+end/g, "backend").replace(/\([^)]*\)|\[[^\]]*\]/g, " ")
     .split(/[^a-z0-9]+/).filter((word) => word && !GENERIC_TITLE_WORDS.has(word) && !/^\d+$/.test(word))
     .map((word) => (word === "webmaster" ? "web" : word).slice(0, 5));
@@ -89,7 +93,9 @@
     const career = number(row.dataset.careerCredibility) || 0;  // 0-10
     const usa = number(row.dataset.usaCredibility) || 0;  // 0-10
     const near = nearness(row);
-    const score = (fit === null ? 50 : fit) * 0.4 + career * 10 * 0.25 + usa * 10 * 0.15 + near * 0.2;
+    // Skill fit counts most; credibility is how much the source is trusted (every LinkedIn listing gets 3/10), not how
+    // well the job fits, so it counts less.
+    const score = (fit === null ? 50 : fit) * 0.5 + career * 10 * 0.15 + usa * 10 * 0.1 + near * 0.25;
     const reasons = [];
     reasons.push(raw === null ? "Skill fit unknown" : `${Math.round(raw)}% skill fit · ${count} skill${count === 1 ? "" : "s"}`);
     if (row.dataset.workArrangement === "Remote") reasons.push("Remote");
@@ -114,7 +120,7 @@
     const disliked = likeness(row.dataset.job, turnedDown);
     if (liked >= 0.5) reasons.push("Like jobs you applied to");
     if (disliked >= 0.5) gaps.push({ text: "Like jobs you turned down", hard: false });
-    return { row, score: score - penalty + Math.round(20 * liked) - Math.round(35 * disliked), reasons, gaps, fitPart: (fit === null ? 50 : fit) * 0.4 };
+    return { row, score: score - penalty + Math.round(20 * liked) - Math.round(35 * disliked), reasons, gaps, fitPart: (fit === null ? 50 : fit) * 0.5 };
   }
 
   function shown(row) {
@@ -122,10 +128,12 @@
   }
 
   const byScore = (a, b) => b.score - a.score;
+  // Pages that aren't one job (same idea as looks_like_not_a_job on the server): directories, job lists, agency pages.
+  const NOT_A_JOB = /^\s*(?:find|hire|compare|top\s+\d+|best)\s|jobs|(?:web|website|graphic|logo|wordpress)\s+design\s+(?:in|near|services?|company|agency|packages?)/i;
 
   function pick() {
     const rows = Array.from(document.querySelectorAll("#results-table .result-row"))
-      .filter((row) => shown(row) && row.dataset.status !== "closed"
+      .filter((row) => shown(row) && row.dataset.status !== "closed" && !NOT_A_JOB.test(row.dataset.job || "")
         && !["Applied", "Talking With Recruiter", "Interview"].includes(row.dataset.application));
     return rows.map(rank).sort(byScore);
   }
@@ -149,7 +157,7 @@
       pick.score -= found.items.reduce((total, gap) => total + (gap.hard ? 100 : gap.weight || (gap.avoid ? 30 : 15)), 0);
       // Skills under "Requirements" count fully, "Nice to have" ones much less: replace the plain skill fit.
       if (found.fit) {
-        pick.score += weigh(found.fit.score, found.fit.required || found.fit.listed) * 0.4 - pick.fitPart;
+        pick.score += weigh(found.fit.score, found.fit.required || found.fit.listed) * 0.5 - pick.fitPart;
         pick.reasons[0] = found.fit.required
           ? `${found.fit.have} of ${found.fit.required} required skill${found.fit.required === 1 ? "" : "s"}`
           : `${found.fit.have_listed} of ${found.fit.listed} listed skills (none required)`;
