@@ -8,6 +8,7 @@ No AI calls: every signal is scored by rules. A match moves the listing's main l
 from datetime import date, timedelta
 import json
 import re
+from urllib.parse import urlparse
 
 from bs4 import BeautifulSoup
 
@@ -28,7 +29,7 @@ AGGREGATORS = {
     "usajobs.gov", "builtin.com", "wellfound.com", "remotive.com", "weworkremotely.com", "remoteok.com", "himalayas.app",
     "jobgether.com", "learn4good.com", "salary.com", "snagajob.com", "getwork.com", "recruit.net", "jobilize.com",
     "theladders.com", "flexjobs.com", "workingnomads.com", "dailyremote.com", "jobleads.com", "careerjet.com",
-    "whatjobs.com", "joblist.com", "teal.com", "tealhq.com", "bebee.com", "trabajo.org", "governmentjobs.com",
+    "whatjobs.com", "joblist.com", "freehire.me", "jobsora.com", "jobtoday.com", "hiring.cafe", "jobs.lever.co.uk", "teal.com", "tealhq.com", "bebee.com", "trabajo.org", "governmentjobs.com",
 }
 # Applicant systems host employers' own postings, usually under the employer's name.
 ATS_HOSTS = ("myworkdayjobs.com", "greenhouse.io", "lever.co", "ashbyhq.com", "workable.com", "smartrecruiters.com",
@@ -59,6 +60,9 @@ def title_similarity(wanted, found):
     a, b = _title_words(wanted), _title_words(found)
     if not a or not b:
         return 0.0
+    role = (re.findall(r"[a-z0-9]+", re.sub(r"\([^)]*\)|\s[-–|,]\s.*$|,.*$", " ", str(wanted).casefold())) or [""])[-1]
+    if role and role not in b:
+        return 0.0  # "Web Designer" is not "Web Developer", however much else matches
     shared = len(a & b)
     return min(shared / len(a), shared / len(b) + 0.25)
 
@@ -67,11 +71,22 @@ def company_words(company):
     return [word for word in _words(company) if word not in COMPANY_FILLER and len(word) > 1]
 
 
+def _on_ats(host):
+    return any(host == item or host.endswith("." + item) for item in ATS_HOSTS)
+
+
 def company_in_url(company, url):
-    """The employer's name in the domain or path: acme.com, acme.wd5.myworkdayjobs.com, boards.greenhouse.io/acme."""
+    """The employer's name in its own domain (acme.com, careers.acme.com), or in an applicant system's address
+    (acme.wd5.myworkdayjobs.com, boards.greenhouse.io/acme). A job aggregator's path naming the company
+    (freehire.me/jobs/designer-acme-123) doesn't count."""
     words = company_words(company)
-    squashed = re.sub(r"[^a-z0-9]", "", str(url or "").casefold())
-    return bool(words) and ("".join(words) in squashed or (len(words[0]) >= 4 and words[0] in squashed))
+    if not words:
+        return False
+    parts = urlparse(str(url or ""))
+    host = (parts.hostname or "").casefold()
+    where = host + (parts.path.split("/")[1] if _on_ats(host) and parts.path.count("/") >= 1 else "")
+    squashed = re.sub(r"[^a-z0-9]", "", where)
+    return "".join(words) in squashed or (len(words[0]) >= 4 and words[0] in squashed)
 
 
 def _shingles(text, size=4):
@@ -162,7 +177,7 @@ def candidate_urls(results, listing, limit=5):
         domain = get_domain(url)
         if not domain or url in found or is_aggregator(domain) or is_directory_or_marketplace_result(domain, result.get("title") or ""):
             continue
-        on_ats = any(domain == host or domain.endswith("." + host) for host in ATS_HOSTS)
+        on_ats = _on_ats(domain)
         if company_in_url(listing["company"], url) or (on_ats and title_similarity(listing["title"], result.get("title")) >= 0.6):
             found.append(url)
         if len(found) >= limit:

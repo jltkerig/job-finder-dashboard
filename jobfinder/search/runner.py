@@ -249,6 +249,7 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
             continue
         print(f"{feed.name} matches: {len(feed_jobs)}")
         feed_saved = 0
+        same_in_feed = set()  # We Work Remotely posts one job under several addresses (…-governance, …-governance-1)
         for job in feed_jobs:
             if (companies_saved >= shared.MAX_SEARCH_RESULTS or feed_saved_total >= feed_cap
                     or feed_saved >= max(1, shared.MAX_SEARCH_RESULTS // 3)):
@@ -259,6 +260,11 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
             if not job["name"] or job["name"].casefold() in BLOCKED_COMPANIES:
                 debug_skip("Blocked company", job["url"], job["title"])
                 continue
+            same_key = (job["name"].casefold(), job["title"].casefold())
+            if same_key in same_in_feed:
+                debug_skip("Same job listed again in the feed", job["url"], job["title"])
+                continue
+            same_in_feed.add(same_key)
             if canonical_url(job["url"]) in rejected_urls:
                 record_skip("Previously rejected", job["url"], job["title"])
                 continue

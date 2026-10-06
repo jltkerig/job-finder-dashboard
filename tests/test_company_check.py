@@ -42,6 +42,15 @@ class JudgeTests(unittest.TestCase):
         self.assertFalse(cc.judge(LISTING, "https://globex.com/jobs/1", page(org="Globex"))["match"])
 
 
+class AggregatorTests(unittest.TestCase):
+    def test_aggregator_path_naming_the_company_is_not_the_employer(self):
+        self.assertFalse(cc.company_in_url("LawnStarter", "https://freehire.me/jobs/analytics-manager-lawnstarter-j4tr7mug"))
+        self.assertTrue(cc.company_in_url("LawnStarter", "https://www.lawnstarter.com/careers/42"))
+
+    def test_different_role_is_not_the_same_job(self):
+        self.assertEqual(cc.title_similarity("Web Designer, eCRM", "Web Developer, eCRM"), 0.0)
+
+
 class CandidateTests(unittest.TestCase):
     def test_boards_are_skipped_and_ats_kept(self):
         results = [{"url": "https://www.indeed.com/viewjob?jk=1", "title": "Graphic Designer - Acme"},

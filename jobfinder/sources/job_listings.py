@@ -128,7 +128,9 @@ def matching_title(title, wanted):
         extras = actual - words
         if words <= actual and all(word in _COMPATIBLE_STEMS or word.isdigit() for word in extras):
             return True
-        if size >= 3 and len(words & actual) >= size - 1:
+        # Two of three words are enough ("Senior Visual Graphic Designer" for "Visual Graphic Designer"), but the role must
+        # be one of them: "Data Platform & Governance" manager is not a "Data Governance Analyst".
+        if size >= 3 and len(words & actual) >= size - 1 and words_list[-1] in actual:
             return True
     return False
 
