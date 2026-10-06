@@ -39,6 +39,8 @@ Each entry: what went wrong, why, the fix, and the check that would have caught 
 - **Two of three words matched without the role** (2026-10-06): "Analytics Engineering Manager, Data Platform &
   Governance" matched "Data Governance Analyst". Fix: the near-match rule in `matching_title` needs the last word
   (the role). Check: for a new title family, try titles that share the field words but a different role.
+- **Not a bug: adjunct teaching jobs in the field match** ("Adjunct Faculty, Graphic Design" for Graphic Designer). The
+  user wants these kept (2026-10-06); Top 10's teaching focus area marks them down a little instead.
 - **Typos in saved titles silently find nothing** ("Production Specalist"). Not fixed in code; tell the user.
 
 ## Saving
