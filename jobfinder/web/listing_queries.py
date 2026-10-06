@@ -305,3 +305,23 @@ def merge_duplicates(companies):
                                 "url": other.get("source_url") or other.get("career_url")} for other in group[1:]]
         hidden.update(id(other) for other in group[1:])
     return [company for company in companies if id(company) not in hidden]
+
+
+def turned_down_titles(limit=200):
+    """Titles of listings you rejected as the wrong role, newest first, so Top 10 Picks can mark down ones like them."""
+    connection = cursor = None
+    try:
+        connection = db.connect()
+        cursor = connection.cursor()
+        cursor.execute("""SELECT career_job_title FROM companies
+                          WHERE is_rejected = 1 AND rejected_by = 'user' AND rejection_reason = 'wrong_role'
+                                AND career_job_title IS NOT NULL AND career_job_title <> ''
+                          ORDER BY rejected_at DESC LIMIT %s""", (limit,))
+        return [row[0] for row in cursor.fetchall()]
+    except Exception:  # no database: nothing learned yet
+        return []
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()

@@ -1981,8 +1981,12 @@ body[data-page="search"] #results-table .details-blocks .bordered-button { min-h
 .top-pick-gaps { margin:8px 0 0; padding:0; list-style:none; font-size:.82rem; color:#8a5a00; }
 .top-pick-gaps li::before { content:"⚠ "; }
 .top-pick-gaps li.hard { color:#b42318; font-weight:600; }
+.top-pick-actions { display:flex; flex-direction:column; align-items:flex-end; gap:6px; }
 .top-pick-open { font-size:.85rem; white-space:nowrap; margin-top:3px; }
-@media (max-width: 640px) { .top-pick { grid-template-columns:26px 20px 1fr; } .top-pick-open { grid-column:3; } }
+.top-pick-reject { padding:3px 10px; border:1px solid #e3b4ae; border-radius:6px; background:#fff; color:#9a2a1f; font-size:.8rem; cursor:pointer; white-space:nowrap; }
+.top-pick-reject:hover { background:#fdecea; }
+.top-pick-reject:disabled { opacity:.5; cursor:default; }
+@media (max-width: 640px) { .top-pick { grid-template-columns:26px 20px 1fr; } .top-pick-actions { grid-column:3; flex-direction:row; align-items:center; } }
 .top-picks-actions .loading::before { content:""; display:inline-block; width:14px; height:14px; margin-right:8px; vertical-align:-2px; border:2px solid #c9ced6; border-top-color:#2a4a7a; border-radius:50%; animation:top-picks-spin .8s linear infinite; }
 @keyframes top-picks-spin { to { transform:rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .top-picks-actions .loading::before { animation-duration:2.4s; } }

@@ -46,11 +46,15 @@
   // Words close to most design and web titles count as yours even when none of your titles use them.
   const knownWords = new Set([...profileTitles.flat(), ...appliedTitles.flat(), "ux", "ui", "produ", "inter", "creat", "multi", "websi"]);
 
-  // 0-1: how much the title shares with the closest job you applied to (shared words over all words of both).
-  function likeApplied(title) {
+  // Listings you turned down with "Not for Me" (or rejected as the wrong role) teach the other way.
+  let turnedDown = [];
+  try { turnedDown = JSON.parse(panel.dataset.turnedDown || "[]").map(titleWords).filter((words) => words.length); } catch {}
+
+  // 0-1: how much the title shares with the closest of the examples (shared words over all words of both).
+  function likeness(title, examples) {
     const words = new Set(titleWords(title));
-    if (!appliedTitles.length || !words.size) return 0;
-    return Math.max(...appliedTitles.map((applied) => {
+    if (!examples.length || !words.size) return 0;
+    return Math.max(...examples.map((applied) => {
       const shared = applied.filter((word) => words.has(word)).length;
       return shared / new Set([...applied, ...words]).size;
     }));
@@ -103,9 +107,11 @@
     } else if (match !== null) {
       reasons.push("Title matches");
     }
-    const likeness = likeApplied(row.dataset.job);
-    if (likeness >= 0.5) reasons.push("Like jobs you applied to");
-    return { row, score: score - penalty + Math.round(20 * likeness), reasons, gaps, fitPart: (fit === null ? 50 : fit) * 0.4 };
+    const liked = likeness(row.dataset.job, appliedTitles);
+    const disliked = likeness(row.dataset.job, turnedDown);
+    if (liked >= 0.5) reasons.push("Like jobs you applied to");
+    if (disliked >= 0.5) gaps.push({ text: "Like jobs you turned down", hard: false });
+    return { row, score: score - penalty + Math.round(20 * liked) - Math.round(35 * disliked), reasons, gaps, fitPart: (fit === null ? 50 : fit) * 0.4 };
   }
 
   function shown(row) {
@@ -152,9 +158,45 @@
     return top.sort(byScore).concat(ranked.slice(PICKS * 2));
   }
 
+  let current = [];  // every ranked listing from the last click, best first
+
+  // "Not for Me": reject the listing as the wrong role, learn from its title, and move the next one up.
+  async function turnDown(pick, button) {
+    button.disabled = true;
+    try {
+      const response = await fetch(`/reject-listing/${encodeURIComponent(pick.row.dataset.companyId)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken, "X-Requested-With": "fetch" },
+        body: JSON.stringify({ reason: "wrong_role" }),
+      });
+      if (!response.ok) throw new Error();
+    } catch {
+      button.disabled = false;
+      status.textContent = "Could not reject that listing. Try again.";
+      return;
+    }
+    const words = titleWords(pick.row.dataset.job);
+    if (words.length) turnedDown.push(words);
+    pick.row.hidden = true;
+    const details = pick.row.nextElementSibling;
+    if (details?.classList.contains("details-row")) details.hidden = true;
+    current = current.filter((other) => other !== pick);
+    current.forEach((other) => {
+      const disliked = likeness(other.row.dataset.job, [words]);
+      if (disliked >= 0.5 && !other.gaps.some((gap) => gap.text === "Like jobs you turned down")) {
+        other.gaps.push({ text: "Like jobs you turned down", hard: false });
+        other.score -= Math.round(35 * disliked);
+      }
+    });
+    current.sort(byScore);
+    render(current.slice(0, PICKS));
+    status.textContent = "Rejected. Top 10 will mark down jobs like it from now on.";
+  }
+
   function render(picks) {
     list.replaceChildren();
-    picks.forEach(({ row, reasons, gaps }, index) => {
+    picks.forEach((pick, index) => {
+      const { row, reasons, gaps } = pick;
       const hard = gaps.some((gap) => gap.hard);
       const item = document.createElement("li");
       item.className = "top-pick" + (hard ? " not-a-fit" : "");
@@ -199,6 +241,8 @@
         body.append(warnings);
       }
       item.append(rankNumber, box, body);
+      const actions = document.createElement("div");
+      actions.className = "top-pick-actions";
       const link = row.querySelector("a.inline-action-link[href^='http']");
       if (link) {
         const open = document.createElement("a");
@@ -207,8 +251,15 @@
         open.target = "_blank";
         open.rel = "noopener noreferrer";
         open.textContent = "Open listing";
-        item.append(open);
+        actions.append(open);
       }
+      const notForMe = document.createElement("button");
+      notForMe.type = "button";
+      notForMe.className = "top-pick-reject";
+      notForMe.textContent = "Not for Me";
+      notForMe.addEventListener("click", () => turnDown(pick, notForMe));
+      actions.append(notForMe);
+      item.append(actions);
       list.append(item);
     });
   }
@@ -231,6 +282,7 @@
       status.classList.remove("loading");
       button.disabled = false;
     }
+    current = ranked;
     const picks = ranked.slice(0, PICKS);
     if (!picks.length) {
       status.textContent = "No open results to pick from. Run a search or clear the filters.";
