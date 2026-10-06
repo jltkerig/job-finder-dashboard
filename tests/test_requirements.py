@@ -48,9 +48,9 @@ class RequirementTests(unittest.TestCase):
         self.assertEqual(gaps("Active Secret clearance required.", profile), [])
 
     def test_focus_area_the_profile_never_mentions(self):
-        text = "Own our brand. Grow the brand identity. Brand systems for every launch."
-        self.assertIn("Built around brand work", gaps(text)[0]["text"])
-        self.assertEqual(gaps(text, dict(PROFILE, skills=["Branding"])), [])
+        text = "Design fashion accessories. Know the fashion calendar. Love apparel."
+        self.assertIn("Built around fashion work", gaps(text)[0]["text"])
+        self.assertEqual(gaps(text, dict(PROFILE, skills=["Fashion illustration"])), [])
 
     def test_skill_sections(self):
         text = "We use Figma.\nRequirements:\nHTML and CSS\nNice to have:\nReact\nPhotoshop is a plus."
