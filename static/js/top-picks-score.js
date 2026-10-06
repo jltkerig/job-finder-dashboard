@@ -147,6 +147,7 @@
     top.forEach((pick) => {
       const found = gaps[pick.row.dataset.companyId];
       if (!found) return;
+      if (found.closed) { pick.closed = true; pick.row.dataset.status = "closed"; return; }  // no longer accepting applications
       if (found.unread) { pick.gaps.push({ text: "Couldn't read the requirements, so check them yourself", hard: false }); return; }
       pick.gaps = pick.gaps.concat(found.items);
       pick.score -= found.items.reduce((total, gap) => total + (gap.hard ? 100 : gap.weight || (gap.avoid ? 30 : 15)), 0);
@@ -161,7 +162,7 @@
         }
       }
     });
-    return top.sort(byScore).concat(ranked.slice(PICKS * 4));
+    return top.filter((pick) => !pick.closed).sort(byScore).concat(ranked.slice(PICKS * 4));
   }
 
 

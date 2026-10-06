@@ -22,6 +22,44 @@ def posting_urls(url):
     return [url]
 
 
+LIVE_CLOSED_CHECKS = 12  # the best picks get a live "still open?" look, once a day each
+
+
+def closed_posting(row, found, cursor, connection, live):
+    """True when the posting says it's closed ("No longer accepting applications"); the listing is then marked Closed.
+    With live, the page is read again (once a day): LinkedIn jobs aren't rechecked by Refresh, and a description saved
+    when the job was captured never shows that it closed later."""
+    import json
+
+    from jobfinder.profiles import requirements as reqs
+    from jobfinder.search.company_check import CLOSED
+    from jobfinder.search.relevance import fetch_text
+
+    closed = bool(CLOSED.search(((found or {}).get("text") or "")[:20000]))
+    cursor.execute("SELECT listing_details FROM companies WHERE id = %s", (row["id"],))
+    latest = cursor.fetchone() or {}
+    try:
+        details = json.loads(latest.get("listing_details") or "{}") or {}
+    except (TypeError, ValueError):
+        details = {}
+    today = date.today().isoformat()
+    if not closed and live and details.get("closed_check") != today and (found or {}).get("read_on") != today:
+        for url in posting_urls(row.get("career_url") or row.get("source_url")):
+            body = reqs.page_text(posting_text(url))
+            if len(body) < MIN_POSTING_TEXT:
+                page = fetch_text(url)
+                body = reqs.page_text(page.text) if page and page.text else ""
+            if len(body) >= MIN_POSTING_TEXT:
+                closed = bool(CLOSED.search(body[:20000]))
+                break
+        details["closed_check"] = today
+        cursor.execute("UPDATE companies SET listing_details = %s WHERE id = %s", (json.dumps(details), row["id"]))
+    if closed:
+        cursor.execute("UPDATE companies SET job_open_status = 'Closed' WHERE id = %s", (row["id"],))
+    connection.commit()
+    return closed
+
+
 def _requirements_for(row, cursor, connection):
     """The listing's requirements, read once from its saved description or page and kept in listing_details; None
     when the page can't be read."""
@@ -72,6 +110,7 @@ def _requirements_for(row, cursor, connection):
     named = [skill for skill in own if re.search(r"(?<![\w])" + re.escape(skill) + r"(?![\w])", text, re.I)]
     all_skills = normalize_skills(list(skills) + detect_skills(text) + named)
     found["skill_sections"] = reqs.skill_sections(text, all_skills)
+    found["read_on"] = today if not details.get("description") else ""  # a live page, read today
     details["requirements"] = found
     cursor.execute("UPDATE companies SET listing_details = %s, listing_skills = %s WHERE id = %s",
                    (json.dumps(details), json.dumps(all_skills), row["id"]))
@@ -104,8 +143,13 @@ def top_pick_requirements():
         connection = db.connect()
         cursor = connection.cursor(dictionary=True)
         cursor.execute(f"SELECT {LISTING_COLUMNS} FROM companies WHERE id IN ({','.join(['%s'] * len(ids))})", ids)
-        for row in cursor.fetchall():
+        rows = {row["id"]: row for row in cursor.fetchall()}
+        for rank, company_id in enumerate(company_id for company_id in ids if company_id in rows):
+            row = rows[company_id]
             found = _requirements_for(row, cursor, connection)
+            if closed_posting(row, found, cursor, connection, live=rank < LIVE_CLOSED_CHECKS):
+                gaps[row["id"]] = {"closed": True, "unread": False, "items": []}
+                continue
             if found is None:
                 gaps[row["id"]] = {"unread": True, "items": []}
                 continue

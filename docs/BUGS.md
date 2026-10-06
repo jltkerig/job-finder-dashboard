@@ -57,6 +57,8 @@ Each entry: what went wrong, why, the fix, and the check that would have caught 
 - **Workday page data says TELECOMMUTE for onsite and hybrid jobs** (2026-10-06): a New York job and a "Client
   Site" job were saved as Remote. Fix: for myworkdayjobs.com, Workday's own `remoteType` (Office / Hybrid / Remote /
   Not Remote) wins over the page's JobPosting data. Check: Remote rows from Workday should have remoteType Remote.
+- **Known issue: "Washington" + "University of Maryland" reads as MD** (row 1). Refresh re-reads the page each time,
+  so a hand fix to DC doesn't stick. Displayed distance is right (35.6 mi); only the state label is off.
 - **Cities were not checked when added** (2026-10-06): "zzzzqq" or "Baltimre" were accepted and then searched as
   nowhere. Fix: Add looks the place up first (`/city-matches`).
 
@@ -81,6 +83,13 @@ Each entry: what went wrong, why, the fix, and the check that would have caught 
   code bug; keep in mind when a test search ends with "Stop requested before the web search started".
 
 ## Top 10
+
+- **Closed LinkedIn jobs stayed in Top 10** (2026-10-06): Kee Group and 5 others said "No longer accepting
+  applications" but were Open. LinkedIn jobs aren't rechecked by Refresh, and a description saved at capture never shows
+  a later closing. Fix: posting text with closed wording marks the job Closed (Top 10 and Refresh); the best 12 picks
+  get a live check once a day. Check: scan saved posting text with `company_check.CLOSED` for rows still Open.
+- **After a refresh, picks already in the Apply queue showed "Apply" again** (2026-10-06). Fix: rows carry
+  `data-queued`, and the button shows "Added to Apply".
 
 - **First pick scored 99 with no readable posting** (2026-10-06): see "Reading postings".
 - **Picks reloaded on every page refresh** (2026-10-06). Fix: the last Top 10 is kept in the browser for a day.
@@ -122,6 +131,8 @@ Each entry: what went wrong, why, the fix, and the check that would have caught 
   the user's own skills by name.
 - **"0 of 1 required skill"** when the posting had no requirements list. Fix: shows "N of M listed skills (none
   required)".
+- **"Unknown employer" although the link is the employer's own site** (2026-10-06, warschawski.com). Fix: Refresh
+  falls back to the site's name (`name_from_url`), skipping job boards and applicant systems.
 - **Company names with codes or taglines** ("1234 ACME", "Acme │ We build things"), and a name equal to the job title.
   Fix: `tidy_company_name`.
 - **Marketing pages saved as jobs** ("WordPress web design in Gaithersburg"). Fix: `NOT_A_JOB` in job_listings.py and

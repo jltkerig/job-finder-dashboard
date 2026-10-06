@@ -109,8 +109,25 @@ class RouteTests(unittest.TestCase):
         fit = response.get_json()["gaps"]["7"]["fit"]
         self.assertEqual(fit["missing_required"], ["HTML"])
         fetch.assert_called_once()
-        saved = json.loads(cursor.execute.call_args_list[-1][0][1][0])
+        save = next(call for call in cursor.execute.call_args_list if "listing_skills = %s" in call[0][0])
+        saved = json.loads(save[0][1][0])
         self.assertEqual(saved["requirements"]["clearance"]["level"], "Top Secret")
+
+
+class ClosedPostingTests(unittest.TestCase):
+    def test_closed_wording_marks_the_listing_closed(self):
+        from jobfinder.web.top_picks_routes import closed_posting
+        cursor = MagicMock()
+        cursor.fetchone.return_value = {"listing_details": "{}"}
+        found = {"text": "See who Acme has hired for this role. No longer accepting applications. About the job"}
+        self.assertTrue(closed_posting({"id": 4, "career_url": "https://acme.com/j"}, found, cursor, MagicMock(), live=False))
+        self.assertIn("job_open_status = 'Closed'", cursor.execute.call_args_list[-1][0][0])
+
+    def test_open_posting_is_left_open(self):
+        from jobfinder.web.top_picks_routes import closed_posting
+        cursor = MagicMock()
+        cursor.fetchone.return_value = {"listing_details": "{}"}
+        self.assertFalse(closed_posting({"id": 4}, {"text": "We are hiring a designer."}, cursor, MagicMock(), live=False))
 
 
 class PostingUrlTests(unittest.TestCase):

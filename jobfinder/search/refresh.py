@@ -210,6 +210,17 @@ def refresh_job_fit_quietly(database):
         print(f"Job Fit: {changed} saved listing(s) now list newly recognized skills.", flush=True)
 
 
+def posting_says_closed(company):
+    """True when the posting text saved for Top 10 says the job is closed."""
+    from jobfinder.search.company_check import CLOSED
+
+    try:
+        details = json.loads(company.get("listing_details") or "{}") or {}
+    except (TypeError, ValueError):
+        return False
+    return bool(CLOSED.search(((details.get("requirements") or {}).get("text") or "")[:20000]))
+
+
 def update_existing_results(company_ids=None):
     """Recheck existing rows without running the web search."""
     shared.update_existing_mode = True
@@ -306,6 +317,12 @@ def update_existing_results(company_ids=None):
             print()
             print(f"Updating {index}/{len(companies)}: {company.get('name') or company.get('domain')}")
             print(f"Not rechecked: {company.get('source_type')} jobs are kept current by the Web Job Scraper extension.")
+            if posting_says_closed(company) and company.get("job_open_status") != "Closed":
+                # The posting text read for Top 10 already says "No longer accepting applications".
+                with database.cursor() as closed_cursor:
+                    closed_cursor.execute("UPDATE companies SET job_open_status = 'Closed' WHERE id = %s", (company_id,))
+                database.commit()
+                print("Its saved posting says it is no longer accepting applications: marked Closed.")
             continue
         career_url = company.get("career_url")
         source_url = company.get("source_url")
