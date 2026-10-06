@@ -1999,3 +1999,13 @@ body[data-page="search"] #results-table .details-blocks .bordered-button { min-h
 .search-running-dot { width:9px; height:9px; border-radius:50%; background:#4ade80; animation:search-running-pulse 1.2s ease-in-out infinite; }
 @keyframes search-running-pulse { 50% { opacity:.3; } }
 .search-running-pill .link-button { background:none; border:0; padding:0; color:#93c5fd; font:inherit; text-decoration:underline; cursor:pointer; }
+
+/* Job Posting in a listing's Details (static/js/listing-preview.js) */
+.job-posting { grid-column:1 / -1; }
+.job-posting-highlights { display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:14px; margin-top:8px; }
+.job-posting-highlights h5 { margin:0 0 4px; font-size:.85rem; color:#3d4550; }
+.job-posting-highlights ul { margin:0; padding-left:18px; font-size:.86rem; line-height:1.45; }
+.job-posting-full { margin-top:10px; font-size:.86rem; }
+.job-posting-full summary { cursor:pointer; color:#2a4a7a; font-weight:600; }
+.job-posting-text { white-space:pre-line; max-height:260px; overflow:auto; margin-top:8px; padding:10px 12px; border:1px solid #e3e6ea; border-radius:6px; background:#fafbfc; line-height:1.45; }
+.job-posting-loading::before { content:""; display:inline-block; width:12px; height:12px; margin-right:8px; vertical-align:-1px; border:2px solid #c9ced6; border-top-color:#2a4a7a; border-radius:50%; animation:top-picks-spin .8s linear infinite; }

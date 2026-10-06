@@ -256,15 +256,50 @@ def delete_kept(company_id):
     return redirect("/dashboard")
 
 
-@app.route("/top-picks/requirements", methods=["POST"])
-def top_pick_requirements():
-    """What each listing asks for that the profile doesn't show (degrees, years, clearance), for Top 10 Picks. A
-    listing's requirements are read once and kept in listing_details."""
+def _requirements_for(row, cursor, connection):
+    """The listing's requirements, read once from its saved description or page and kept in listing_details; None
+    when the page can't be read."""
     import json
 
     from jobfinder.profiles import requirements as reqs
     from jobfinder.profiles.profile_tools import normalize_skills
     from jobfinder.search.relevance import fetch_text
+
+    try:
+        details = json.loads(row.get("listing_details") or "{}") or {}
+    except (TypeError, ValueError):
+        details = {}
+    found = details.get("requirements")
+    if found is not None and found.get("version") == reqs.VERSION:
+        return found
+    try:
+        skills = json.loads(row.get("listing_skills") or "[]") or []
+    except (TypeError, ValueError):
+        skills = []
+    text = details.get("description") or ""
+    if len(text) < 200:
+        for url in (row.get("career_url"), row.get("source_url")):
+            page = fetch_text(url) if url else None
+            if page and page.text:
+                text = reqs.page_text(page.text)
+                break
+    if not text:
+        return None
+    found = reqs.listing_requirements(text)
+    found["skill_sections"] = reqs.skill_sections(text, normalize_skills(skills))
+    details["requirements"] = found
+    cursor.execute("UPDATE companies SET listing_details = %s WHERE id = %s", (json.dumps(details), row["id"]))
+    connection.commit()
+    return found
+
+
+LISTING_COLUMNS = "id, career_url, source_url, listing_details, listing_skills"
+
+
+@app.route("/top-picks/requirements", methods=["POST"])
+def top_pick_requirements():
+    """What each listing asks for that the profile doesn't show (degrees, years, clearance), for Top 10 Picks."""
+    from jobfinder.profiles import requirements as reqs
     from jobfinder.web.profile_store import get_user_profile
 
     data = request.get_json(silent=True) or {}
@@ -282,35 +317,12 @@ def top_pick_requirements():
     try:
         connection = db.connect()
         cursor = connection.cursor(dictionary=True)
-        cursor.execute(f"SELECT id, career_url, source_url, listing_details, listing_skills FROM companies WHERE id IN "
-                       f"({','.join(['%s'] * len(ids))})", ids)
+        cursor.execute(f"SELECT {LISTING_COLUMNS} FROM companies WHERE id IN ({','.join(['%s'] * len(ids))})", ids)
         for row in cursor.fetchall():
-            try:
-                details = json.loads(row.get("listing_details") or "{}") or {}
-            except (TypeError, ValueError):
-                details = {}
-            try:
-                skills = json.loads(row.get("listing_skills") or "[]") or []
-            except (TypeError, ValueError):
-                skills = []
-            found = details.get("requirements")
-            if found is None or found.get("version") != reqs.VERSION:
-                text = details.get("description") or ""
-                if len(text) < 200:
-                    for url in (row.get("career_url"), row.get("source_url")):
-                        page = fetch_text(url) if url else None
-                        if page and page.text:
-                            text = reqs.page_text(page.text)
-                            break
-                if not text:
-                    gaps[row["id"]] = {"unread": True, "items": []}
-                    continue
-                found = reqs.listing_requirements(text)
-                found["skill_sections"] = reqs.skill_sections(text, normalize_skills(skills))
-                details["requirements"] = found
-                cursor.execute("UPDATE companies SET listing_details = %s WHERE id = %s",
-                               (json.dumps(details), row["id"]))
-                connection.commit()
+            found = _requirements_for(row, cursor, connection)
+            if found is None:
+                gaps[row["id"]] = {"unread": True, "items": []}
+                continue
             gaps[row["id"]] = {"unread": False, "items": reqs.requirement_gaps(found, profile),
                                "fit": reqs.weighted_fit(profile.get("skills") or [], found.get("skill_sections"))}
     except Error as error:
@@ -321,3 +333,32 @@ def top_pick_requirements():
         if connection:
             connection.close()
     return jsonify({"status": "ok", "gaps": gaps})
+
+
+@app.route("/listing-preview/<int:company_id>")
+def listing_preview(company_id):
+    """Some of the job posting for the Details panel: warnings, the requirement / responsibility lines, and the text."""
+    from jobfinder.profiles import requirements as reqs
+    from jobfinder.web.profile_store import get_user_profile
+
+    connection = cursor = None
+    try:
+        connection = db.connect()
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute(f"SELECT {LISTING_COLUMNS} FROM companies WHERE id = %s", (company_id,))
+        row = cursor.fetchone()
+        if not row:
+            return api_error("E3231", "The listing could not be found.", 404)
+        found = _requirements_for(row, cursor, connection)
+    except Error as error:
+        return api_error("E3231", f"Could not read the job posting: {error}", 500)
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+    if found is None:
+        return jsonify({"status": "ok", "unread": True})
+    text = found.get("text") or ""
+    return jsonify({"status": "ok", "unread": False, "gaps": reqs.requirement_gaps(found, get_user_profile() or {}),
+                    "highlights": reqs.key_lines(text), "text": reqs.posting_body(text)[:12000]})

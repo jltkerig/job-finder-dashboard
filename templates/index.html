@@ -145,6 +145,10 @@
       </tr>
       <tr id="details-{{ company.id }}" class="details-row" hidden><td colspan="13">
             <div class="details-panel">
+              <section class="details-section job-posting" data-preview-id="{{ company.id }}">
+                <h4>Job Posting</h4>
+                <div class="job-posting-body"><p class="field-help">Open the details to load the posting.</p></div>
+              </section>
               <section class="details-section">
                 <h4>About This Listing</h4>
                 <dl class="details-grid">
@@ -219,4 +223,5 @@
   <script src="/static/js/captures.js?v={{ app_version }}"></script>
   <script src="/static/js/columns.js?v={{ app_version }}"></script>
   <script src="/static/js/top-picks.js?v={{ app_version }}"></script>
+  <script src="/static/js/listing-preview.js?v={{ app_version }}"></script>
 </body></html>

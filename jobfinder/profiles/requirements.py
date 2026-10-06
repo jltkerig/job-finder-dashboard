@@ -287,3 +287,38 @@ def weighted_fit(user_skills, sections):
             "have": sum(1 for skill, where in sections.items() if where != "preferred" and skill.casefold() in user),
             "missing_required": [skill for skill, where in sections.items()
                                  if where == "required" and skill.casefold() not in user]}
+
+
+DUTIES_HEADING = re.compile(r"\b(responsibilities|what you(?:'ll| will) do|the role|duties|day[\s-]to[\s-]day|"
+                            r"you will|in this role|key tasks|your impact|purpose of (?:the )?role)\b", re.I)
+
+
+def key_lines(text, per_section=8):
+    """{"Requirements": [...], "Responsibilities": [...], "Nice to Have": [...]}: the lines under those headings, for
+    skimming a posting. Sections with nothing found are left out."""
+    sections = {"Requirements": [], "Responsibilities": [], "Nice to Have": []}
+    current = None
+    for raw in re.split(r"\n+", text or ""):
+        bullet = bool(re.match(r"\s*[•·\-–*�]", raw))
+        line = re.sub(r"\s+", " ", raw.replace("�", " ")).strip(" •·-–*\t")
+        if not line:
+            continue
+        if not bullet and _is_heading(line):
+            kind = ("Nice to Have" if PREFERRED_HEADING.search(line) else
+                    "Responsibilities" if DUTIES_HEADING.search(line) else
+                    "Requirements" if REQUIRED_HEADING.search(line) else None)
+            if kind or line.endswith(":") or not current:
+                current = kind
+                continue
+        if current and 12 <= len(line) <= 400 and len(sections[current]) < per_section and line not in sections[current]:
+            sections[current].append(line)
+    return {name: lines for name, lines in sections.items() if lines}
+
+
+def posting_body(text):
+    """The posting text without the menus and links before it: starts a few lines above the first real paragraph,
+    with blank-ish lines and stray symbols cleaned up."""
+    lines = [re.sub(r"\s+", " ", line.replace("�", "•")).strip() for line in (text or "").split("\n")]
+    lines = [line for line in lines if line]
+    first = next((n for n, line in enumerate(lines) if len(line.split()) >= 10), 0)
+    return "\n".join(lines[max(0, first - 3):])

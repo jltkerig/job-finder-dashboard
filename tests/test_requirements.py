@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
-from jobfinder.profiles.requirements import listing_requirements, requirement_gaps, skill_sections, weighted_fit
+from jobfinder.profiles.requirements import key_lines, posting_body, listing_requirements, requirement_gaps, skill_sections, weighted_fit
 import dashboard
 
 PROFILE = {"education": [], "skills": ["Figma"], "job_titles": ["Graphic Designer"],
@@ -58,6 +58,18 @@ class RequirementTests(unittest.TestCase):
         self.assertEqual([gap["text"] for gap in found if gap.get("avoid")],
                          ["Mentions video editing, which you avoid", "Mentions audio, which you avoid"])
         self.assertEqual(gaps("Audiophile welcome.", profile), [])
+
+    def test_key_lines(self):
+        text = ("Your Impact\n• Lead design reviews for the team\nQualifications\n• Bachelor's Degree in Design\n"
+                "Nice to have:\n• Motion design skills")
+        self.assertEqual(key_lines(text), {"Requirements": ["Bachelor's Degree in Design"],
+                                           "Responsibilities": ["Lead design reviews for the team"],
+                                           "Nice to Have": ["Motion design skills"]})
+
+    def test_posting_body_drops_menus(self):
+        text = ("Skip to main content\nLanguage\nDeutsch\nCareers\nJobs\nDesigner\n"
+                "We are looking for a designer to join our small and friendly team.")
+        self.assertTrue(posting_body(text).startswith("Careers"))
 
     def test_skill_sections(self):
         text = "We use Figma.\nRequirements:\nHTML and CSS\nNice to have:\nReact\nPhotoshop is a plus."
