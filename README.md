@@ -4,7 +4,16 @@ Personal job discovery project using Python, MySQL, Flask, Brave Search API, Rem
 
 ## What Job Finder does
 
-Job Finder searches the web locally for employer career pages and job listings, checks each result for career and United States location evidence, and saves the findings to MySQL. New searches use the Brave Search API (add your key on the Tuning page). Results are suggestions to review: a credibility score does not guarantee a company, opening, or application is legitimate.
+Job Finder searches employer career sites, job sites, feeds and the web for employer career pages and job listings, checks each result for career and United States location evidence, and saves the findings to MySQL. New searches use the Brave Search API (add your key on the Tuning page). Results are suggestions to review: a credibility score does not guarantee a company, opening, or application is legitimate.
+
+## Recent versions (v1.1.180 – v1.1.207)
+
+- **Brave Search only.** The web search uses the Brave Search API; SearXNG and Docker were removed. Add your key on the **Tuning** page (it is saved in `user-data/settings.json`, never in the repo). Without a key, searches still check employer career sites, job sites and feeds but skip the web search. Job Finder sets no query limit of its own; if Brave refuses (plan quota used up or a wrong key) the web search stops for that run and the stop reason says so.
+- **Top 10 Picks.** Ranks the results shown by skill fit (required skills weigh more than nice-to-haves), distance and credibility, then reads each top listing's requirements: degree, years, clearance, focus areas (fashion, writing, motion …) and your **Avoid in Job Postings** terms. Each pick has Keep, Reject, Queue, 👍/👎 and a **Details** drop-down with the posting's requirements, duties and text. Rejections and ratings teach the ranking; jobs you applied to count as good examples.
+- **Daily search and Apply queue.** On Tuning, turn on *Search every day and queue the best jobs*. Job Finder reruns your last search once a day after the hour you set; Top 10 then queues strong picks (no hard gaps) on the Dashboard. **Apply** opens the posting, **Mark Applied** records it. Nothing is ever submitted for you.
+- **Company-site check.** Jobs from the National Labor Exchange and remote feeds are looked up on the employer's own site. A page counts only when the title, employer, location and posting text agree and it isn't closed; the listing's link then moves to the employer's page and its credibility rises. Runs at the end of each search and on Refresh, up to 15 listings at a time.
+- **Clear Results** on the Search page deletes listings you haven't saved, queued, applied to or rejected (rejected ones stay hidden). It won't run during a search.
+- **Job Posting preview** in each listing's Details, an **Ignore** list under Search for Jobs (shared with the profile's Avoid list), **Keep Browsing** while another tab searches, scam and not-a-job flags, and duplicate listings merged with "Also listed on".
 
 ## Later versions (v1.1.66 – v1.1.120)
 
@@ -36,13 +45,15 @@ Job Fit compares your saved skills against recognizable skills found on the list
 
 | Control | What it checks |
 | --- | --- |
-| Start Job Finder | New web search using the selected titles and locations. |
+| Start Job Finder | New search using the selected titles and locations (web search needs a Brave key). |
+| Top 10 Picks | Ranks the results shown and lists the 10 best, with their requirements and gaps. |
+| Clear Results | Deletes results you haven't saved, queued, applied to or rejected. |
 | Refresh Results | Rechecks the currently displayed Search results. |
 | Update Existing Results | Rechecks all active stored listings directly without a new web search. |
 | Refresh Saved Listings | Rechecks saved listings shown under the Dashboard filters, with progress. |
 | Search for Latest Version | Looks for a newer versioned ZIP in the parent project folder or Downloads; the updater backs up the installation and preserves local files. |
 
-Job Finder does not submit job applications or verify businesses through external registries. The Credibility Scores page explains the current career and USA scoring rules and separates possible future evidence sources from current checks.
+Job Finder never submits job applications (the Apply queue only opens postings) or verify businesses through external registries. The Credibility Scores page explains the current career and USA scoring rules and separates possible future evidence sources from current checks.
 
 ## Start
 
@@ -79,9 +90,12 @@ jobfinder/              the code
   paths.py              where every file lives (read this first); creates user-data/ and logs/
   db.py                 the one place that opens a database connection
   web/                  the pages and buttons, one module per kind of page (see the list in dashboard.py)
+                        (top_picks_routes, auto_apply for the daily search and Apply queue, clear_results)
   search/               the search itself: runner.py is the search, the others are its parts
-                        (shared settings, session, searching, fetching, company_site, usa_location, geo, relevance ...)
-  sources/              where jobs come from: job sites, feeds, employer career boards (Workday, Greenhouse ...)
+                        (shared settings, session, searching (Brave), fetching, company_site, company_check,
+                        usa_location, geo, relevance ...)
+  sources/              where jobs come from: job sites, feeds, employer career boards
+                        (employer_jobs.py, with adapters split into employer_common/enterprise/boards/more)
   profiles/             your profile's helpers: skills and Job Fit, O*NET titles, places, drive times
   records/              what Job Finder remembers: skipped pages, board health, imported captures, retention
 
