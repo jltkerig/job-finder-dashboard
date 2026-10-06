@@ -16,9 +16,18 @@ _LEADING_CODE = re.compile(r"^\s*0\d{1,4}\s+(?=[A-Za-z])")  # zero-padded only: 
 OFFICIAL_BOARD_CREDIBILITY = 8
 
 
-def tidy_company_name(name):
-    """The company name without a leading entity code."""
-    return _LEADING_CODE.sub("", str(name or "")).strip()
+# Unpadded codes too when a short all-capitals name follows ("9025 CVS Shared Services"); "84 Lumber" stays.
+_LEADING_NUMBER_CODE = re.compile(r"^\s*\d{4,}\s+(?=[A-Z]{2,}\b)")
+
+
+def tidy_company_name(name, title=None):
+    """The company name without a leading entity code or a tagline after a bar ("Coda Search│Staffing"), and empty
+    when a job site put the job title where the company belongs."""
+    cleaned = _LEADING_NUMBER_CODE.sub("", _LEADING_CODE.sub("", str(name or "")))
+    cleaned = re.split(r"\s*[│|]\s*", cleaned)[0].strip()
+    if title and cleaned.casefold() == str(title).strip().casefold():
+        return ""
+    return cleaned
 
 
 def verification_label(details, source_type, name, source_url):

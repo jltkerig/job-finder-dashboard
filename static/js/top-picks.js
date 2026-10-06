@@ -27,8 +27,34 @@
   // Signs a listing may not be a real US job: perks in the title, "anywhere in the world", low USA credibility.
   const BAIT_TITLE = /fresh grad|no experience|wfh|work from home|on[- ]job[- ]training|urgent|immediate start|\$\$|easy money|earn up to|(?:\([^)]*,[^)]*\))/i;
 
+  // How closely the listing's title matches one of your job titles, 0-100. Words are compared by their first five
+  // letters ("design" ~ "designer"); listing words that none of your titles use ("highway", "telecommunications")
+  // count against it, while level and work-type words ("senior", "remote", "II") don't.
+  const GENERIC_TITLE_WORDS = new Set(["senior", "sr", "junior", "jr", "staff", "lead", "principal", "mid", "level", "entry",
+    "i", "ii", "iii", "iv", "remote", "hybrid", "onsite", "site", "contract", "full", "time", "part", "temporary", "the",
+    "and", "of", "for", "with", "to", "in", "at", "a", "an", "us", "usa"]);
+  const titleWords = (text) => (text || "").toLowerCase()
+    .replace(/front[\s-]+end/g, "frontend").replace(/back[\s-]+end/g, "backend").replace(/\([^)]*\)|\[[^\]]*\]/g, " ")
+    .split(/[^a-z0-9]+/).filter((word) => word && !GENERIC_TITLE_WORDS.has(word) && !/^\d+$/.test(word))
+    .map((word) => (word === "webmaster" ? "web" : word).slice(0, 5));
+  let profileTitles = [];
+  try { profileTitles = JSON.parse(panel.dataset.titles || "[]").map(titleWords).filter((words) => words.length); } catch {}
+  // Words close to most design and web titles count as yours even when none of your titles use them.
+  const knownWords = new Set([...profileTitles.flat(), "ux", "ui", "produ", "inter", "creat", "multi", "websi"]);
+
+  function titleMatch(title) {
+    const words = titleWords(title);
+    if (!profileTitles.length || !words.length) return null;
+    const known = words.filter((word) => knownWords.has(word)).length / words.length;
+    const best = Math.max(...profileTitles.map((mine) => mine.filter((word) => words.includes(word)).length / mine.length));
+    return Math.round(100 * best * known);
+  }
+
+  const CLEARANCE_TITLE = /ts\s*\/\s*sci|top secret|polygraph|\bpoly\b|security clearance|\bclearance\b|\bsecret\b/i;
+
   function warnings(row, usa) {
     const found = [];
+    if (CLEARANCE_TITLE.test(row.dataset.job || "")) found.push({ text: "The title asks for a security clearance", hard: true });
     if (BAIT_TITLE.test(row.dataset.job || "")) found.push({ text: "Title reads like a mass-hiring ad: check the company before applying", hard: false });
     if (/anywhere in the world|worldwide/i.test(row.dataset.state || "")) found.push({ text: "Open to anywhere in the world: may not be a US employer", hard: false });
     if (usa < 6) found.push({ text: `Low USA credibility (${Math.round(usa)}/10)`, hard: false });
@@ -52,7 +78,18 @@
     }
     reasons.push(`Credibility ${Math.round(career)}/10`);
     const gaps = warnings(row, usa);
-    return { row, score: score - gaps.length * 15, reasons, gaps, fitPart: (fit === null ? 50 : fit) * 0.4 };
+    let penalty = gaps.reduce((total, gap) => total + (gap.hard ? 100 : 15), 0);
+    const match = titleMatch(row.dataset.job);
+    if (match !== null && match < 40) {
+      gaps.push({ text: "The title doesn't match your job titles", hard: false });
+      penalty += 40;
+    } else if (match !== null && match < 80) {
+      reasons.push("Title partly matches");
+      penalty += 10;
+    } else if (match !== null) {
+      reasons.push("Title matches");
+    }
+    return { row, score: score - penalty, reasons, gaps, fitPart: (fit === null ? 50 : fit) * 0.4 };
   }
 
   function shown(row) {

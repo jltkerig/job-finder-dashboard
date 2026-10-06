@@ -27,7 +27,7 @@ def reject_listing(company_id):
     try:
         connection = db.connect()
         cursor = connection.cursor(dictionary=True)
-        cursor.execute("SELECT domain FROM companies WHERE id = %s", (company_id,))
+        cursor.execute("SELECT domain, name, career_job_title FROM companies WHERE id = %s", (company_id,))
         row = cursor.fetchone()
         if not row:
             if wants_json:
@@ -35,6 +35,13 @@ def reject_listing(company_id):
             return redirect(request.referrer or "/")
 
         domain = row.get("domain")
+        # The Search page shows one row for a job found on several boards, so rejecting it rejects those copies too.
+        from jobfinder.web.listing_queries import _duplicate_key
+        key = _duplicate_key(row)
+        same_job = [company_id]
+        if key:
+            cursor.execute("SELECT id, name, career_job_title FROM companies WHERE is_rejected = 0 AND id <> %s", (company_id,))
+            same_job += [other["id"] for other in cursor.fetchall() if _duplicate_key(other) == key]
         cursor.execute(
             """
             UPDATE companies
@@ -42,13 +49,13 @@ def reject_listing(company_id):
                 pre_reject_status = CASE WHEN is_rejected = 0 THEN application_status ELSE pre_reject_status END,
                 is_rejected = 1, is_kept = 0, application_status = 'Rejected',
                 rejected_at = CURRENT_TIMESTAMP, rejection_reason = %s, rejected_by = 'user'
-            WHERE id = %s
-            """,
-            (reason, company_id),
+            WHERE id IN ({})
+            """.format(",".join(["%s"] * len(same_job))),
+            (reason, *same_job),
         )
         connection.commit()
         if wants_json:
-            return jsonify({"status": "rejected", "company_id": company_id, "domain": domain})
+            return jsonify({"status": "rejected", "company_id": company_id, "domain": domain, "also_rejected": same_job[1:]})
     except Error as error:
         print("Could not reject listing.")
         print(error)

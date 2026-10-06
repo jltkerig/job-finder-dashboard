@@ -204,7 +204,7 @@ class CaptureImport:
         A job you already applied to skips the filters: it is always saved, with status Applied."""
         source_type, domain = CAPTURE_SITES[site]
         url, title = job["url"], job["title"]
-        company = tidy_company_name(job.get("company")) or None
+        company = tidy_company_name(job.get("company"), job.get("title")) or None
         applied = bool(job.get("applied"))
         row = self.by_url.get(url)
         if not applied:

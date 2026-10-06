@@ -81,6 +81,13 @@ def find_state_from_text(text, strict=False):
     """
     text_lower = text.lower()
 
+    # "Washington, DC" is the District, not Washington State.
+    text_lower = re.sub(r"\bwashington,?\s*d\.?\s?c\b\.?", "district of columbia", text_lower)
+    if re.search(r"\bdistrict of columbia\b", text_lower) and not re.search(
+            r"\b(?:" + "|".join(re.escape(name) for name in US_STATES) + r")\b",
+            text_lower[:text_lower.index("district of columbia")]):
+        return "DC"
+
     # Use the first state mentioned; longer names are tried first at each position
     # so "West Virginia" is not read as "Virginia".
     names = "|".join(re.escape(name) for name in sorted(US_STATES, key=len, reverse=True))

@@ -60,7 +60,7 @@ from jobfinder.sources.employer_jobs import (
 )
 from jobfinder.sources.employer_site import clear_cache as clear_employer_cache, is_third_party
 from jobfinder.sources.job_feeds import FEEDS, FEED_NAMES
-from jobfinder.sources.job_listings import canonical_url, extract_jobs, matching_title as matching_job_title
+from jobfinder.sources.job_listings import canonical_url, extract_jobs, looks_like_not_a_job, matching_title as matching_job_title
 from jobfinder.sources.job_sites import JOB_SITE_NAMES, job_site_for
 
 SEARCH_SCOPE_FILE = paths.SEARCH_SCOPE_FILE
@@ -320,7 +320,9 @@ def update_existing_results(company_ids=None):
         if not (is_irrelevant_lead(company, details, wanted_titles) or is_wrong_location_lead(company, details)):
             remote_limit = stale_remote_limit(company, details, selected_now, employer_http)
         internship = is_internship_row(company, details)
-        reject_reason = ("wrong_role" if internship or is_irrelevant_lead(company, details, wanted_titles)
+        not_a_job = not company.get("is_kept") and looks_like_not_a_job(company.get("career_job_title"))
+        reject_reason = ("not_a_job" if not_a_job
+                         else "wrong_role" if internship or is_irrelevant_lead(company, details, wanted_titles)
                          else "wrong_location" if is_wrong_location_lead(company, details) or remote_limit else None)
         if reject_reason:
             try:
@@ -342,7 +344,7 @@ def update_existing_results(company_ids=None):
                                 company=company.get("name"), url=source_url or career_url,
                                 reason=reject_reason, detail=why)
                 continue
-        tidy_name = tidy_company_name(company.get("name"))
+        tidy_name = tidy_company_name(company.get("name"), company.get("career_job_title")) or "Unknown employer"
         if tidy_name and tidy_name != company.get("name"):
             try:
                 with database.cursor() as rename_cursor:

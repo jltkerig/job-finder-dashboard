@@ -180,6 +180,22 @@ def apply_link_closed(page_url, page_html):
     return listing_closed(page_url, page_html, get)
 
 
+def decode_page(content, declared=None):
+    """Page bytes as text: UTF-8 when they are valid UTF-8, otherwise the encoding the server declared, or Windows-1252
+    (what most older sites mean by "ISO-8859-1"), so curly quotes and dashes don't turn into "�"."""
+    try:
+        return content.decode("utf-8")
+    except UnicodeDecodeError:
+        pass
+    for encoding in (declared, "cp1252"):
+        if encoding and encoding.lower() not in {"utf-8", "utf8", "iso-8859-1", "latin-1"}:
+            try:
+                return content.decode(encoding)
+            except (LookupError, UnicodeDecodeError):
+                continue
+    return content.decode("cp1252", errors="replace")
+
+
 def fetch_text(url, max_bytes=6_000_000):
     """Any text file (sitemap.xml, robots.txt) as an object with .url and .text, or None; read politely and size-capped."""
     if not is_valid_url(url):
@@ -195,7 +211,7 @@ def fetch_text(url, max_bytes=6_000_000):
             if len(content) > max_bytes:
                 break
         response.close()
-        return SimpleNamespace(url=response.url, text=content.decode("utf-8", errors="replace"))
+        return SimpleNamespace(url=response.url, text=decode_page(content, response.encoding))
     except requests.RequestException:
         return None
 

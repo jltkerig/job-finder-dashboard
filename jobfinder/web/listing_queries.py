@@ -238,3 +238,70 @@ def get_companies():
 
         if connection is not None and connection.is_connected():
             connection.close()
+
+
+def add_current_distances(companies, cities):
+    """Distance from the nearest of your current search cities, worked out on each load: the distance saved with a
+    listing is from whichever cities that search used, so a DC listing found by an earlier DC search showed "0 miles"."""
+    from jobfinder.search.geo import geocode_location, haversine_miles
+
+    connection = None
+    points = []
+    try:
+        connection = db.connect()
+        for item in cities or []:
+            place = geocode_location(connection, item.get("city") if isinstance(item, dict) else str(item))
+            if place:
+                points.append((place["lat"], place["lon"]))
+    except Exception:  # no database or geocoder: keep the saved distances
+        return
+    finally:
+        if connection:
+            connection.close()
+    if not points:
+        return
+    for company in companies:
+        try:
+            lat, lon = float(company["latitude"]), float(company["longitude"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if company.get("work_arrangement") == "Remote":
+            continue
+        company["distance_miles"] = round(min(haversine_miles(lat, lon, *point) for point in points), 2)
+
+
+_COMPANY_FILLER = {"the", "inc", "llc", "ltd", "co", "corp", "company", "group", "government", "gov", "of"}
+
+
+def _duplicate_key(company):
+    """(company, title) for spotting one job found on several job boards: the company's first real word, since boards
+    shorten names ("Sinclair" / "Sinclair Broadcast Group", "T Rowe Price" / "T. Rowe Price"), and the title with
+    punctuation, "[Remote]" tags and the like removed."""
+    words = [word for word in re.findall(r"[a-z0-9]+", str(company.get("name") or "").casefold())
+             if word not in _COMPANY_FILLER]
+    name = "".join(words[:2]) if words and len(words[0]) <= 2 else (words[0] if words else "")
+    title = re.sub(r"\[[^\]]*\]|\((?:remote|hybrid|on-?site)\)", " ", str(company.get("career_job_title") or "").casefold())
+    title = " ".join(re.findall(r"[a-z0-9]+", title))
+    return (name, title) if name and title else None
+
+
+def merge_duplicates(companies):
+    """One row per job: when the same job was found on several boards, keep the best source (employer careers site,
+    then the higher credibility, then the newest) and list the others on it as "also_listed". Rejected listings are
+    left alone."""
+    groups = {}
+    for company in companies:
+        key = _duplicate_key(company)
+        if key and not company.get("is_rejected"):
+            groups.setdefault(key, []).append(company)
+    hidden = set()
+    for group in groups.values():
+        if len(group) < 2:
+            continue
+        group.sort(key=lambda item: (item.get("source_type") == "Employer careers", item.get("career_credibility") or 0,
+                                     str(item.get("date_found") or "")), reverse=True)
+        keep = group[0]
+        keep["also_listed"] = [{"id": other["id"], "source": other.get("source_type") or "Web",
+                                "url": other.get("source_url") or other.get("career_url")} for other in group[1:]]
+        hidden.update(id(other) for other in group[1:])
+    return [company for company in companies if id(company) not in hidden]

@@ -18,6 +18,8 @@ from jobfinder.web import schema
 from jobfinder.web.blocklists import block_details
 from jobfinder.web.core import app
 from jobfinder.web.listing_queries import (
+    add_current_distances,
+    merge_duplicates,
     add_drive_times,
     add_job_fit,
     get_companies,
@@ -42,11 +44,12 @@ def home():
 
     ensure_keep_column()
     schema.ensure_job_tracking_columns()
-    companies = get_companies()
+    companies = merge_duplicates(get_companies())
 
     running, mode = scraper_status()
     profile = profile_store.get_user_profile()
     add_job_fit(companies, profile.get("skills", []))
+    add_current_distances(companies, profile.get("cities", []))
     recent_search = get_search_history(limit=1)
     latest_search_at = recent_search[0].get("searched_at") if recent_search else None
     skipped = []

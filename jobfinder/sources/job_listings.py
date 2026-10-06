@@ -98,8 +98,21 @@ _OFF_FIELD_STEMS = {_stem(word) for word in OFF_FIELD_WORDS}
 _COMPATIBLE_STEMS = {_stem(word) for word in COMPATIBLE_EXTRA_WORDS}
 
 
+# Page titles that are not one job: directories ("Find a Web Designer in Maryland"), job lists ("Remote Content Designer
+# Jobs in the US"), agency service pages ("WordPress web design in Gaithersburg") and salary or how-to pages.
+NOT_A_JOB = re.compile(r"^\s*(?:find|hire|compare|top\s+\d+|best)\s+(?:an?\s+|the\s+)?|\bjobs\b|\bnear\s+me\b|\bsalar(?:y|ies)\b|"
+                       r"\bhow\s+to\b|\b(?:web|website|graphic|logo|wordpress)\s+design\s+(?:in|near|services?|company|"
+                       r"agency|packages?)\b|\bhiring\s+(?:an?\s+)?(?:freelance\s+)?\w+\s+near\b", re.I)
+
+
+def looks_like_not_a_job(title):
+    return bool(NOT_A_JOB.search(str(title or "")))
+
+
 def matching_title(title, wanted):
     """The searched words must appear together (Web Producer is not Web Series Producer)."""
+    if looks_like_not_a_job(title):
+        return False
     actual_list = _token_list(title)
     actual = set(actual_list)
     # "Lead, Digital Designer (Apparel & Footwear)": the bracketed department is not part of the job's name.
