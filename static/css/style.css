@@ -2044,3 +2044,5 @@ body[data-page="search"] #results-table .details-blocks .bordered-button { min-h
 
 /* Top 10 pick's own Details drop-down */
 .top-pick-details { grid-column:1 / -1; margin-top:4px; padding-top:10px; border-top:1px solid #e3e6ea; }
+
+.top-pick-details-open { display:inline-block; margin-top:10px; }

@@ -7,6 +7,18 @@ from jobfinder import db
 from jobfinder.web.core import api_error, app
 
 
+MIN_POSTING_TEXT = 300  # less than this is a page shell (menus, "Privacy Policy"), not the posting
+
+
+def posting_urls(url):
+    """Where the posting's text is: iCIMS shows it inside a frame, so its frame address is read first."""
+    if not url:
+        return []
+    if "icims.com" in url and "in_iframe=" not in url:
+        return [url + ("&" if "?" in url else "?") + "in_iframe=1", url]
+    return [url]
+
+
 def _requirements_for(row, cursor, connection):
     """The listing's requirements, read once from its saved description or page and kept in listing_details; None
     when the page can't be read."""
@@ -31,11 +43,13 @@ def _requirements_for(row, cursor, connection):
     except (TypeError, ValueError):
         skills = []
     text = details.get("description") or ""
-    if len(text) < 200:
-        for url in (row.get("career_url"), row.get("source_url")):
-            page = fetch_text(url) if url else None
-            if page and page.text:
-                text = reqs.page_text(page.text)
+    if len(text) < MIN_POSTING_TEXT:
+        text = ""
+        for url in [link for base in (row.get("career_url"), row.get("source_url")) for link in posting_urls(base)]:
+            page = fetch_text(url)
+            body = reqs.page_text(page.text) if page and page.text else ""
+            if len(body) >= MIN_POSTING_TEXT:
+                text = body
                 break
     if not text:
         return None

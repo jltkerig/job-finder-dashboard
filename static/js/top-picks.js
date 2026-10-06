@@ -206,6 +206,10 @@
           delete drop.dataset.loaded;
           drop.replaceChildren(Object.assign(document.createElement("p"), { className: "field-help", textContent: error.message || "Could not read the posting." }));
         }
+        if (link) {
+          drop.append(Object.assign(document.createElement("a"), { className: "top-pick-open top-pick-details-open", href: link.href,
+            target: "_blank", rel: "noopener noreferrer", textContent: "Open listing" }));
+        }
       });
       buttons.append(details);
       const reject = document.createElement("button");

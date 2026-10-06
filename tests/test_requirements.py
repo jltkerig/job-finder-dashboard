@@ -59,6 +59,10 @@ class RequirementTests(unittest.TestCase):
                          ["Mentions video editing, which you avoid", "Mentions audio, which you avoid"])
         self.assertEqual(gaps("Audiophile welcome.", profile), [])
 
+    def test_long_experience_area(self):
+        found = gaps("4-5 years of SQL database administration and programming experience required.")
+        self.assertIn("Asks for 4+ years of sql database administration programming experience", [gap["text"] for gap in found])
+
     def test_key_lines(self):
         text = ("Your Impact\n• Lead design reviews for the team\nQualifications\n• Bachelor's Degree in Design\n"
                 "Nice to have:\n• Motion design skills")
@@ -90,7 +94,8 @@ class RouteTests(unittest.TestCase):
                                          "listing_details": "{}", "listing_skills": '["Figma", "HTML"]'}]
         connection = MagicMock()
         connection.cursor.return_value = cursor
-        page = MagicMock(text="<p>Active Top Secret clearance required.</p><h3>Requirements:</h3><p>HTML</p>"
+        about = "<p>" + "We build friendly tools for small teams and care about clear, accessible design. " * 4 + "</p>"
+        page = MagicMock(text=about + "<p>Active Top Secret clearance required.</p><h3>Requirements:</h3><p>HTML</p>"
                                   "<h3>Nice to have:</h3><p>Figma</p>")
         client = dashboard.app.test_client()
         with client.session_transaction() as session:
@@ -106,6 +111,20 @@ class RouteTests(unittest.TestCase):
         fetch.assert_called_once()
         saved = json.loads(cursor.execute.call_args_list[-1][0][1][0])
         self.assertEqual(saved["requirements"]["clearance"]["level"], "Top Secret")
+
+
+class PostingUrlTests(unittest.TestCase):
+    def test_icims_frame_is_read_first(self):
+        from jobfinder.web.top_picks_routes import posting_urls
+        url = "https://careers-acme.icims.com/jobs/1/designer/job"
+        self.assertEqual(posting_urls(url), [url + "?in_iframe=1", url])
+        self.assertEqual(posting_urls("https://acme.com/jobs/1"), ["https://acme.com/jobs/1"])
+
+    def test_page_shell_counts_as_unread(self):
+        from jobfinder.web.top_picks_routes import _requirements_for
+        row = {"id": 1, "career_url": "https://acme.com/job", "source_url": "", "listing_details": "{}", "listing_skills": "[]"}
+        with patch("jobfinder.search.relevance.fetch_text", return_value=MagicMock(text="<p>Privacy Policy - Acme</p>")):
+            self.assertIsNone(_requirements_for(row, MagicMock(), MagicMock()))
 
 
 if __name__ == "__main__":

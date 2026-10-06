@@ -16,7 +16,7 @@ DEGREE_WORDS = (r"(?:bachelor'?s?|baccalaureate|b\.?f\.?a\.?|b\.?a\.?|b\.?s\.?|a
 DEGREE_FIELD = re.compile(r"(?<![\w.])" + DEGREE_WORDS + r"(?:\s+degree)?(?:\s+or\s+higher)?\s+(?:in|from)\s+(?:an?\s+)?"
                           r"(?:accredited\s+)?(?:\d-year\s+)?([a-z][a-z &/,\-]{2,80})", re.I)
 # Bump when the reading changes so saved results are read again.
-VERSION = 8
+VERSION = 10
 # Areas of work a listing can be built around. When a listing keeps coming back to one (3+ mentions) and the profile
 # never mentions it, the job likely wants background you don't show ("brand" all through a brand designer listing).
 FOCUS_AREAS = {
@@ -41,7 +41,7 @@ EQUIVALENT = re.compile(r"\bor\s+(?:the\s+)?(?:an?\s+)?equivalent\b|\bequivalent
                         r"practical)\b|\bin\s+lieu\s+of\b|\bor\s+\d{1,2}\s*\+?\s*(?:years?|yrs?)\b", re.I)
 PREFERRED = re.compile(r"\b(prefer(?:red|ably)?|nice to have|a plus|bonus|ideal(?:ly)?|desired)\b", re.I)
 # "5+ years of brand design experience" / "3 years of experience in fashion"
-YEARS_IN = re.compile(r"(?:years?|yrs?)\s+(?:of\s+)?((?:[a-z/&\-]+\s+){0,4}?)(?:experience|exp\b)(?:\s+(?:in|with|within)\s+"
+YEARS_IN = re.compile(r"(?:years?|yrs?)\s+(?:of\s+)?((?:[a-z/&\-]+\s+){0,6}?)(?:experience|exp\b)(?:\s+(?:in|with|within)\s+"
                       r"(?:an?\s+|the\s+)?((?:[a-z/&\-]+\s*){1,4}))?", re.I)
 FIELD_CUTS = re.compile(r"\s*(?:,?\s+or\s+(?:a\s+)?(?:related|similar|equivalent|comparable)|\s+(?:and|with|from|is|are|"
                         r"required|preferred|plus|strongly)\b|[.;:()•\n]).*$", re.I)
