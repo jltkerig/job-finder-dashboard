@@ -215,8 +215,9 @@ def requirement_gaps(requirements, profile):
     own_work = re.sub(r"\b(?:copy)?writers\b", " ", known)
     for area, count in sorted((requirements.get("focus") or {}).items(), key=lambda item: -item[1])[:2]:
         if not re.search(r"\b(?:" + FOCUS_AREAS.get(area, re.escape(area)) + r")\b", own_work, re.I):
+            # Ten or more mentions: the job is centred on it (a footwear designer listing says "footwear" all through).
             gaps.append({"text": f"Built around {area} work (mentioned {count} times); your profile doesn't mention it",
-                         "hard": False})
+                         "hard": False, "weight": 40 if count >= 10 else 15})
     seen = {gap["text"] for gap in gaps}
     text = requirements.get("text") or ""
     for term in profile.get("avoid_terms") or []:
