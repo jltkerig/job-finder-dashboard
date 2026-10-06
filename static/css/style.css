@@ -1991,3 +1991,11 @@ body[data-page="search"] #results-table .details-blocks .bordered-button { min-h
 .remote-states { display:block; }
 #results-table.compact-rows .remote-states { display:inline; }
 #results-table.compact-rows .remote-states::before { content:" · "; }
+
+/* Search still running in another tab after "Keep Browsing" (static/js/charts.js) */
+.loading-actions { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
+.search-running-pill { position:fixed; right:16px; bottom:16px; z-index:4100; display:flex; align-items:center; gap:10px; padding:9px 14px; border-radius:999px; background:#1f2937; color:#fff; font-size:.88rem; box-shadow:0 4px 14px rgba(0,0,0,.18); }
+.search-running-pill[hidden] { display:none; }
+.search-running-dot { width:9px; height:9px; border-radius:50%; background:#4ade80; animation:search-running-pulse 1.2s ease-in-out infinite; }
+@keyframes search-running-pulse { 50% { opacity:.3; } }
+.search-running-pill .link-button { background:none; border:0; padding:0; color:#93c5fd; font:inherit; text-decoration:underline; cursor:pointer; }
