@@ -24,6 +24,17 @@
   // A fit found from only one or two skills says little, so it is pulled toward the middle until five are found.
   const weigh = (score, count) => 50 + (score - 50) * Math.min(1, count / 5);
 
+  // Signs a listing may not be a real US job: perks in the title, "anywhere in the world", low USA credibility.
+  const BAIT_TITLE = /fresh grad|no experience|wfh|work from home|on[- ]job[- ]training|urgent|immediate start|\$\$|easy money|earn up to|(?:\([^)]*,[^)]*\))/i;
+
+  function warnings(row, usa) {
+    const found = [];
+    if (BAIT_TITLE.test(row.dataset.job || "")) found.push({ text: "Title reads like a mass-hiring ad: check the company before applying", hard: false });
+    if (/anywhere in the world|worldwide/i.test(row.dataset.state || "")) found.push({ text: "Open to anywhere in the world: may not be a US employer", hard: false });
+    if (usa < 6) found.push({ text: `Low USA credibility (${Math.round(usa)}/10)`, hard: false });
+    return found;
+  }
+
   function rank(row) {
     const raw = number(row.dataset.jobFit);
     const count = number(row.dataset.fitCount) || 0;
@@ -40,7 +51,8 @@
       if (miles !== null && miles < 99999) reasons.push(`${Math.round(miles)} miles away`);
     }
     reasons.push(`Credibility ${Math.round(career)}/10`);
-    return { row, score, reasons, gaps: [], fitPart: (fit === null ? 50 : fit) * 0.4 };
+    const gaps = warnings(row, usa);
+    return { row, score: score - gaps.length * 15, reasons, gaps, fitPart: (fit === null ? 50 : fit) * 0.4 };
   }
 
   function shown(row) {
@@ -69,8 +81,8 @@
     top.forEach((pick) => {
       const found = gaps[pick.row.dataset.companyId];
       if (!found) return;
-      if (found.unread) { pick.gaps = [{ text: "Couldn't read the requirements, so check them yourself", hard: false }]; return; }
-      pick.gaps = found.items.slice();
+      if (found.unread) { pick.gaps.push({ text: "Couldn't read the requirements, so check them yourself", hard: false }); return; }
+      pick.gaps = pick.gaps.concat(found.items);
       pick.score -= found.items.reduce((total, gap) => total + (gap.hard ? 100 : 15), 0);
       // Skills under "Requirements" count fully, "Nice to have" ones much less: replace the plain skill fit.
       if (found.fit) {
