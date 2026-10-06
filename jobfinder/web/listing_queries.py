@@ -308,17 +308,37 @@ def merge_duplicates(companies):
 
 
 def turned_down_titles(limit=200):
-    """Titles of listings you rejected as the wrong role, newest first, so Top 10 Picks can mark down ones like them."""
+    """Titles of listings you rejected as the wrong role or rated 👎 in Top 10 Picks, so later picks mark down ones like
+    them."""
     connection = cursor = None
     try:
         connection = db.connect()
         cursor = connection.cursor()
         cursor.execute("""SELECT career_job_title FROM companies
-                          WHERE is_rejected = 1 AND rejected_by = 'user' AND rejection_reason = 'wrong_role'
+                          WHERE ((is_rejected = 1 AND rejected_by = 'user' AND rejection_reason = 'wrong_role')
+                                 OR listing_details LIKE '%%"pick_rating": "down"%%')
                                 AND career_job_title IS NOT NULL AND career_job_title <> ''
-                          ORDER BY rejected_at DESC LIMIT %s""", (limit,))
+                          ORDER BY date_found DESC LIMIT %s""", (limit,))
         return [row[0] for row in cursor.fetchall()]
     except Exception:  # no database: nothing learned yet
+        return []
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+
+
+def liked_titles(limit=200):
+    """Titles of listings you rated 👍 in Top 10 Picks."""
+    connection = cursor = None
+    try:
+        connection = db.connect()
+        cursor = connection.cursor()
+        cursor.execute("""SELECT career_job_title FROM companies WHERE listing_details LIKE '%%"pick_rating": "up"%%'
+                          AND career_job_title IS NOT NULL AND career_job_title <> '' LIMIT %s""", (limit,))
+        return [row[0] for row in cursor.fetchall()]
+    except Exception:  # no database: nothing rated yet
         return []
     finally:
         if cursor:

@@ -42,7 +42,10 @@
   // Jobs you applied to show what you really go for: their titles' words count as yours, and listings like them
   // move up.
   let appliedTitles = [];
-  try { appliedTitles = JSON.parse(panel.dataset.applied || "[]").map(titleWords).filter((words) => words.length); } catch {}
+  try {
+    appliedTitles = [...JSON.parse(panel.dataset.applied || "[]"), ...JSON.parse(panel.dataset.liked || "[]")]
+      .map(titleWords).filter((words) => words.length);
+  } catch {}
   // Words close to most design and web titles count as yours even when none of your titles use them.
   const knownWords = new Set([...profileTitles.flat(), ...appliedTitles.flat(), "ux", "ui", "produ", "inter", "creat", "multi", "websi"]);
 
@@ -193,6 +196,35 @@
     status.textContent = "Rejected. Top 10 will mark down jobs like it from now on.";
   }
 
+  // 👍 / 👎: saved on the listing and learned from next time; the pick stays where it is. Clicking the same one again
+  // clears it.
+  async function rate(pick, rating, buttons) {
+    const next = pick.row.dataset.rating === rating ? "none" : rating;
+    try {
+      const response = await fetch("/top-picks/rate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
+        body: JSON.stringify({ company_id: pick.row.dataset.companyId, rating: next }),
+      });
+      if (!response.ok) throw new Error();
+    } catch {
+      status.textContent = "Could not save the rating. Try again.";
+      return;
+    }
+    const words = titleWords(pick.row.dataset.job);
+    const drop = (list) => { const at = list.findIndex((item) => item.join(" ") === words.join(" ")); if (at >= 0) list.splice(at, 1); };
+    if (pick.row.dataset.rating === "up") drop(appliedTitles);
+    if (pick.row.dataset.rating === "down") drop(turnedDown);
+    if (next === "up") appliedTitles.push(words);
+    if (next === "down") turnedDown.push(words);
+    pick.row.dataset.rating = next === "none" ? "" : next;
+    buttons.up.classList.toggle("is-on", next === "up");
+    buttons.down.classList.toggle("is-on", next === "down");
+    buttons.up.setAttribute("aria-pressed", String(next === "up"));
+    buttons.down.setAttribute("aria-pressed", String(next === "down"));
+    status.textContent = next === "none" ? "Rating cleared." : "Thanks. Top 10 will use that next time.";
+  }
+
   function render(picks) {
     list.replaceChildren();
     picks.forEach((pick, index) => {
@@ -200,6 +232,7 @@
       const hard = gaps.some((gap) => gap.hard);
       const item = document.createElement("li");
       item.className = "top-pick" + (hard ? " not-a-fit" : "");
+      item.dataset.score = Math.round(pick.score);
       const rankNumber = document.createElement("span");
       rankNumber.className = "top-pick-rank";
       rankNumber.textContent = index + 1;
@@ -253,12 +286,46 @@
         open.textContent = "Open listing";
         actions.append(open);
       }
-      const notForMe = document.createElement("button");
-      notForMe.type = "button";
-      notForMe.className = "top-pick-reject";
-      notForMe.textContent = "Not for Me";
-      notForMe.addEventListener("click", () => turnDown(pick, notForMe));
-      actions.append(notForMe);
+      const buttons = document.createElement("div");
+      buttons.className = "top-pick-buttons";
+      // Keep works like the row's own Keep button (saves the job to your Dashboard).
+      const rowKeep = row.querySelector(".keep-action");
+      if (rowKeep) {
+        const keep = document.createElement("button");
+        keep.type = "button";
+        keep.className = "bordered-button keep-action-pick" + (rowKeep.classList.contains("is-saved") ? " is-saved" : "");
+        keep.textContent = rowKeep.classList.contains("is-saved") ? "Saved" : "Keep";
+        keep.addEventListener("click", () => {
+          rowKeep.click();
+          setTimeout(() => {
+            keep.textContent = rowKeep.textContent.trim();
+            keep.classList.toggle("is-saved", rowKeep.classList.contains("is-saved"));
+          }, 800);
+        });
+        buttons.append(keep);
+      }
+      const reject = document.createElement("button");
+      reject.type = "button";
+      reject.className = "bordered-button destructive-action";
+      reject.textContent = "Reject";
+      reject.title = "Reject this listing; Top 10 marks down jobs like it from now on.";
+      reject.addEventListener("click", () => turnDown(pick, reject));
+      buttons.append(reject);
+      const ratings = document.createElement("div");
+      ratings.className = "top-pick-rating";
+      const up = document.createElement("button");
+      const down = document.createElement("button");
+      [[up, "up", "👍", "Good pick"], [down, "down", "👎", "Bad pick"]].forEach(([button, value, icon, label]) => {
+        button.type = "button";
+        button.className = "top-pick-thumb" + (row.dataset.rating === value ? " is-on" : "");
+        button.textContent = icon;
+        button.title = label;
+        button.setAttribute("aria-label", label);
+        button.setAttribute("aria-pressed", String(row.dataset.rating === value));
+        button.addEventListener("click", () => rate(pick, value, { up, down }));
+        ratings.append(button);
+      });
+      actions.append(buttons, ratings);
       item.append(actions);
       list.append(item);
     });

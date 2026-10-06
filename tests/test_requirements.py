@@ -48,7 +48,7 @@ class RequirementTests(unittest.TestCase):
         self.assertEqual(gaps("Active Secret clearance required.", profile), [])
 
     def test_focus_area_the_profile_never_mentions(self):
-        text = "Design fashion accessories. Know the fashion calendar. Love apparel."
+        text = "Design fashion accessories. Know the fashion calendar. Love apparel, footwear and fashion week."
         self.assertIn("Built around fashion work", gaps(text)[0]["text"])
         self.assertEqual(gaps(text, dict(PROFILE, skills=["Fashion illustration"])), [])
 

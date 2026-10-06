@@ -369,3 +369,45 @@ def listing_preview(company_id):
     text = found.get("text") or ""
     return jsonify({"status": "ok", "unread": False, "gaps": reqs.requirement_gaps(found, get_user_profile() or {}),
                     "highlights": reqs.key_lines(text), "text": reqs.posting_body(text)[:12000]})
+
+
+@app.route("/top-picks/rate", methods=["POST"])
+def rate_top_pick():
+    """👍 / 👎 on a Top 10 pick: kept in listing_details so later picks favour or mark down listings like it. "none"
+    clears it."""
+    import json
+
+    data = request.get_json(silent=True) or {}
+    rating = data.get("rating")
+    try:
+        company_id = int(data.get("company_id"))
+    except (TypeError, ValueError):
+        return jsonify({"status": "error", "message": "Invalid listing."}), 400
+    if rating not in {"up", "down", "none"}:
+        return jsonify({"status": "error", "message": "Invalid rating."}), 400
+    connection = cursor = None
+    try:
+        connection = db.connect()
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute("SELECT listing_details FROM companies WHERE id = %s", (company_id,))
+        row = cursor.fetchone()
+        if not row:
+            return api_error("E3232", "The listing could not be found.", 404)
+        try:
+            details = json.loads(row.get("listing_details") or "{}") or {}
+        except (TypeError, ValueError):
+            details = {}
+        if rating == "none":
+            details.pop("pick_rating", None)
+        else:
+            details["pick_rating"] = rating
+        cursor.execute("UPDATE companies SET listing_details = %s WHERE id = %s", (json.dumps(details), company_id))
+        connection.commit()
+    except Error as error:
+        return api_error("E3232", f"Could not save the rating: {error}", 500)
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+    return jsonify({"status": "ok", "rating": rating})

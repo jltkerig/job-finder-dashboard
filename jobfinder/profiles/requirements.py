@@ -16,7 +16,7 @@ DEGREE_WORDS = (r"(?:bachelor'?s?|baccalaureate|b\.?f\.?a\.?|b\.?a\.?|b\.?s\.?|a
 DEGREE_FIELD = re.compile(r"(?<![\w.])" + DEGREE_WORDS + r"(?:\s+degree)?(?:\s+or\s+higher)?\s+(?:in|from)\s+(?:an?\s+)?"
                           r"(?:accredited\s+)?(?:\d-year\s+)?([a-z][a-z &/,\-]{2,80})", re.I)
 # Bump when the reading changes so saved results are read again.
-VERSION = 5
+VERSION = 7
 # Areas of work a listing can be built around. When a listing keeps coming back to one (3+ mentions) and the profile
 # never mentions it, the job likely wants background you don't show ("brand" all through a brand designer listing).
 FOCUS_AREAS = {
@@ -28,8 +28,10 @@ FOCUS_AREAS = {
     "e-commerce": r"e-?commerce", "gaming": r"gaming|video\s+games?", "cybersecurity": r"cyber\s?security|security\s+teams?",
     "engineering": r"civil\s+engineering|sewer|highway|structural", "teaching": r"teaching|faculty|students?|curriculum",
     "industrial design": r"industrial\s+design|product\s+development|factory|factories|sourcing",
-    "writing": r"writ(?:e|es|ing|er|ers|ten)|copywrit\w*|ux\s+writ\w*|content\s+strateg\w*|microcopy|"
-               r"voice\s+and\s+tone|editorial\s+style",
+    # Writing as the work itself, not "write clean code" or "written communication".
+    "writing": r"copywrit\w*|ux\s+writ\w*|content\s+writ\w*|technical\s+writ\w*|writ(?:e|ing)\s+(?:and|&)\s+(?:edit|shape)\w*|"
+               r"content\s+strateg\w*|microcopy|voice\s+and\s+tone|tone[\s-]+of[\s-]+voice|messaging|plain\s+language|"
+               r"editorial\s+style|writers?|writing(?!\s+(?:code|tests|clean|software|unit|scripts|queries))",
 }
 FOREIGN = re.compile(r"\b(?:outside\s+(?:of\s+)?the\s+(?:united\s+states|u\.?s\.?)|foreign|evaluat\w+|equivalency)\b", re.I)
 FASHION_SCHOOL = re.compile(r"\b(fashion|design|art|culinary|architecture|nursing|law|medical)\s+school\b", re.I)
@@ -149,7 +151,7 @@ def listing_requirements(text):
     focus = {}
     for area, pattern in FOCUS_AREAS.items():
         count = len(re.findall(r"\b(?:" + pattern + r")\b", text or "", re.I))
-        if count >= 3:
+        if count >= 5:  # a few passing mentions ("our brand") aren't what the job is about
             focus[area] = count
     return {"degrees": degrees, "years": years, "experience": experience, "clearance": clearance, "focus": focus,
             "text": (text or "")[:20000], "version": VERSION}
