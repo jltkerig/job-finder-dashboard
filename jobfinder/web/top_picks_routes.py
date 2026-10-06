@@ -1,5 +1,7 @@
 """Top 10 Picks routes: read each listing's requirements, preview a posting, rate a pick."""
 
+from datetime import date
+
 from flask import jsonify, request
 from mysql.connector import Error
 
@@ -43,6 +45,10 @@ def _requirements_for(row, cursor, connection):
     except (TypeError, ValueError):
         skills = []
     text = details.get("description") or ""
+    today = date.today().isoformat()
+    unread_key = f"unread_on_v{reqs.VERSION}"
+    if len(text) < MIN_POSTING_TEXT and details.get(unread_key) == today:
+        return None  # already failed today: don't fetch it again on every Top 10
     if len(text) < MIN_POSTING_TEXT:
         text = ""
         for url in [link for base in (row.get("career_url"), row.get("source_url")) for link in posting_urls(base)]:
@@ -52,6 +58,9 @@ def _requirements_for(row, cursor, connection):
                 text = body
                 break
     if not text:
+        details[unread_key] = today
+        cursor.execute("UPDATE companies SET listing_details = %s WHERE id = %s", (json.dumps(details), row["id"]))
+        connection.commit()
         return None
     found = reqs.listing_requirements(text)
     # Skills from the posting text too: many job-board listings were saved without any, so their fit was unknown.

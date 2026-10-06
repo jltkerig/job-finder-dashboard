@@ -102,7 +102,32 @@
     }
   }
 
+  // The last Top 10 is remembered in this browser for a day, so a page refresh shows it again without re-ranking.
+  const SAVED_KEY = "jobFinderTopPicks";
+  const SAVED_FOR_MS = 24 * 60 * 60 * 1000;
+
+  function savePicks(picks) {
+    try {
+      localStorage.setItem(SAVED_KEY, JSON.stringify({ at: Date.now(), picks: picks.map((pick) => ({
+        id: pick.row.dataset.companyId, score: pick.score, reasons: pick.reasons, gaps: pick.gaps })) }));
+    } catch {}
+  }
+
+  function savedPicks() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(SAVED_KEY) || "null");
+      if (!saved || Date.now() - saved.at > SAVED_FOR_MS) return [];
+      return saved.picks.map((pick) => {
+        const row = document.querySelector(`#results-table .result-row[data-company-id="${pick.id}"]`);
+        return row && row.dataset.status !== "closed" ? { row, score: pick.score, reasons: pick.reasons || [], gaps: pick.gaps || [] } : null;
+      }).filter(Boolean);
+    } catch {
+      return [];
+    }
+  }
+
   function render(picks) {
+    savePicks(picks);
     list.replaceChildren();
     picks.forEach((pick, index) => {
       const { row, reasons, gaps } = pick;
@@ -289,9 +314,22 @@
     panel.scrollIntoView({ behavior: "smooth", block: "start" });
   });
 
-  if (autoQueue) button.click();
+  if (autoQueue) {
+    button.click();
+  } else {
+    const restored = savedPicks();
+    if (restored.length) {
+      current = restored;
+      render(restored);
+      panel.hidden = false;
+      status.textContent = "Your last Top 10. Click Top 10 Picks to rank again.";
+    }
+  }
 
-  document.getElementById("top-picks-close")?.addEventListener("click", () => { panel.hidden = true; });
+  document.getElementById("top-picks-close")?.addEventListener("click", () => {
+    panel.hidden = true;
+    try { localStorage.removeItem(SAVED_KEY); } catch {}  // closed: don't bring it back on the next refresh
+  });
 
   build.addEventListener("click", async () => {
     const chosen = Array.from(list.querySelectorAll("input:checked"));
