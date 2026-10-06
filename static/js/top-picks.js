@@ -222,13 +222,13 @@
       const queueButton = document.createElement("button");
       queueButton.type = "button";
       queueButton.className = "bordered-button";
-      queueButton.textContent = "Queue";
+      queueButton.textContent = "Apply";
       queueButton.title = "Add to the Apply queue on your Dashboard";
       queueButton.addEventListener("click", async () => {
         queueButton.disabled = true;
         try {
           await queue([row.dataset.companyId]);
-          queueButton.textContent = "Queued";
+          queueButton.textContent = "Added to Apply";
         } catch (error) {
           status.textContent = error.message;
           queueButton.disabled = false;
