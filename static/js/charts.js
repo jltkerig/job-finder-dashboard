@@ -83,7 +83,7 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       const response = await fetch("/apply-queue", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken }, body: JSON.stringify({ company_ids: [companyId], queued: true }) });
       if (!response.ok) throw new Error();
-      button.textContent = "Added to Apply";
+      button.textContent = "Added";
       const row = button.closest(".result-row"); if (row) row.dataset.queued = "1";
       const keep = row?.querySelector(".keep-action"); if (keep) { keep.textContent = "Saved"; keep.classList.add("is-saved"); }
     } catch { button.disabled = false; button.textContent = "Try again"; }

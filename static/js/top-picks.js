@@ -251,17 +251,17 @@
       const queueButton = document.createElement("button");
       queueButton.type = "button";
       queueButton.className = "bordered-button";
-      queueButton.textContent = row.dataset.queued ? "Added to Apply" : "Apply";
+      queueButton.textContent = row.dataset.queued ? "Added" : "Apply";
       queueButton.disabled = Boolean(row.dataset.queued);
       queueButton.title = "Add to the Apply queue on your Dashboard";
       queueButton.addEventListener("click", async () => {
         queueButton.disabled = true;
         try {
           await queue([row.dataset.companyId]);
-          queueButton.textContent = "Added to Apply";
+          queueButton.textContent = "Added";
           row.dataset.queued = "1";
           const rowApply = row.querySelector(".apply-action");
-          if (rowApply) { rowApply.textContent = "Added to Apply"; rowApply.disabled = true; }
+          if (rowApply) { rowApply.textContent = "Added"; rowApply.disabled = true; }
         } catch (error) {
           status.textContent = error.message;
           queueButton.disabled = false;

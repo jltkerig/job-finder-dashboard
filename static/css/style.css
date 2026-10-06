@@ -2051,4 +2051,12 @@ body[data-page="search"] #results-table .details-blocks .bordered-button { min-h
 body[data-page="search"] #results-table tr.result-row td[data-label="Save"] { display:flex !important; gap:8px; align-items:stretch; white-space:normal; }
 body[data-page="search"] #results-table tr.result-row td[data-label="Save"] .bordered-button { flex:1 1 0; width:auto !important; min-width:0 !important; max-width:none !important; margin:0; }
 body[data-page="search"] #results-table tr.result-row td.row-actions .row-action-grid { display:flex !important; gap:8px; }
-body[data-page="search"] #results-table tr.result-row td.row-actions .row-action-grid .bordered-button { flex:1 1 0; width:auto !important; min-width:0 !important; max-width:none !important; }
+body[data-page="search"] #results-table tr.result-row td.row-actions .row-action-grid .bordered-button:not(.block-action):not(.block-company-action) { flex:1 1 0; width:auto !important; min-width:0 !important; max-width:none !important; }
+
+/* One button size on result cards (Keep, Apply, Details, Reject) and on Top 10 picks */
+body[data-page="search"] #results-table tr.result-row td[data-label="Save"] .bordered-button,
+body[data-page="search"] #results-table tr.result-row td.row-actions .row-action-grid .bordered-button:not(.block-action):not(.block-company-action) {
+  box-sizing:border-box; height:36px !important; min-height:36px !important; padding:4px 8px !important;
+  font-size:.82rem !important; line-height:1.2; display:inline-flex; align-items:center; justify-content:center; }
+.top-pick-buttons .bordered-button { box-sizing:border-box; min-width:76px; height:30px; padding:4px 10px;
+  display:inline-flex; align-items:center; justify-content:center; font-size:.82rem; }
