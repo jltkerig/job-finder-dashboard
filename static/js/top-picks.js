@@ -75,7 +75,9 @@
       // Skills under "Requirements" count fully, "Nice to have" ones much less: replace the plain skill fit.
       if (found.fit) {
         pick.score += weigh(found.fit.score, found.fit.required) * 0.4 - pick.fitPart;
-        pick.reasons[0] = `${found.fit.score}% fit on required skills`;
+        pick.reasons[0] = found.fit.required
+          ? `${found.fit.have} of ${found.fit.required} required skill${found.fit.required === 1 ? "" : "s"}`
+          : `${found.fit.score}% skill fit (nice-to-haves only)`;
         if (found.fit.missing_required.length) {
           pick.gaps.push({ text: `Required skills you don't list: ${found.fit.missing_required.join(", ")}`, hard: false });
         }

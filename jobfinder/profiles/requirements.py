@@ -270,7 +270,7 @@ def skill_sections(text, skills):
 
 
 def weighted_fit(user_skills, sections):
-    """{"score": 0-100, "required": n, "missing_required": [...]}: missing a required skill costs
+    """{"score": 0-100, "required": n, "have": n, "missing_required": [...]}: missing a required skill costs
     more than missing a nice-to-have one. None when the listing has no skills."""
     if not sections or not user_skills:
         return None
@@ -279,5 +279,6 @@ def weighted_fit(user_skills, sections):
     have = sum(WEIGHTS[where] for skill, where in sections.items() if skill.casefold() in user)
     return {"score": round(100 * have / total),
             "required": sum(1 for where in sections.values() if where != "preferred"),
+            "have": sum(1 for skill, where in sections.items() if where != "preferred" and skill.casefold() in user),
             "missing_required": [skill for skill, where in sections.items()
                                  if where == "required" and skill.casefold() not in user]}
