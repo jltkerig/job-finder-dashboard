@@ -170,3 +170,9 @@ def rejected_listings():
         company_notice=request.args.get("company_notice", ""),
         domain_notice=request.args.get("domain_notice", ""),
     )
+
+
+@app.route("/favicon.ico")
+def favicon():
+    """No icon file: answer quietly instead of a 404 on every page."""
+    return "", 204

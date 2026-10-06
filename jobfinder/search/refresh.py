@@ -26,6 +26,7 @@ from jobfinder.search.company_names import (
     company_board_posting,
     on_company_site,
     on_official_board,
+    name_from_url,
     tidy_company_name,
     verification_label,
 )
@@ -347,7 +348,7 @@ def update_existing_results(company_ids=None):
                                 company=company.get("name"), url=source_url or career_url,
                                 reason=reject_reason, detail=why)
                 continue
-        tidy_name = tidy_company_name(company.get("name"), company.get("career_job_title")) or "Unknown employer"
+        tidy_name = tidy_company_name(company.get("name"), company.get("career_job_title")) or name_from_url(company.get("career_url")) or "Unknown employer"
         if tidy_name and tidy_name != company.get("name"):
             try:
                 with database.cursor() as rename_cursor:

@@ -30,6 +30,22 @@ def tidy_company_name(name, title=None):
     return cleaned
 
 
+def name_from_url(url):
+    """The employer's name from its own website ("https://www.warschawski.com/jobs/1" -> "Warschawski"), or "" for a job
+    board, an aggregator or an applicant system, whose address doesn't name the employer reliably."""
+    from urllib.parse import urlparse
+
+    from jobfinder.search import company_check  # here: company_check imports modules that import this one
+
+    host = (urlparse(str(url or "")).hostname or "").casefold()
+    if not host or company_check.is_aggregator(host) or company_check._on_ats(host):
+        return ""
+    labels = [label for label in host.split(".") if label not in ("www", "careers", "jobs", "apply", "join", "work")]
+    if len(labels) < 2 or labels[-2] in ("linkedin", "indeed", "glassdoor", "ziprecruiter", "usnlx", "adzuna"):
+        return ""
+    return labels[-2].replace("-", " ").title()
+
+
 def verification_label(details, source_type, name, source_url):
     """Plain-language answer to "is this a real posting by the company?", shown next to the company website."""
     if source_type == EMPLOYER_SOURCE:
