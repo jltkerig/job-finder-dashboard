@@ -12,6 +12,9 @@ Each entry: what went wrong, why, the fix, and the check that would have caught 
       what was saved, where, and why it stopped. Back up the profile first; remove test rows and history after.
 - [ ] Search new/edited source files for stray control characters (`grep -c $'\x08'`): shell heredocs turn `\b` into a
       backspace.
+- [ ] After any button or layout change, screenshot the page at a narrow (~750px) and a wide (~1440px) window, and
+      check `scrollWidth` isn't wider than the window. Older rules in style.css override new ones (fixed widths,
+      `display:block` on card cells), so a new rule may need the `body[data-page=…] #results-table tr.result-row` prefix.
 - [ ] Close test servers and headless browsers when done (a leftover PHP server on :8080 once blocked the search).
 
 ## Reading postings
@@ -92,6 +95,8 @@ Each entry: what went wrong, why, the fix, and the check that would have caught 
 
 ## Top 10
 
+- **Apply hidden behind Details on result cards** (2026-10-06). Keep has fixed/100% widths and the card cell is forced
+  to `display:block`, so Apply was pushed off the card. Fix: stronger flex rules for the Save and action cells.
 - **Closed LinkedIn jobs stayed in Top 10** (2026-10-06): Kee Group and 5 others said "No longer accepting
   applications" but were Open. LinkedIn jobs aren't rechecked by Refresh, and a description saved at capture never shows
   a later closing. Fix: posting text with closed wording marks the job Closed (Top 10 and Refresh); the best 12 picks

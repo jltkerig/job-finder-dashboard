@@ -2047,6 +2047,8 @@ body[data-page="search"] #results-table .details-blocks .bordered-button { min-h
 
 .top-pick-details-open { display:inline-block; margin-top:10px; }
 
-/* Keep and Apply side by side on each result */
-.result-row td[data-label="Save"] { white-space:nowrap; }
-.result-row td[data-label="Save"] .bordered-button + .bordered-button { margin-left:6px; }
+/* Keep and Apply side by side on each result, sharing the line */
+body[data-page="search"] #results-table tr.result-row td[data-label="Save"] { display:flex !important; gap:8px; align-items:stretch; white-space:normal; }
+body[data-page="search"] #results-table tr.result-row td[data-label="Save"] .bordered-button { flex:1 1 0; width:auto !important; min-width:0 !important; max-width:none !important; margin:0; }
+body[data-page="search"] #results-table tr.result-row td.row-actions .row-action-grid { display:flex !important; gap:8px; }
+body[data-page="search"] #results-table tr.result-row td.row-actions .row-action-grid .bordered-button { flex:1 1 0; width:auto !important; min-width:0 !important; max-width:none !important; }
