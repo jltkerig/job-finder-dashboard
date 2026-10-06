@@ -129,7 +129,7 @@
 
   const byScore = (a, b) => b.score - a.score;
   // Pages that aren't one job (same idea as looks_like_not_a_job on the server): directories, job lists, agency pages.
-  const NOT_A_JOB = /^\s*(?:find|hire|compare|top\s+\d+|best)\s|jobs|(?:web|website|graphic|logo|wordpress)\s+design\s+(?:in|near|services?|company|agency|packages?)/i;
+  const NOT_A_JOB = /^\s*(?:find|hire|compare|top\s+\d+|best)\s|\bjobs\b|\b(?:web|website|graphic|logo|wordpress)\s+design\s+(?:in|near|services?|company|agency|packages?)\b/i;
 
   function pick() {
     const rows = Array.from(document.querySelectorAll("#results-table .result-row"))
