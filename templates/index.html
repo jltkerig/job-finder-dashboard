@@ -110,6 +110,7 @@
       </div>
       </details>
       <button id="top-picks-button" class="bordered-button" type="button" title="Rank the results shown and pick the 10 best to apply to">Top 10 Picks</button>
+      <button id="clear-results-button" class="bordered-button destructive-action" type="button" title="Delete every result you haven't saved, queued or applied to">Clear Results</button>
       <div class="results-count" id="results-count">{{ companies|length }} results
       </div>
     </section>
@@ -229,6 +230,7 @@
   <script src="/static/js/charts.js?v={{ app_version }}"></script>
   <script src="/static/js/captures.js?v={{ app_version }}"></script>
   <script src="/static/js/columns.js?v={{ app_version }}"></script>
+  <script src="/static/js/clear-results.js?v={{ app_version }}"></script>
   <script src="/static/js/top-picks-score.js?v={{ app_version }}"></script>
   <script src="/static/js/top-picks.js?v={{ app_version }}"></script>
   <script src="/static/js/listing-preview.js?v={{ app_version }}"></script>

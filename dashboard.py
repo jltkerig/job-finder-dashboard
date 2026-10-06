@@ -15,12 +15,12 @@ This file only puts the app together and starts it. The pages and what they do l
     application_files.py the resumes and cover letters made for a saved job
     (profile_store, listing_queries, search_history, schema: reading and writing the database)
 """
-from jobfinder.web import (application_files, auto_apply, blocklists, extension_api, listing_actions, listing_queries, pages, top_picks_routes, profile_routes,  # noqa: F401
+from jobfinder.web import (application_files, auto_apply, blocklists, clear_results, extension_api, listing_actions, listing_queries, pages, top_picks_routes, profile_routes,  # noqa: F401
                            profile_store, schema, search_control, search_history, tuning, update_checks)
 from jobfinder.web.core import app
 
 # The version lives here, in one place. release.py raises it, update.ps1 and start.ps1 read it, and the pages show it.
-APP_VERSION = "1.1.206"
+APP_VERSION = "1.1.207"
 
 app.config.update(APP_VERSION=APP_VERSION)
 
