@@ -39,8 +39,22 @@
     .map((word) => (word === "webmaster" ? "web" : word).slice(0, 5));
   let profileTitles = [];
   try { profileTitles = JSON.parse(panel.dataset.titles || "[]").map(titleWords).filter((words) => words.length); } catch {}
+  // Jobs you applied to show what you really go for: their titles' words count as yours, and listings like them
+  // move up.
+  let appliedTitles = [];
+  try { appliedTitles = JSON.parse(panel.dataset.applied || "[]").map(titleWords).filter((words) => words.length); } catch {}
   // Words close to most design and web titles count as yours even when none of your titles use them.
-  const knownWords = new Set([...profileTitles.flat(), "ux", "ui", "produ", "inter", "creat", "multi", "websi"]);
+  const knownWords = new Set([...profileTitles.flat(), ...appliedTitles.flat(), "ux", "ui", "produ", "inter", "creat", "multi", "websi"]);
+
+  // 0-1: how much the title shares with the closest job you applied to (shared words over all words of both).
+  function likeApplied(title) {
+    const words = new Set(titleWords(title));
+    if (!appliedTitles.length || !words.size) return 0;
+    return Math.max(...appliedTitles.map((applied) => {
+      const shared = applied.filter((word) => words.has(word)).length;
+      return shared / new Set([...applied, ...words]).size;
+    }));
+  }
 
   function titleMatch(title) {
     const words = titleWords(title);
@@ -89,7 +103,9 @@
     } else if (match !== null) {
       reasons.push("Title matches");
     }
-    return { row, score: score - penalty, reasons, gaps, fitPart: (fit === null ? 50 : fit) * 0.4 };
+    const likeness = likeApplied(row.dataset.job);
+    if (likeness >= 0.5) reasons.push("Like jobs you applied to");
+    return { row, score: score - penalty + Math.round(20 * likeness), reasons, gaps, fitPart: (fit === null ? 50 : fit) * 0.4 };
   }
 
   function shown(row) {
@@ -100,7 +116,8 @@
 
   function pick() {
     const rows = Array.from(document.querySelectorAll("#results-table .result-row"))
-      .filter((row) => shown(row) && row.dataset.status !== "closed");
+      .filter((row) => shown(row) && row.dataset.status !== "closed"
+        && !["Applied", "Talking With Recruiter", "Interview"].includes(row.dataset.application));
     return rows.map(rank).sort(byScore);
   }
 

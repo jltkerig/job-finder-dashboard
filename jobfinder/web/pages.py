@@ -76,6 +76,9 @@ def home():
         profile_state=profile.get("state", ""),
         profile_work_preferences=profile.get("work_preferences", []),
         profile_avoid_terms=profile.get("avoid_terms", []),
+        applied_titles=[company.get("career_job_title") for company in companies
+                        if company.get("application_status") in {"Applied", "Talking With Recruiter", "Interview"}
+                        and company.get("career_job_title")],
     )
 
 
