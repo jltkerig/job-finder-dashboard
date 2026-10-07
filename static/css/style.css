@@ -2036,7 +2036,7 @@ body[data-page="search"] #results-table .details-blocks .bordered-button { min-h
 .keep-action-pick.is-saved { background:var(--success); border-color:var(--success); color:#fff; }
 
 /* Dashboard Apply queue */
-.apply-queue { margin: 0 0 1.5rem; padding: 1rem; border: 1px solid var(--border, #ccc); border-radius: 8px; }
+.apply-queue { margin: 0 0 1.5rem; padding: 1rem; border: 1px solid var(--border, #ccc); border-radius: 8px; background: #fff; }
 .apply-queue h2 { margin: 0 0 .25rem; }
 .apply-queue-list { list-style: none; margin: .75rem 0 0; padding: 0; display: grid; gap: .5rem; }
 .apply-queue-item { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem; padding: .5rem 0; border-top: 1px solid var(--border, #ddd); }

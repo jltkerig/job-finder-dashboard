@@ -14,6 +14,22 @@
     if (!response.ok) throw new Error();
   }
 
+  // Download saves the job's résumé and cover letter PDFs (the links shown under the job), one after the other.
+  section.addEventListener("click", (event) => {
+    const button = event.target.closest(".apply-queue-download");
+    if (!button) return;
+    const links = [...button.closest(".apply-queue-item").querySelectorAll(".apply-queue-files a")];
+    links.forEach((link, index) => setTimeout(() => {
+      const save = document.createElement("a");
+      save.href = link.href;
+      save.download = decodeURIComponent(link.pathname.split("/").pop());
+      document.body.append(save);
+      save.click();
+      save.remove();
+    }, index * 400));
+    status.textContent = links.length > 1 ? "Downloading the résumé and cover letter." : "Downloading the résumé.";
+  });
+
   section.addEventListener("click", async (event) => {
     const button = event.target.closest(".apply-queue-applied, .apply-queue-remove");
     if (!button) return;
