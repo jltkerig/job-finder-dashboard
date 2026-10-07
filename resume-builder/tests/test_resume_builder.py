@@ -392,7 +392,7 @@ class ConnectorTests(unittest.TestCase):
     def test_tools_listed(self):
         names = {tool.name for tool in self.call("__list__").tools}
         self.assertEqual(names, {"get_job_finder_profile", "get_current_resume", "get_references",
-                                 "list_documents", "get_document", "list_saved_jobs", "get_job",
+                                 "list_documents", "get_document", "list_saved_jobs", "list_apply_queue", "get_job",
                                  "save_resume", "save_cover_letter", "list_builds", "get_build", "get_writing_rules"})
 
     def test_an_older_single_rules_file_is_split_into_the_two_lists(self):
@@ -413,6 +413,16 @@ class ConnectorTests(unittest.TestCase):
         self.assertTrue((config.DATA_DIR / "cover-letter-rules.md").exists())
         import mcp_server
         self.assertIn("get_writing_rules FIRST", mcp_server.INSTRUCTIONS)
+
+    def test_apply_queue_lists_what_each_job_still_needs(self):
+        queue = [{"job_id": 7, "job_title": "Senior Product Designer", "company": "Owner"},
+                 {"job_id": 9, "job_title": "Web Designer", "company": "Perplexity"}]
+        saved = [{"job_id": 9, "kind": "resume", "pdf_exists": True}, {"job_id": 9, "kind": "cover_letter", "pdf_exists": False}]
+        with mock.patch.object(jobfinder_db, "list_apply_queue", return_value=queue), \
+                mock.patch.object(builds, "list_builds", return_value=saved):
+            out = self.text(self.call("list_apply_queue"))
+        self.assertRegex(out, r'"job_id": 7,[\s\S]*"needs": \[\s*"resume",\s*"cover_letter"\s*\]')
+        self.assertRegex(out, r'"job_id": 9,[\s\S]*"needs": \[\s*"cover_letter"\s*\]')
 
     def test_current_resume_includes_page_picture(self):
         self.assertIn("No resume uploaded", self.text(self.call("get_current_resume")))

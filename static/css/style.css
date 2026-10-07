@@ -2062,3 +2062,4 @@ body[data-page="search"] #results-table tr.result-row td.row-actions .row-action
   display:inline-flex; align-items:center; justify-content:center; font-size:.82rem; }
 .apply-queue-files { display:flex; gap:12px; margin-top:4px; font-size:.85rem; }
 .apply-queue-job { display:flex; flex-direction:column; }
+.apply-queue-needs { margin-top:4px; font-size:.85rem; color:#b45309; font-weight:600; }

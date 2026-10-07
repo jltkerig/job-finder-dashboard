@@ -228,6 +228,21 @@ def list_jobs(search="", limit=25):
         return [_summary(row) for row in cursor.fetchall()]
 
 
+# Statuses that take a job off Job Finder's Apply queue (its auto_apply.QUEUE_DONE).
+QUEUE_DONE = ("Applied", "Talking With Recruiter", "Interview", "Rejected", "Closed")
+
+
+def list_apply_queue():
+    """Jobs on Job Finder's Apply queue, not yet applied to, oldest first."""
+    with _cursor() as cursor:
+        cursor.execute("SELECT id, name, career_job_title, city, state, work_arrangement, application_status, is_kept, "
+                       "date_found, listing_details FROM companies WHERE listing_details LIKE %s "
+                       "AND COALESCE(is_rejected, 0) = 0 ORDER BY id", ('%"apply_queued"%',))
+        rows = cursor.fetchall()
+    return [_summary(row) for row in rows
+            if _listing(row.get("listing_details")).get("apply_queued") and row.get("application_status") not in QUEUE_DONE]
+
+
 def get_job(job_id):
     with _cursor() as cursor:
         cursor.execute("SELECT * FROM companies WHERE id = %s", (int(job_id),))

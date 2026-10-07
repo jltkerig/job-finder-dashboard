@@ -22,6 +22,8 @@ INSTRUCTIONS = f"""Resume Builder writes tailored resumes and cover letters as P
 Typical flow: get_writing_rules FIRST, then get_job_finder_profile and get_current_resume, then
 list_documents and read EVERY reference document with get_document, then list_saved_jobs / get_job
 for the job the user names (read the whole listing), then save_resume and/or save_cover_letter.
+When the user asks for their Apply queue, call list_apply_queue and write what each job "needs", always
+passing its job_id, so every queued job ends up with a resume and a cover letter.
 
 Reference documents often hold employment history, skills, tools, projects and results that are not
 on the uploaded resume or in the Job Finder profile. Count everything in them as part of the user's
@@ -150,6 +152,23 @@ def list_saved_jobs(search: str = "", limit: int = 25) -> str:
         return _json(jobfinder_db.list_jobs(search, limit))
     except jobfinder_db.JobFinderUnavailable as error:
         return str(error)
+
+
+@server.tool()
+def list_apply_queue() -> str:
+    """Jobs on Job Finder's Apply queue, each with what it still needs ("resume", "cover_letter").
+    Every queued job needs both before the user applies; write the missing ones, one job at a time."""
+    try:
+        queue = jobfinder_db.list_apply_queue()
+    except jobfinder_db.JobFinderUnavailable as error:
+        return str(error)
+    have = {}
+    for record in builds.list_builds():
+        if record.get("pdf_exists") and record.get("job_id") is not None:
+            have.setdefault(int(record["job_id"]), set()).add(record.get("kind"))
+    for job in queue:
+        job["needs"] = [kind for kind in ("resume", "cover_letter") if kind not in have.get(job["job_id"], set())]
+    return _json(queue) if queue else "The Apply queue is empty."
 
 
 @server.tool()
