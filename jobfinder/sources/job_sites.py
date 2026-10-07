@@ -85,7 +85,7 @@ class NationalLaborExchange:
         """Openings for a title near a place (a city, ZIP code or state), most relevant first."""
         listings = []
         for page in range(1, self.MAX_PAGES + 1):
-            params = {"q": keyword, "page": page}
+            params = {**({"q": keyword} if keyword else {}), "page": page}  # no keyword: any job
             if place:
                 params["location"] = place
             if radius:
@@ -211,7 +211,7 @@ class USAJobs:
         """Openings for a title near a place (a city, or a whole state), most relevant first."""
         listings = []
         for page in range(1, self.MAX_PAGES + 1):
-            params = {"Keyword": keyword, "ResultsPerPage": self.PAGE_SIZE, "Page": page, "Fields": "Full",
+            params = {**({"Keyword": keyword} if keyword else {}), "ResultsPerPage": self.PAGE_SIZE, "Page": page, "Fields": "Full",
                       "WhoMayApply": "public", "DatePosted": self.DAYS}
             if place:
                 params["LocationName"] = self.location_name(place)
@@ -324,7 +324,7 @@ class Adzuna:
 
     def search(self, keyword, place="", radius=None):
         """Openings for a title near a place (a city, or a whole state), most relevant first. One page only."""
-        params = {"what": keyword, "results_per_page": self.PAGE_SIZE, "max_days_old": self.DAYS,
+        params = {**({"what": keyword} if keyword else {}), "results_per_page": self.PAGE_SIZE, "max_days_old": self.DAYS,
                   "content-type": "application/json"}
         if place:
             params["where"] = self.location_name(place)

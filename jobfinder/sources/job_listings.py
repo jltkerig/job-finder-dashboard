@@ -110,10 +110,16 @@ def looks_like_not_a_job(title):
     return bool(NOT_A_JOB.search(str(title or "")))
 
 
+ANY_TITLE = "*"  # a search with no job title: any real job matches
+ANY_TITLE_LABEL = "Any job"
+
+
 def matching_title(title, wanted):
     """The searched words must appear together (Web Producer is not Web Series Producer)."""
     if looks_like_not_a_job(title):
         return False
+    if ANY_TITLE in wanted:
+        return bool(str(title or "").strip())
     actual_list = _token_list(title)
     actual = set(actual_list)
     # "Lead, Digital Designer (Apparel & Footwear)": the bracketed department is not part of the job's name.

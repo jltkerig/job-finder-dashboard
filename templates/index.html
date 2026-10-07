@@ -35,8 +35,8 @@
       </div>
       <form id="job-search-form" class="job-search-form">
         <div class="form-field job-title-field"><label for="job-title">Job Titles</label>
-          <p class="field-help">Separate multiple titles with commas. Related titles appear as you type.
-          </p><input id="job-title" name="job_title" type="text" data-title-suggest="list" placeholder="e.g. Web Designer, UI Designer" value="{{ profile_job_titles|join(', ') }}" required />
+          <p class="field-help">Separate multiple titles with commas. Related titles appear as you type. Leave empty to find any jobs nearby.
+          </p><input id="job-title" name="job_title" type="text" data-title-suggest="list" placeholder="e.g. Web Designer, UI Designer" value="{{ profile_job_titles|join(', ') }}" />
           <div id="job-title-suggestions" class="job-title-suggestions" hidden aria-live="polite">
           </div>
         </div>
@@ -196,7 +196,7 @@
     <div class="empty-dashboard">
       <h3>No Search Results Yet
       </h3>
-      <p>Enter a job title and City, State above, then start Job Finder.
+      <p>Enter a job title (or leave it empty for any job) and City, State above, then start Job Finder.
       </p>
     </div>{% endif %}
   </section>

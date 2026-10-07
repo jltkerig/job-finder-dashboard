@@ -19,7 +19,7 @@ import requests
 from bs4 import BeautifulSoup
 
 from jobfinder import paths
-from jobfinder.sources.job_listings import extract_jobs, matching_title
+from jobfinder.sources.job_listings import ANY_TITLE, extract_jobs, matching_title
 from jobfinder.sources.remote_states import is_remote_place, place_states
 
 from jobfinder.sources.employer_boards import Ashby, BambooHR, Greenhouse, Lever, Recruitee, Teamtailor
@@ -134,6 +134,8 @@ class Employer:
         """Openings whose title matches one of the titles (or this employer's extra titles), with details."""
         wanted = list(titles) + self.extra_titles
         keywords = list(dict.fromkeys(title.casefold().strip() for title in wanted if title.strip()))[:MAX_KEYWORDS]
+        if ANY_TITLE in wanted:
+            keywords = [""]  # no job title: every opening on the board
         listings = {}
         for keyword in keywords:
             for listing in self.adapter.search(keyword, http):

@@ -98,8 +98,15 @@ from jobfinder.sources.job_listings import (
     job_links,
     pagination_links,
     matching_title as matching_job_title,
+    ANY_TITLE,
+    ANY_TITLE_LABEL,
 )
 from jobfinder.sources.job_sites import JOB_SITES, SiteBlocked, search_places
+from jobfinder.search.area_queries import area_queries
+
+def _title_label(title):
+    return ANY_TITLE_LABEL if title == ANY_TITLE else title
+
 
 def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
     _page_cache.clear()
@@ -132,7 +139,7 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
 
     print()
 
-    if not job_title:
+    if job_title is None:  # only the command line asks; an empty title from the dashboard means any job
         job_title = input("Job title: ").strip()
 
     if not state:
@@ -147,11 +154,6 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
             seen_job_titles.add(key)
             job_titles.append(cleaned_title)
 
-    if not job_titles:
-        print("No valid job titles were provided.")
-        database.close()
-        return
-
     corrected_titles = []
     for index, typed_title in enumerate(job_titles):
         fixed = spelling_fix(typed_title)
@@ -160,15 +162,20 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
             corrected_titles.append((typed_title, fixed))
             job_titles[index] = fixed
     selected_titles = list(dict.fromkeys(job_titles))
-    job_titles = expand_job_titles(selected_titles)
+    job_titles = expand_job_titles(selected_titles) if selected_titles else []
     if len(job_titles) > len(selected_titles):
         print("Related O*NET search titles: " + ", ".join(job_titles[len(selected_titles):]))
     # Web queries use the typed and O*NET titles; the related families below are only used to recognise openings.
     query_titles = list(job_titles)
-    related_extras = [title for title in related_family_titles(selected_titles) if title.casefold() not in {t.casefold() for t in job_titles}]
+    related_extras = [title for title in (related_family_titles(selected_titles) if selected_titles else []) if title.casefold() not in {t.casefold() for t in job_titles}]
     job_titles = job_titles + related_extras
     if related_extras:
         print("Also matching closely related titles: " + ", ".join(related_extras))
+    # No job title: any real job near the chosen places.
+    any_title = not job_titles
+    if any_title:
+        job_titles = [ANY_TITLE]
+        print("No job title: looking for any jobs in the area.")
 
     try:
         cities = json.loads(cities_json or "[]")
@@ -275,7 +282,7 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
             if limited_to and selected_states and not (limited_to & selected_states):
                 record_skip("Remote job limited to residents of " + ", ".join(sorted(limited_to)), job["url"], job["title"])
                 continue
-            matched_title = next((wanted for wanted in job_titles if matching_job_title(job["title"], [wanted])), job_titles[0])
+            matched_title = _title_label(next((wanted for wanted in job_titles if matching_job_title(job["title"], [wanted])), job_titles[0]))
             inserted = storage.save_company(
                 database, job["name"], job["title"], 6, feed.domain,
                 job["url"], job["url"], "United States" if job["usa_score"] == 6 else None,
@@ -352,8 +359,8 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
             if outcome["skip"]:
                 record_skip(outcome["skip"], job_url, opening["title"])
                 continue
-            matched_title = next((wanted for wanted in job_titles + employer.extra_titles
-                                  if matching_job_title(opening["title"], [wanted])), job_titles[0])
+            matched_title = _title_label(next((wanted for wanted in job_titles + employer.extra_titles
+                                  if matching_job_title(opening["title"], [wanted])), job_titles[0]))
             details = {"schedule": opening["schedule"], "salary": opening["salary"], "posted": opening["posted"],
                        "evidence": opening["evidence"], "location": opening["location"], "matched_title": matched_title,
                        "remote_limited_to": sorted(outcome["remote_limited_to"]),
@@ -531,7 +538,7 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
                        location=listing["location"], matched_title=None)
             existing_companies += 1
             return False
-        matched_title = next((wanted for wanted in job_titles if matching_job_title(title, [wanted])), job_titles[0])
+        matched_title = _title_label(next((wanted for wanted in job_titles if matching_job_title(title, [wanted])), job_titles[0]))
         details = {"posted": listing["posted"], "location": listing["location"], "matched_title": matched_title,
                    "evidence": [f"{site.name} listing", "title matches search"], "external_id": listing["guid"],
                    "remote_limited_to": sorted(outcome["remote_limited_to"]),
@@ -580,7 +587,7 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
             site_saved_total = 0  # each job site gets its own share of the search, so one can't use it all up
             print(f"Searching {site.name} for your titles near {', '.join(place for place, _ in places) or 'anywhere'}...")
             try:
-                for title in selected_titles:
+                for title in selected_titles or [""]:  # "": any job, searched by place only
                     for place, radius in places:
                         if shared.stop_requested() or site_saved_total >= site_cap or companies_saved >= shared.MAX_SEARCH_RESULTS:
                             break
@@ -661,6 +668,8 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
         for candidate_query in title_queries:
             if candidate_query not in search_queries:
                 search_queries.append(candidate_query)
+    if any_title:
+        search_queries = area_queries(state, city_names, shared.JOB_BOARD_SITES)
 
 
     empty_query_streak = 0
@@ -818,7 +827,7 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
                             continue
                         details = {key: opening.get(key) for key in ("schedule", "salary", "posted", "evidence", "location")}
                         details["source"] = url
-                        details["matched_title"] = next((wanted for wanted in job_titles if matching_job_title(opening["title"], [wanted])), job_titles[0])
+                        details["matched_title"] = _title_label(next((wanted for wanted in job_titles if matching_job_title(opening["title"], [wanted])), job_titles[0]))
                         outcome = judging.assess_opening(database, opening, page.text, job_url, state, selected_states,
                                                  statewide_states, city_targets)
                         if outcome["skip"]:

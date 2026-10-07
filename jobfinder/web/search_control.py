@@ -109,8 +109,7 @@ def validate_search_criteria(job_title, state, cities=None):
     job_title = (job_title or "").strip()[:1000]
     state = (state or "").strip()[:100]
 
-    if not job_title:
-        return None, None, None, "Enter a job title."
+    # No job title is allowed: the search then looks for any jobs in the area.
 
     if not state:
         return None, None, None, "Enter a state."
@@ -150,7 +149,7 @@ def launch_search_process(job_title, state, cities=None, mode="search"):
 
         # Keep Search and User Profile on the same saved job-title/location data,
         # but only once this search is actually going to start.
-        if mode != "replacement":
+        if mode != "replacement" and job_title:  # an empty title must not erase the saved titles
             try:
                 profile = profile_store.get_user_profile()
                 titles = []
@@ -180,7 +179,7 @@ def launch_search_process(job_title, state, cities=None, mode="search"):
             with webfiles.SCRAPER_LOG_FILE.open("a", encoding="utf-8") as log_file:
                 log_file.write(
                     f"\n=== {datetime.now().isoformat(timespec='seconds')} | {mode} | "
-                    f"{job_title} | {state} ===\n"
+                    f"{job_title or '(any job)'} | {state} ===\n"
                 )
                 log_file.flush()
                 scraper_process = subprocess.Popen(
