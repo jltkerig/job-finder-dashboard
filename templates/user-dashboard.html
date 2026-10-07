@@ -163,7 +163,7 @@
       <h2 id="apply-queue-heading">Apply Queue <span class="field-help">({{ apply_queue|length }})</span></h2>
       <p class="field-help">Apply opens the posting. Fill it in and press Submit yourself, then mark it Applied.</p>
       <ul class="apply-queue-list">{% for job in apply_queue %}
-        <li class="apply-queue-item" data-company-id="{{ job.id }}"><span class="apply-queue-job"><strong>{{ job.career_job_title or 'Unknown Job' }}</strong> <span class="summary-company">{{ job.name or '' }}</span></span>
+        <li class="apply-queue-item" data-company-id="{{ job.id }}"><span class="apply-queue-job"><strong>{{ job.career_job_title or 'Unknown Job' }}</strong> <span class="summary-company">{{ job.name or '' }}</span>{% if job.application_files %}<span class="apply-queue-files">{% for file in job.application_files %}{% if loop.first or file.kind != job.application_files[loop.index0 - 1].kind %}<a href="/user-builds/{{ file.pdf }}" target="_blank" rel="noopener">{{ file.label }}</a>{% endif %}{% endfor %}</span>{% else %}<span class="apply-queue-files field-help">No résumé yet</span>{% endif %}</span>
           <span class="apply-queue-actions">{% if job.url %}<a class="bordered-button primary-action" href="{{ job.url }}" target="_blank" rel="noopener noreferrer">Apply</a>{% endif %}<button class="bordered-button apply-queue-applied" type="button">Mark Applied</button><button class="bordered-button secondary-action apply-queue-remove" type="button">Remove</button></span>
         </li>{% endfor %}
       </ul>

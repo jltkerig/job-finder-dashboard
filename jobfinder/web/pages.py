@@ -107,7 +107,7 @@ def user_dashboard():
     return render_template(
         "user-dashboard.html",
         companies=companies,
-        apply_queue=auto_apply.get_apply_queue(),
+        apply_queue=add_application_files(auto_apply.get_apply_queue()),
         profile=profile,
         resume_builder_url=RESUME_BUILDER_URL,
         profile_version=profile_store.profile_version(profile),
