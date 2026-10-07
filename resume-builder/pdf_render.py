@@ -113,6 +113,8 @@ def _styles(layout):
     accent = colors.HexColor(layout["accent_color"])
     align = TA_CENTER if layout["name_align"] == "center" else TA_LEFT
     lead = size * layout["line_spacing"]
+    # Secondary details (company, place, dates, contact) in a softer grey, so job titles lead the eye.
+    muted = colors.HexColor("#555555")
     gap = layout["section_gap"] if layout["section_gap"] is not None else size
     return {
         "name": ParagraphStyle("name", fontName=name_bold, fontSize=layout["name_size"],
@@ -120,19 +122,30 @@ def _styles(layout):
         "headline": ParagraphStyle("headline", fontName=detail, fontSize=size + 1.5, leading=(size + 1.5) * 1.3,
                                    textColor=text, alignment=align, spaceBefore=2),
         "contact": ParagraphStyle("contact", fontName=detail, fontSize=size - 0.5, leading=lead,
-                                  textColor=text, alignment=align, spaceBefore=3),
+                                  textColor=muted, alignment=align, spaceBefore=3),
         "heading": ParagraphStyle("heading", fontName=heading_bold, fontSize=layout["heading_size"],
-                                  leading=layout["heading_size"] * 1.2, textColor=accent, spaceBefore=gap, spaceAfter=2),
+                                  leading=layout["heading_size"] * 1.2, textColor=accent, spaceBefore=gap, spaceAfter=size * 0.6),
         "body": ParagraphStyle("body", fontName=regular, fontSize=size, leading=lead, textColor=text),
-        "item": ParagraphStyle("item", fontName=regular, fontSize=size, leading=lead, textColor=text, spaceBefore=size * 0.5),
-        "sub": ParagraphStyle("sub", fontName=detail_italic, fontSize=size, leading=lead, textColor=text),
-        "dates": ParagraphStyle("dates", fontName=detail, fontSize=size, leading=lead, textColor=text,
-                                alignment=TA_RIGHT, spaceBefore=size * 0.5),
+        "item": ParagraphStyle("item", fontName=regular, fontSize=size + 1, leading=(size + 1) * 1.3, textColor=text),
+        "sub": ParagraphStyle("sub", fontName=detail_italic, fontSize=size, leading=lead, textColor=muted,
+                              spaceAfter=size * 0.2),
+        "skill": ParagraphStyle("skill", fontName=regular, fontSize=size, leading=lead, textColor=text,
+                                spaceAfter=size * 0.35),
+        "dates": ParagraphStyle("dates", fontName=detail, fontSize=size, leading=(size + 1) * 1.3, textColor=muted,
+                                alignment=TA_RIGHT),
         "bullet": ParagraphStyle("bullet", fontName=regular, fontSize=size, leading=lead, textColor=text,
-                                 leftIndent=size * 1.4, bulletIndent=size * 0.4, spaceBefore=1, bulletFontName=regular),
+                                 leftIndent=size * 1.4, bulletIndent=size * 0.4, spaceBefore=size * 0.25, bulletFontName=regular),
         "letter": ParagraphStyle("letter", fontName=regular, fontSize=size + 0.5, leading=(size + 0.5) * 1.35,
                                  textColor=text, spaceAfter=size * 0.9),
     }, accent
+
+
+def _labelled(line, style):
+    """A skills line: "Tools: Figma, Photoshop" with the label in bold."""
+    label, colon, rest = line.partition(":")
+    if colon and 0 < len(label) <= 40 and rest.strip():
+        return Paragraph(f"<b>{escape(label.strip())}:</b> {escape(rest.strip())}", style)
+    return _p(line, style)
 
 
 def _p(text, style):
@@ -173,9 +186,10 @@ def render_resume(content: ResumeContent, layout: dict, path: Path):
     for section in content.sections:
         blocks = []
         if section.text:
-            blocks.append([_p(section.text, styles["body"])])
-        for item in section.items:
-            flow = []
+            blocks.append([_labelled(line, styles["skill"]) for line in section.text.splitlines() if line.strip()])
+        for number, item in enumerate(section.items):
+            # Space between entries goes before the title row: a table cell ignores its paragraph's spaceBefore.
+            flow = [Spacer(1, layout["body_size"] * 1.1)] if number else []
             head = escape(item.heading)
             left = [Paragraph(f"<b>{head}</b>" if head else "", styles["item"])]
             sub = " — ".join(x for x in (item.subheading, item.location) if x)
