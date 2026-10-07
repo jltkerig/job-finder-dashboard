@@ -82,6 +82,30 @@ class CheckListingsTests(unittest.TestCase):
         self.assertTrue(details["verification"].startswith("Found on the company site"))
         self.assertEqual(details["company_check"], "2026-10-06")
 
+    def test_job_board_listing_is_always_due_and_rejected_when_not_found(self):
+        self.assertTrue(cc._due({}, date(2026, 10, 6), "https://remotive.com/remote-jobs/design/x-1"))
+        self.assertFalse(cc._due({}, date(2026, 10, 6), "https://www.kobotoolbox.org/join-our-team/frontend-developer"))
+        row = {"id": 9, "name": "Acme Widgets Inc.", "career_job_title": "Graphic Designer", "career_url": "https://remotive.com/j/1",
+               "source_url": "https://remotive.com/j/1", "source_type": "Remotive", "career_credibility": 6, "is_kept": 0,
+               "application_status": "None", "listing_details": "{}"}
+        cursor = MagicMock()
+        cursor.fetchall.return_value = [row]
+        database = MagicMock()
+        database.cursor.return_value = cursor
+        self.assertEqual(cc.check_listings(database, lambda q: [], lambda u: None, today=date(2026, 10, 6)), 0)
+        self.assertIn("rejection_reason = 'not_on_company_site'", cursor.execute.call_args_list[-1][0][0])
+
+    def test_saved_job_board_listing_is_flagged_not_rejected(self):
+        row = {"id": 9, "name": "Acme Widgets Inc.", "career_job_title": "Graphic Designer", "career_url": "https://remotive.com/j/1",
+               "source_url": "https://remotive.com/j/1", "source_type": "Remotive", "career_credibility": 6, "is_kept": 1,
+               "application_status": "Saved", "listing_details": "{}"}
+        cursor = MagicMock()
+        cursor.fetchall.return_value = [row]
+        database = MagicMock()
+        database.cursor.return_value = cursor
+        cc.check_listings(database, lambda q: [], lambda u: None, today=date(2026, 10, 6))
+        self.assertNotIn("is_rejected", cursor.execute.call_args_list[-1][0][0])
+
     def test_recently_checked_listing_is_skipped(self):
         details = {"company_check": "2026-10-04", "verification": "Listed on X; no matching posting found on the company site"}
         self.assertFalse(cc._due(details, date(2026, 10, 6)))

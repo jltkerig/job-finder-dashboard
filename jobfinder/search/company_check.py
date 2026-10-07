@@ -29,13 +29,13 @@ AGGREGATORS = {
     "usajobs.gov", "builtin.com", "wellfound.com", "remotive.com", "weworkremotely.com", "remoteok.com", "himalayas.app",
     "jobgether.com", "learn4good.com", "salary.com", "snagajob.com", "getwork.com", "recruit.net", "jobilize.com",
     "theladders.com", "flexjobs.com", "workingnomads.com", "dailyremote.com", "jobleads.com", "careerjet.com",
-    "whatjobs.com", "joblist.com", "freehire.me", "thecreativeloft.com", "jobleads.com", "builtinnyc.com", "jobright.ai", "jobsora.com", "jobtoday.com", "hiring.cafe", "jobs.lever.co.uk", "teal.com", "tealhq.com", "bebee.com", "trabajo.org", "governmentjobs.com",
+    "whatjobs.com", "joblist.com", "freehire.me", "thecreativeloft.com", "jobleads.com", "builtinnyc.com", "jobright.ai", "jobsora.com", "jobtoday.com", "hiring.cafe", "jobs.lever.co.uk", "teal.com", "tealhq.com", "bebee.com", "trabajo.org",
 }
 # Applicant systems host employers' own postings, usually under the employer's name.
 ATS_HOSTS = ("myworkdayjobs.com", "greenhouse.io", "lever.co", "ashbyhq.com", "workable.com", "smartrecruiters.com",
              "icims.com", "bamboohr.com", "recruitee.com", "teamtailor.com", "paylocity.com", "ultipro.com",
              "successfactors.com", "oraclecloud.com", "adp.com", "jobvite.com", "breezy.hr", "applytojob.com",
-             "rippling.com", "paycomonline.net", "dayforcehcm.com", "taleo.net")
+             "rippling.com", "paycomonline.net", "dayforcehcm.com", "taleo.net", "governmentjobs.com")
 CLOSED = re.compile(r"no longer (?:accepting|available|open)|position has been filled|(?:job|posting|position) "
                     r"(?:has )?(?:expired|closed)|this (?:job|position|requisition) is (?:closed|no longer)", re.I)
 COMPANY_FILLER = {"inc", "llc", "ltd", "corp", "corporation", "company", "co", "the", "group", "holdings", "and", "of",
@@ -132,12 +132,19 @@ def judge(listing, url, html):
     titles += [heading.get_text(" ", strip=True) for heading in soup.find_all("h1", limit=3)]
     similarity = max((title_similarity(listing["title"], title) for title in titles if title), default=0.0)
     reasons = []
-    if similarity < 0.6:
+    # The employer often names the job more briefly ("Frontend Developer" for a board's "Frontend Web Application
+    # Developer"): a looser title is enough when most of the posting text is the same.
+    overlap = text_overlap(listing.get("description") or "", text)
+    if similarity < 0.6 and not (similarity >= 0.4 and overlap >= 0.3):
         return {"score": 0, "match": False, "reasons": ["different job title"]}
     if CLOSED.search(text[:20000]):
         return {"score": 0, "match": False, "reasons": ["the posting says it is closed"]}
     score = round(similarity * 40)
     reasons.append(f"title matches ({similarity:.0%})")
+    # The same title word for word beats a "Senior …" version of it on the same careers site.
+    if any(set(_words(title)) - {"careers", "jobs", "job"} == set(_words(listing["title"])) for title in titles if title):
+        score += 5
+        reasons.append("exact title")
 
     organisations = " ".join(str((posting.get("hiringOrganization") or {}).get("name") or "") for posting in postings
                              if isinstance(posting.get("hiringOrganization"), dict))
@@ -158,7 +165,6 @@ def judge(listing, url, html):
     if place and any(word in _words(text[:20000]) for word in place):
         score += 10
         reasons.append("same location")
-    overlap = text_overlap(listing.get("description") or "", text)
     if overlap >= 0.3:
         score += 25
         reasons.append(f"same posting text ({overlap:.0%})")
@@ -207,14 +213,22 @@ def find_company_posting(listing, search, fetch):
     return None
 
 
-def _due(details, today):
+def on_job_board(url):
+    """True when the link is a job board's copy, not the employer's own site or applicant system."""
+    host = (urlparse(str(url or "")).hostname or "").casefold()
+    return bool(host) and is_aggregator(host)
+
+
+def _due(details, today, url=""):
+    """Every job-board listing needs the employer's own posting (a board is never a lead by itself); feed and job-site
+    listings not checked yet do too."""
     checked = details.get("company_check")
     if checked:
         try:
             return date.fromisoformat(checked) <= today - timedelta(days=RECHECK_DAYS)
         except ValueError:
             return True
-    return NOT_CHECKED in str(details.get("verification") or "")
+    return on_job_board(url) or NOT_CHECKED in str(details.get("verification") or "")
 
 
 def check_listings(database, search, fetch, limit=CHECK_LIMIT, today=None):
@@ -224,9 +238,8 @@ def check_listings(database, search, fetch, limit=CHECK_LIMIT, today=None):
     cursor = database.cursor(dictionary=True)
     try:
         cursor.execute("SELECT id, name, career_job_title, career_url, source_url, source_type, career_credibility, "
-                       "listing_details FROM companies WHERE is_rejected = 0 AND listing_details LIKE %s "
-                       "AND COALESCE(job_open_status, '') <> 'Closed' ORDER BY date_found DESC",
-                       ('%verification%',))
+                       "is_kept, application_status, listing_details FROM companies WHERE is_rejected = 0 "
+                       "AND COALESCE(job_open_status, '') <> 'Closed' ORDER BY date_found DESC")
         rows = cursor.fetchall()
     finally:
         cursor.close()
@@ -236,7 +249,7 @@ def check_listings(database, search, fetch, limit=CHECK_LIMIT, today=None):
             details = json.loads(row.get("listing_details") or "{}") or {}
         except (TypeError, ValueError):
             continue
-        if not _due(details, today):
+        if not _due(details, today, row.get("career_url")):
             continue
         if checked >= limit:
             break
@@ -265,6 +278,14 @@ def check_listings(database, search, fetch, limit=CHECK_LIMIT, today=None):
             print(f"  Found the employer's posting: {match['url']}", flush=True)
             update = ("UPDATE companies SET career_url = %s, source_url = %s, career_credibility = GREATEST(COALESCE(career_credibility, 0), 8), "
                       "listing_details = %s WHERE id = %s", (match["url"], board_url, json.dumps(details), row["id"]))
+        elif on_job_board(row.get("career_url")) and not row.get("is_kept") and                 str(row.get("application_status") or "None") in ("None", ""):
+            # Not a lead without the employer's own posting: rejected, so Settings can restore it.
+            details["verification"] = f"Only on {source}; not found on the company's website"
+            print("  Not on the company's website: rejected.", flush=True)
+            update = ("UPDATE companies SET listing_details = %s, pre_reject_kept = is_kept, pre_reject_status = "
+                      "application_status, is_rejected = 1, application_status = 'Rejected', rejected_at = "
+                      "CURRENT_TIMESTAMP, rejection_reason = 'not_on_company_site', rejected_by = 'system' WHERE id = %s",
+                      (json.dumps(details), row["id"]))
         else:
             details["verification"] = f"Listed on {source}; no matching posting found on the company site"
             update = ("UPDATE companies SET listing_details = %s WHERE id = %s", (json.dumps(details), row["id"]))

@@ -215,6 +215,10 @@ def decode_page(content, declared=None):
     return content.decode("cp1252", errors="replace")
 
 
+BROWSER_HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
+                                 "Chrome/126.0 Safari/537.36", "Accept": "text/html,application/xhtml+xml"}
+
+
 def fetch_text(url, max_bytes=6_000_000):
     """Any text file (sitemap.xml, robots.txt) as an object with .url and .text, or None; read politely and size-capped."""
     if not is_valid_url(url):
@@ -222,6 +226,11 @@ def fetch_text(url, max_bytes=6_000_000):
     try:
         wait_for_host(url)
         response = requests.get(url, headers=HEADERS, timeout=TIMEOUT, stream=True)
+        if response.status_code == 403:
+            # Some firewalls (CloudFront) refuse any non-browser agent even on public job pages: ask once more as a
+            # browser would.
+            response.close()
+            response = requests.get(url, headers=BROWSER_HEADERS, timeout=TIMEOUT, stream=True)
         if not response.ok:
             return None
         content = b""
