@@ -16,7 +16,7 @@ from flask import jsonify, request
 from mysql.connector import Error
 
 from jobfinder import db
-from jobfinder.web import webfiles
+from jobfinder.web import queue_documents, webfiles
 from jobfinder.web.core import api_error, app, log_error_code
 from jobfinder.web.schema import ensure_job_tracking_columns, ensure_keep_column
 from jobfinder.web.tuning import read_tuning_settings
@@ -76,6 +76,7 @@ def _tick():
     now = datetime.now(webfiles.LOCAL_TIMEZONE)
     if search_due(settings, now) and run_daily_search():
         write_settings({"auto_search_last_date": now.date().isoformat()})
+    queue_documents.start_if_needed()
 
 
 def _loop():
@@ -88,6 +89,7 @@ def _loop():
 
 
 def start_scheduler():
+    queue_documents.start()
     threading.Thread(target=_loop, name="daily-search", daemon=True).start()
 
 
@@ -172,6 +174,8 @@ def update_apply_queue():
             cursor.close()
         if connection:
             connection.close()
+    if queued:
+        queue_documents.start_if_needed()  # every queued job gets a résumé and cover letter
     return jsonify({"status": "saved", "count": len(ids)})
 
 
