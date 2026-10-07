@@ -64,7 +64,8 @@ def _is_type(node, name):
 _DROPPED_WORDS = {"senior", "junior", "remote", "hybrid", "job", "jobs", "the", "a"}
 # Words that put a title in a different trade from a designer/developer search.
 OFF_FIELD_WORDS = {"interior", "landscape", "fashion", "apparel", "industrial", "mechanical", "electrical", "structural",
-                   "architectural", "jewelry", "floral", "kitchen", "furniture", "merchandising", "merchandiser"}
+                   "architectural", "jewelry", "floral", "kitchen", "furniture", "merchandising", "merchandiser",
+                   "sewer", "highway", "civil", "bim", "cad"}
 # Extra words that may sit around or between the searched words without changing the job.
 COMPATIBLE_EXTRA_WORDS = {
     "ux", "ui", "digital", "creative", "visual", "interaction", "interactive", "graphic", "content", "product", "brand",

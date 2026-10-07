@@ -27,7 +27,8 @@ class Relevance(unittest.TestCase):
     def test_saved_vetted_remote_ok_and_untitled_rows_are_never_touched(self):
         self.assertFalse(relevance.is_irrelevant_lead(row(PIO, is_kept=1), {}, TITLES))
         self.assertFalse(relevance.is_irrelevant_lead(row(PIO), {'matched_title': 'web designer'}, TITLES))
-        self.assertFalse(relevance.is_irrelevant_lead(row(PIO, source_type='Remote OK'), {}, TITLES))
+        self.assertFalse(relevance.is_irrelevant_lead(row(PIO, source_type='Remote OK'), {'matched_title': 'web designer'}, TITLES))
+        self.assertTrue(relevance.is_irrelevant_lead(row(PIO), {'matched_title': 'Designer'}, TITLES))  # an old, looser match
         self.assertFalse(relevance.is_irrelevant_lead(row(''), {}, TITLES))
 
     def test_no_known_titles_changes_nothing(self):

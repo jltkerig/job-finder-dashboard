@@ -27,7 +27,7 @@ from jobfinder.sources.job_listings import excludes_us, matching_title as matchi
 # Describing words for the digital and visual design work these searches are about: a related title made only of
 # these ("Interface Designer", "Website Designer") is kept even when it shares no word with the typed title.
 DIGITAL_WORDS = {"web", "website", "internet", "site", "digital", "interface", "experience", "ux", "ui", "user",
-                 "interaction", "visual", "graphic", "graphics", "computer", "multimedia", "media", "content", "front",
+                 "interaction", "visual", "graphic", "graphics", "multimedia", "media", "content", "front",
                  "end", "frontend", "page", "online", "brand", "creative", "production", "art"}
 
 
@@ -48,7 +48,7 @@ def expand_job_titles(titles):
         for suggestion in related_title_suggestions(title, limit=12):
             words = _title_words(suggestion)
             kind = words - {role}
-            if (role in words and kind and (kind & describing or kind <= DIGITAL_WORDS)
+            if (role in words and kind and kind <= describing | DIGITAL_WORDS
                     and suggestion.casefold() not in seen):
                 expanded.append(suggestion)
                 seen.add(suggestion.casefold())
@@ -147,12 +147,26 @@ def is_internship_row(company, details):
     return bool(not company.get("is_kept") and is_internship(company.get("career_job_title"), details.get("schedule")))
 
 
+OTHER_FIELD = re.compile(r"\b(?:engineer\w*|sewer|highway|civil|bim|cad|computer-aided|technical designer|"
+                         r"instructional|extension specialist|full[- ]?stack|java|node(?:\.js)?|"
+                         r"telecommunications)\b", re.I)
+DESIGN_FIELD = re.compile(r"\b(?:design\w*|web\w*|digital|graphic\w*|visual|content|creative|ux|ui|front[- ]?end|"
+                          r"producer|production|brand|interactive|multimedia|marketing)\b", re.I)
+
+
 def is_irrelevant_lead(company, details, wanted):
-    """An unsaved lead from before titles were checked whose title matches none of the user's."""
+    """An unsaved lead whose title matches none of the user's titles. Judged again every time: the title stored when
+    it was saved may come from an older, looser match (a bare "Designer" let in sewer and highway engineers)."""
     title = (company.get("career_job_title") or "").strip()
-    return bool(wanted and title and not company.get("is_kept") and not details.get("matched_title")
-                and company.get("source_type") not in FEED_NAMES
-                and not matching_job_title(title, wanted))
+    if not (wanted and title and not company.get("is_kept")) or matching_job_title(title, wanted):
+        return False
+    # A title matched when it was saved still counts while it is one of the current titles; an old, looser one
+    # (a bare "Designer") doesn't.
+    if str(details.get("matched_title") or "").casefold() in {str(t).casefold() for t in wanted}:
+        return False
+    # No title matches: reject only what is clearly another field; design-adjacent roles (UX/UI, product, creative,
+    # digital content or producer) stay for the user to judge.
+    return bool(OTHER_FIELD.search(title) or not DESIGN_FIELD.search(title))
 
 
 def is_wrong_location_lead(company, details):

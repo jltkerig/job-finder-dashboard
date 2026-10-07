@@ -33,6 +33,18 @@ Each entry: what went wrong, why, the fix, and the check that would have caught 
 
 ## Matching titles
 
+- **The wrong-role check never fired for most listings** (2026-10-06, the real reason off-field jobs kept coming back
+  after being "fixed"). It skipped every listing with a stored `matched_title`, and listings saved during the bare
+  "Designer" period all had one, so sewer/highway engineers, BIM and CAD drafters stayed forever. Fix: a stored match
+  counts only while it is one of the current titles; listings matching no title are rejected when clearly another field
+  (engineering, drafting, instructional, extension, full-stack/Java/Node, technical designer), design-adjacent ones stay.
+  Check: run `is_irrelevant_lead` over all open listings after any title change and read the list.
+- **Related titles added unrelated words** ("Front End React Developer" let in full-stack/Java jobs; "Computer Graphic
+  Designer" matched "Computer-Aided Designer"). Fix: a related title may only add words from the typed titles or the
+  digital/design list.
+- **Don't undo earlier decisions:** a bracketed department isn't part of the job name ("Lead, Digital Designer (Apparel &
+  Footwear)" is a Digital Designer job); adjunct graphic design teaching stays. The tests pin both.
+
 - **Related titles widened to the bare role** (2026-10-06). O*NET suggestions for "Product Designer" included
   "Designer", "Fur Designer", "Toy Designer", so Textile, Computer-Aided, Instructional and engineering "Design" jobs
   matched. Fix: a related title must share a describing word with a typed title or be a digital/design-field title.
