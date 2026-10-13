@@ -64,6 +64,36 @@ class CaptureFiles(unittest.TestCase):
             self.assertEqual(capture.files_to_import(searches), [target])
             self.assertEqual(len(capture.read_jobs(target)[1]), 2)
 
+    def test_a_file_still_being_rewritten_waits_and_counts_only_new_jobs(self):
+        with tempfile.TemporaryDirectory() as downloads, tempfile.TemporaryDirectory() as searches:
+            waiting = Path(downloads) / "searches"
+            earlier = capture_file(searches, jobs=[job()], day="passive-10-12-2026-13.02.32.100")  # imported earlier today
+            capture.mark_imported(searches, [earlier])
+            path = capture_file(waiting, jobs=[job(), job(job_id="2"), job(job_id="3")])
+            pending = capture.pending_files(downloads)
+            written = pending[0]["modified"]
+            self.assertEqual(capture.settled_files(pending, searches, now=written + 60), [])
+            ready = capture.settled_files(pending, searches, now=written + capture.QUIET_SECONDS + 1)
+            self.assertEqual([(item["jobs"], item["new"]) for item in ready], [(3, 2)])
+            self.assertTrue(path.exists())
+
+    def test_only_new_or_changed_jobs_are_imported_from_a_file_that_repeats_earlier_ones(self):
+        with tempfile.TemporaryDirectory() as searches:
+            earlier = capture_file(searches, jobs=[job(), job(job_id="2", url="https://www.linkedin.com/jobs/view/2")],
+                                   day="passive-10-12-2026-13.02.32.100")
+            capture.mark_imported(searches, [earlier])
+            seen = capture.load_seen_jobs(searches)  # built from what was imported before
+            self.assertEqual(len(seen), 2)
+            again = [dict(j, last_seen="2026-10-12T17:00:00Z", changed_at="2026-10-12T17:00:00Z") for j in capture.read_jobs(earlier)[1]]
+            self.assertEqual(capture.new_or_changed(again, seen), [])  # only seen again
+            changed = dict(again[0], title="Senior Web Designer")
+            fresh = job(job_id="3", url="https://www.linkedin.com/jobs/view/3")
+            fresh["url"] = capture.canonical_url(fresh["url"])
+            self.assertEqual([j["title"] for j in capture.new_or_changed([again[1], changed, fresh], seen)],
+                             ["Senior Web Designer", "Web Designer"])
+            capture.save_seen_jobs(searches, {**seen, fresh["url"]: capture.job_fingerprint(fresh)})
+            self.assertEqual(len(capture.load_seen_jobs(searches)), 3)
+
     def test_old_folders_are_removed_only_after_import(self):
         with tempfile.TemporaryDirectory() as searches:
             old = capture_file(searches, day="passive-08-01-2026")
@@ -73,6 +103,28 @@ class CaptureFiles(unittest.TestCase):
             self.assertEqual(capture.remove_old_folders(searches, today=date(2026, 9, 30)), ["passive-08-01-2026"])
             self.assertFalse(old.exists())
             self.assertTrue(recent.exists())
+
+    def test_each_scrape_is_its_own_folder_imported_once_and_removed_when_old(self):
+        with tempfile.TemporaryDirectory() as downloads, tempfile.TemporaryDirectory() as searches:
+            waiting = Path(downloads) / "searches"
+            first = capture_file(waiting, jobs=[job()], day="passive-10-12-2026-13.02.32.100")
+            capture_file(waiting, jobs=[job(job_id="2")], day="passive-10-12-2026-13.07.05.250")
+            self.assertEqual(len(capture.pending_files(downloads)), 2)
+            moved = capture.move_pending(downloads, searches)
+            self.assertEqual(len(moved), 2)
+            self.assertFalse(first.exists())
+            capture.mark_imported(searches, moved)
+            self.assertEqual(capture.files_to_import(searches), [])
+            # A later scrape is the only thing left to import.
+            later = capture_file(waiting, jobs=[job(job_id="3")], day="passive-10-12-2026-14.30.00.000")
+            capture.move_pending(downloads, searches)
+            self.assertEqual([path.parent.parent.name for path in capture.files_to_import(searches)],
+                             ["passive-10-12-2026-14.30.00.000"])
+            self.assertFalse(later.exists())
+            capture.mark_imported(searches, capture.files_to_import(searches))
+            removed = capture.remove_old_folders(searches, today=date(2026, 12, 1))
+            self.assertEqual(sorted(removed), ["passive-10-12-2026-13.02.32.100", "passive-10-12-2026-13.07.05.250",
+                                               "passive-10-12-2026-14.30.00.000"])
 
     def test_jobs_without_a_title_or_web_link_are_left_out(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -145,7 +197,7 @@ def import_run(rows=()):
     run.database = None
     run.state, run.wanted = "TX", ["Web Designer"]
     run.statewide, run.selected_states, run.city_targets = set(), {"TX"}, []
-    run.rejected, run.by_url, run.by_key = set(), {}, {}
+    run.rejected, run.by_url, run.by_key, run.mine = set(), {}, {}, {}
     for row in rows:
         run._remember(row)
     return run
@@ -248,6 +300,33 @@ class ImportFilter(unittest.TestCase):
         row_id, details = set_details.call_args[0]
         self.assertEqual(row_id, 7)
         self.assertEqual(details["also_on"], [{"site": "LinkedIn", "url": "https://www.linkedin.com/jobs/view/4012345678"}])
+
+    def test_a_repost_of_a_job_you_saved_is_linked_even_when_the_saved_one_had_no_place(self):
+        saved = {"id": 9, "name": "Acme Corp", "career_job_title": "Web Designer", "work_arrangement": None, "city": None,
+                 "state": None, "source_url": "https://www.linkedin.com/jobs/view/111", "source_type": "LinkedIn",
+                 "listing_details": json.dumps({"location": ""}), "is_kept": 1, "application_status": "Applied"}
+        result, _, set_details = self.import_one(import_run([saved]), job(job_id="222", url="https://www.linkedin.com/jobs/view/222"))
+        self.assertEqual(result[0], "linked")
+        self.assertEqual(self.saved, [])
+        self.assertEqual(set_details.call_args[0][0], 9)
+
+    def test_a_repost_in_another_city_is_a_different_job(self):
+        saved = {"id": 9, "name": "Acme Corp", "career_job_title": "Web Designer", "work_arrangement": "On-site",
+                 "city": "Dallas", "state": "TX", "source_url": "https://www.linkedin.com/jobs/view/111", "source_type": "LinkedIn",
+                 "listing_details": json.dumps({"location": "Dallas, TX"}), "is_kept": 1, "application_status": "Applied"}
+        result, _, _ = self.import_one(import_run([saved]), job(job_id="222", url="https://www.linkedin.com/jobs/view/222"))
+        self.assertEqual(result[0], "added")
+
+    def test_a_saved_job_the_site_now_says_is_closed_is_marked_closed_even_when_filters_skip_it(self):
+        saved = {"id": 5, "name": "Acme Corp", "career_job_title": "Nurse Manager", "work_arrangement": "On-site",
+                 "city": "Austin", "state": "TX", "source_url": "https://www.linkedin.com/jobs/view/4012345678",
+                 "source_type": "LinkedIn", "listing_details": json.dumps({"location": "Austin, TX"}), "is_kept": 1,
+                 "application_status": "Saved"}
+        run = import_run([saved])
+        with patch.object(judging, "assess_opening", return_value=passing()),                 patch.object(run, "_mark_closed") as mark_closed:
+            result = run.import_job("linkedin", job(title="Nurse Manager", closed=True, level="opened"))
+        mark_closed.assert_called_once_with(5)
+        self.assertEqual(result[0], "skipped")  # the title is not one you search for; closing it is separate
 
     def test_a_new_job_the_site_says_is_closed_is_not_added(self):
         result, _, _ = self.import_one(import_run(), job(closed=True, level="opened", description="x" * 200))

@@ -89,7 +89,11 @@ def get_kept_companies(status_filter="", state_filter="", title_filter="", sort_
 
         where = ["is_kept = 1", "is_rejected = 0"]
         params = []
-        if status_filter:
+        if status_filter == "__applied":
+            where.append("application_status IN ('Applied', 'Talking With Recruiter', 'Interview')")
+        elif status_filter == "__not_applied":
+            where.append("COALESCE(application_status, 'None') NOT IN ('Applied', 'Talking With Recruiter', 'Interview')")
+        elif status_filter:
             where.append("application_status = %s")
             params.append(status_filter)
         if state_filter:
@@ -112,7 +116,7 @@ def get_kept_companies(status_filter="", state_filter="", title_filter="", sort_
             SELECT id, name, career_job_title, career_credibility, domain, career_url,
                    source_url, source_type, country, state, city, latitude, longitude, distance_miles, usa_credibility, work_arrangement, date_found,
                    last_checked, result_updated_at, is_kept, job_open_status, application_status, notes, listing_skills,
-                   is_rejected, rejected_at
+                   is_rejected, rejected_at, listing_details
             FROM companies
             WHERE {' AND '.join(where)}
             ORDER BY {order_by}
@@ -285,6 +289,9 @@ def _duplicate_key(company):
     return (name, title) if name and title else None
 
 
+APPLIED_STATUSES = ("Applied", "Talking With Recruiter", "Interview")
+
+
 def merge_duplicates(companies):
     """One row per job: when the same job was found on several boards, keep the best source (employer careers site,
     then the higher credibility, then the newest) and list the others on it as "also_listed". Rejected listings are
@@ -298,7 +305,9 @@ def merge_duplicates(companies):
     for group in groups.values():
         if len(group) < 2:
             continue
-        group.sort(key=lambda item: (item.get("source_type") == "Employer careers", item.get("career_credibility") or 0,
+        # A job you saved or applied to always stays; its copies are the ones that are hidden.
+        group.sort(key=lambda item: (bool(item.get("is_kept")), item.get("application_status") in APPLIED_STATUSES,
+                                     item.get("source_type") == "Employer careers", item.get("career_credibility") or 0,
                                      str(item.get("date_found") or "")), reverse=True)
         keep = group[0]
         keep["also_listed"] = [{"id": other["id"], "source": other.get("source_type") or "Web",
@@ -308,15 +317,14 @@ def merge_duplicates(companies):
 
 
 def turned_down_titles(limit=200):
-    """Titles of listings you rejected as the wrong role or rated 👎 in Top 10 Picks, so later picks mark down ones like
-    them."""
+    """Titles of listings you rated 👎 in Top 10 Picks, so later picks mark down ones like them. Rejecting a listing
+    (for any reason, closed included) teaches nothing; only 👎 does."""
     connection = cursor = None
     try:
         connection = db.connect()
         cursor = connection.cursor()
         cursor.execute("""SELECT career_job_title FROM companies
-                          WHERE ((is_rejected = 1 AND rejected_by = 'user' AND rejection_reason = 'wrong_role')
-                                 OR listing_details LIKE '%%"pick_rating": "down"%%')
+                          WHERE listing_details LIKE '%%"pick_rating": "down"%%'
                                 AND career_job_title IS NOT NULL AND career_job_title <> ''
                           ORDER BY date_found DESC LIMIT %s""", (limit,))
         return [row[0] for row in cursor.fetchall()]

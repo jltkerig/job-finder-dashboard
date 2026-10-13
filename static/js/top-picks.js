@@ -10,18 +10,19 @@
   const build = document.getElementById("top-picks-build");
   const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || "";
   if (!window.TopPicksScore) return;
-  const { PICKS, titleWords, byScore, pick, checkRequirements, likeness, rank, appliedTitles, turnedDown } = window.TopPicksScore;
+  const { isHandled, PICKS, titleWords, byScore, pick, checkRequirements, likeness, rank, appliedTitles, turnedDown } = window.TopPicksScore;
 
   let current = [];  // every ranked listing from the last click, best first
 
-  // "Not for Me": reject the listing as the wrong role, learn from its title, and move the next one up.
-  async function turnDown(pick, button) {
+  // Reject / Closed: take the listing off the Search page and move the next pick up. Neither teaches Top 10 anything:
+  // only 👎 marks down jobs like it (a closed listing says nothing about the role, and a rejection can be for any reason).
+  async function rejectListing(pick, button, reason, message) {
     button.disabled = true;
     try {
       const response = await fetch(`/reject-listing/${encodeURIComponent(pick.row.dataset.companyId)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken, "X-Requested-With": "fetch" },
-        body: JSON.stringify({ reason: "wrong_role" }),
+        body: JSON.stringify({ reason }),
       });
       if (!response.ok) throw new Error();
     } catch {
@@ -29,26 +30,27 @@
       status.textContent = "Could not reject that listing. Try again.";
       return;
     }
-    const words = titleWords(pick.row.dataset.job);
-    if (words.length) turnedDown.push(words);
     pick.row.hidden = true;
     const details = pick.row.nextElementSibling;
     if (details?.classList.contains("details-row")) details.hidden = true;
     current = current.filter((other) => other !== pick);
-    current.forEach((other) => {
-      const disliked = likeness(other.row.dataset.job, [words]);
-      if (disliked >= 0.5 && !other.gaps.some((gap) => gap.text === "Like jobs you turned down")) {
-        other.gaps.push({ text: "Like jobs you turned down", hard: false });
-        other.score -= Math.round(35 * disliked);
-      }
-    });
-    current.sort(byScore);
     render(current.slice(0, PICKS));
-    status.textContent = "Rejected. Top 10 will mark down jobs like it from now on.";
+    status.textContent = message;
   }
 
-  // 👍 / 👎: saved on the listing and learned from next time; the pick stays where it is. Clicking the same one again
-  // clears it.
+  // Keep or Apply on a pick: it is handled, so it leaves the list and the next best one moves up.
+  function dropPick(pick, message) {
+    current = current.filter((other) => other !== pick);
+    if (current.length < PICKS) {  // a remembered list holds only 10: rank again so the list is full
+      button.click();
+      return;
+    }
+    render(current.slice(0, PICKS));
+    status.textContent = message;
+  }
+
+  // 👍 / 👎: saved on the listing and learned from next time. 👍 stays where it is (click it again to clear); 👎 is a bad
+  // pick and leaves the Top 10 at once.
   async function rate(pick, rating, buttons) {
     const next = pick.row.dataset.rating === rating ? "none" : rating;
     try {
@@ -74,6 +76,8 @@
     buttons.up.setAttribute("aria-pressed", String(next === "up"));
     buttons.down.setAttribute("aria-pressed", String(next === "down"));
     status.textContent = next === "none" ? "Rating cleared." : "Thanks. Top 10 will use that next time.";
+    // A bad pick leaves the Top 10 straight away and the next best one moves up.
+    if (next === "down") dropPick(pick, "Bad pick removed from your Top 10. The next one moved up.");
   }
 
   // Apply queue: queued jobs are kept on the Dashboard, where Apply opens them. After a daily search, Top 10 runs by
@@ -123,7 +127,7 @@
       if (!saved || Date.now() - saved.at > SAVED_FOR_MS) return [];
       return saved.picks.map((pick) => {
         const row = document.querySelector(`#results-table .result-row[data-company-id="${pick.id}"]`);
-        return row && row.dataset.status !== "closed" ? { row, score: pick.score, reasons: pick.reasons || [], gaps: pick.gaps || [] } : null;
+        return row && row.dataset.status !== "closed" && !isHandled(row) ? { row, score: pick.score, reasons: pick.reasons || [], gaps: pick.gaps || [] } : null;
       }).filter(Boolean);
     } catch {
       return [];
@@ -167,7 +171,9 @@
         chip.textContent = reason;
         chips.append(chip);
       });
-      body.append(title, company, chips);
+      body.append(title, company);
+      if (window.TopPicksFacts) body.append(window.TopPicksFacts.build(row));
+      body.append(chips);
       if (gaps.length) {
         const warnings = document.createElement("ul");
         warnings.className = "top-pick-gaps";
@@ -206,6 +212,7 @@
           setTimeout(() => {
             keep.textContent = rowKeep.textContent.trim();
             keep.classList.toggle("is-saved", rowKeep.classList.contains("is-saved"));
+            if (isHandled(row)) dropPick(pick, "Saved to your Dashboard. The next pick moved up.");
           }, 800);
         });
         buttons.append(keep);
@@ -245,9 +252,15 @@
       reject.type = "button";
       reject.className = "bordered-button destructive-action";
       reject.textContent = "Reject";
-      reject.title = "Reject this listing; Top 10 marks down jobs like it from now on.";
-      reject.addEventListener("click", () => turnDown(pick, reject));
-      buttons.append(reject);
+      reject.title = "Reject this listing. Use 👎 instead to have Top 10 mark down jobs like it.";
+      reject.addEventListener("click", () => rejectListing(pick, reject, "other", "Rejected."));
+      const closed = document.createElement("button");
+      closed.type = "button";
+      closed.className = "bordered-button destructive-action";
+      closed.textContent = "Closed";
+      closed.title = "The job is closed. Rejects it without teaching Top 10 anything.";
+      closed.addEventListener("click", () => rejectListing(pick, closed, "closed", "Rejected as closed."));
+      buttons.append(reject, closed);
       const queueButton = document.createElement("button");
       queueButton.type = "button";
       queueButton.className = "bordered-button";
@@ -262,6 +275,7 @@
           row.dataset.queued = "1";
           const rowApply = row.querySelector(".apply-action");
           if (rowApply) { rowApply.textContent = "Added"; rowApply.disabled = true; }
+          dropPick(pick, "Added to your Apply queue. The next pick moved up.");
         } catch (error) {
           status.textContent = error.message;
           queueButton.disabled = false;

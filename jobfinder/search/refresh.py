@@ -13,7 +13,7 @@ from jobfinder import paths
 from jobfinder.profiles.profile_tools import listing_skills, refresh_listing_skills
 from jobfinder.profiles.travel import miles_between
 from jobfinder.records.capture_import import CAPTURE_SOURCES
-from jobfinder.records.job_retention import CLOSED_KEEP_DAYS, tidy_closed_jobs
+from jobfinder.records.job_retention import CLOSED_KEEP_DAYS, UNSAVED_KEEP_DAYS, tidy_closed_jobs, tidy_old_jobs
 from jobfinder.records.search_debug import DebugRun
 from jobfinder.search import fetching
 from jobfinder.search import geo
@@ -701,6 +701,9 @@ def update_existing_results(company_ids=None):
         expired = tidy_closed_jobs(database)
         if expired:
             print(f"Deleted {expired} job(s) closed for more than {CLOSED_KEEP_DAYS} days (saved jobs are kept).")
+        old = tidy_old_jobs(database)
+        if old:
+            print(f"Deleted {old} unsaved job(s) found more than {UNSAVED_KEEP_DAYS} days ago (saved jobs are kept).")
     except Error as error:
         print(f"Could not tidy closed jobs: {error}")
     # With a Brave Search key, a refresh also looks for employers' own postings of job-site listings.

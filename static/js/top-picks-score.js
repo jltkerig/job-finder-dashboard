@@ -133,10 +133,16 @@
   // Pages that aren't one job (same idea as looks_like_not_a_job on the server): directories, job lists, agency pages.
   const NOT_A_JOB = /^\s*(?:find|hire|compare|top\s+\d+|best)\s|\bjobs\b|\b(?:web|website|graphic|logo|wordpress)\s+design\s+(?:in|near|services?|company|agency|packages?)\b/i;
 
+  // A job you already saved (Keep), added to the Apply queue, or rated 👎 (a bad pick) is not picked again.
+  function isHandled(row) {
+    return row.dataset.saved === "true" || Boolean(row.dataset.queued) || row.dataset.rating === "down";
+  }
+
   function pick() {
     const rows = Array.from(document.querySelectorAll("#results-table .result-row"))
       .filter((row) => shown(row) && row.dataset.status !== "closed" && !NOT_A_JOB.test(row.dataset.job || "")
-        && !["Applied", "Talking With Recruiter", "Interview"].includes(row.dataset.application));
+        && !["Applied", "Talking With Recruiter", "Interview"].includes(row.dataset.application)
+        && !isHandled(row));
     return rows.map(rank).sort(byScore);
   }
 
@@ -173,6 +179,6 @@
   }
 
 
-  // appliedTitles and turnedDown are shared: top-picks.js adds to them when you rate or reject a pick.
-  window.TopPicksScore = { PICKS, titleWords, byScore, pick, checkRequirements, likeness, rank, appliedTitles, turnedDown };
+  // appliedTitles and turnedDown are shared: top-picks.js adds to them when you rate a pick (rejecting one teaches nothing).
+  window.TopPicksScore = { isHandled, PICKS, titleWords, byScore, pick, checkRequirements, likeness, rank, appliedTitles, turnedDown };
 })();

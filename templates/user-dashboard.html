@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="csrf-token" content="{{ csrf_token }}" /><title>Dashboard | Job Finder</title><link rel="stylesheet" href="/static/css/style.css?v={{ app_version }}" /></head>
+<html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="csrf-token" content="{{ csrf_token }}" /><title>Dashboard | Job Finder</title><link rel="stylesheet" href="/static/css/style.css?v={{ asset_version }}" /></head>
 <body data-page="dashboard" data-form-examples="{{ form_examples|tojson|forceescape }}">
 <nav class="top-nav" aria-label="Main navigation">
   <div class="nav-inner"><a class="nav-link" href="/">Search</a><a class="nav-link active" href="/dashboard">Dashboard</a><a class="nav-link" href="http://127.0.0.1:5001/">Résumé Builder</a><a class="nav-link" href="/rejected-listings">Settings</a><a class="nav-link" href="/tuning">Tuning</a>
@@ -135,6 +135,18 @@
       </aside>
     </div>
 
+{% if apply_queue %}
+    <section id="apply-queue" class="apply-queue" aria-labelledby="apply-queue-heading">
+      <h2 id="apply-queue-heading">Apply Queue <span class="field-help">({{ apply_queue|length }})</span></h2>
+      <p class="field-help">Apply opens the posting. Fill it in and press Submit yourself, then mark it Applied.</p>
+      <ul class="apply-queue-list">{% for job in apply_queue %}
+        <li class="apply-queue-item" data-company-id="{{ job.id }}"><span class="apply-queue-job"><strong>{{ job.career_job_title or 'Unknown Job' }}</strong> <span class="summary-company">{{ job.name or '' }}</span>{% if job.application_files %}<span class="apply-queue-files">{% for file in job.application_files|sort(attribute='kind', reverse=true)|unique(attribute='kind') %}{% if true %}<a href="/user-builds/{{ file.pdf }}" target="_blank" rel="noopener"{% if file.kind == 'combined' %} class="apply-queue-combined-link"{% endif %}>{{ file.label }}</a>{% endif %}{% endfor %}{% if job.can_combine %}<button class="bordered-button apply-queue-combine" type="button" title="Put the résumé and cover letter into one PDF (résumé first)">{{ 'Combine again' if job.combined_pdf else 'Combine' }}</button>{% endif %}</span>{% endif %}{% set kinds = job.application_files|map(attribute='kind')|list %}{% set needs = ([] if 'resume' in kinds else ['résumé']) + ([] if 'cover_letter' in kinds else ['cover letter']) %}{% if needs %}<span class="apply-queue-needs">{% if job.id in queue_writing %}Writing the {{ needs|join(' and ') }}…{% else %}Needs {{ needs|join(' and ') }}{% endif %}</span>{% endif %}</span>
+          <span class="apply-queue-actions">{% if job.application_files %}<button class="bordered-button apply-queue-download" type="button" title="Download the résumé and cover letter">Download</button>{% endif %}{% if job.url %}<a class="bordered-button primary-action" href="{{ job.url }}" target="_blank" rel="noopener noreferrer">Apply</a>{% endif %}<button class="bordered-button apply-queue-applied" type="button">Mark Applied</button><button class="bordered-button secondary-action apply-queue-remove" type="button">Remove</button></span>
+        </li>{% endfor %}
+      </ul>
+      <p id="apply-queue-status" class="field-help" role="status"></p>
+    </section>
+{% endif %}
     <div class="section-heading-row">
       <h2>Saved Jobs
       </h2>{% if companies %}
@@ -148,7 +160,7 @@
       </div>
       <div class="form-field"><label for="filter-state">State</label><input id="filter-state" name="state" value="{{ filters.state }}" placeholder="Filter state" />
       </div>
-      <div class="form-field"><label for="filter-status">Application Status</label><select id="filter-status" name="status"><option value="">All</option>{% for option in application_statuses %}<option value="{{ option }}" {% if filters.status == option %}selected{% endif %}>{{ option }}</option>{% endfor %}</select>
+      <div class="form-field"><label for="filter-status">Application Status</label><select id="filter-status" name="status"><option value="">All</option><option value="__applied" {% if filters.status == '__applied' %}selected{% endif %}>Applied (any stage)</option><option value="__not_applied" {% if filters.status == '__not_applied' %}selected{% endif %}>Not applied</option>{% for option in application_statuses %}<option value="{{ option }}" {% if filters.status == option %}selected{% endif %}>{{ option }}</option>{% endfor %}</select>
       </div>
       <div class="form-field"><label for="filter-sort">Sort</label><select id="filter-sort" name="sort"><option value="date_desc" {% if filters.sort == 'date_desc' %}selected{% endif %}>Newest</option><option value="date_asc" {% if filters.sort == 'date_asc' %}selected{% endif %}>Oldest</option><option value="company" {% if filters.sort == 'company' %}selected{% endif %}>Company</option><option value="title" {% if filters.sort == 'title' %}selected{% endif %}>Job Title</option><option value="status" {% if filters.sort == 'status' %}selected{% endif %}>Status</option><option value="verified" {% if filters.sort == 'verified' %}selected{% endif %}>Last Verified</option></select>
       </div>
@@ -158,31 +170,22 @@
     <p id="dashboard-refresh-status" class="field-help" role="status" hidden>
     </p>
 
-{% if apply_queue %}
-    <section id="apply-queue" class="apply-queue" aria-labelledby="apply-queue-heading">
-      <h2 id="apply-queue-heading">Apply Queue <span class="field-help">({{ apply_queue|length }})</span></h2>
-      <p class="field-help">Apply opens the posting. Fill it in and press Submit yourself, then mark it Applied.</p>
-      <ul class="apply-queue-list">{% for job in apply_queue %}
-        <li class="apply-queue-item" data-company-id="{{ job.id }}"><span class="apply-queue-job"><strong>{{ job.career_job_title or 'Unknown Job' }}</strong> <span class="summary-company">{{ job.name or '' }}</span>{% if job.application_files %}<span class="apply-queue-files">{% for file in job.application_files|sort(attribute='kind', reverse=true)|unique(attribute='kind') %}{% if true %}<a href="/user-builds/{{ file.pdf }}" target="_blank" rel="noopener">{{ file.label }}</a>{% endif %}{% endfor %}</span>{% endif %}{% set kinds = job.application_files|map(attribute='kind')|list %}{% set needs = ([] if 'resume' in kinds else ['résumé']) + ([] if 'cover_letter' in kinds else ['cover letter']) %}{% if needs %}<span class="apply-queue-needs">{% if job.id in queue_writing %}Writing the {{ needs|join(' and ') }}…{% else %}Needs {{ needs|join(' and ') }}{% endif %}</span>{% endif %}</span>
-          <span class="apply-queue-actions">{% if job.application_files %}<button class="bordered-button apply-queue-download" type="button" title="Download the résumé and cover letter">Download</button>{% endif %}{% if job.url %}<a class="bordered-button primary-action" href="{{ job.url }}" target="_blank" rel="noopener noreferrer">Apply</a>{% endif %}<button class="bordered-button apply-queue-applied" type="button">Mark Applied</button><button class="bordered-button secondary-action apply-queue-remove" type="button">Remove</button></span>
-        </li>{% endfor %}
-      </ul>
-      <p id="apply-queue-status" class="field-help" role="status"></p>
-    </section>
-{% endif %}
 {% if companies %}
+    <div class="bulk-bar" id="bulk-bar"><label class="bulk-all"><input type="checkbox" id="bulk-all" /> Select all {{ companies|length }} shown</label><span id="bulk-count" class="field-help" role="status">None selected</span><button id="bulk-delete" class="bordered-button destructive-action" type="button" disabled>Delete Selected</button></div>
     <div class="saved-job-grid">{% for company in companies %}{% set listing_status = (company.job_open_status or 'Unknown')|lower %}{% set domain_url = company.domain if company.domain and '://' in company.domain else ('https://' ~ company.domain ~ '/' if company.domain else '') %}
       <article class="saved-job-card" id="job-{{ company.id }}" data-company-id="{{ company.id }}">
         <details class="saved-job-collapse">
           <summary class="saved-job-summary">
+            <label class="bulk-pick" title="Select to delete"><input type="checkbox" class="bulk-check" value="{{ company.id }}" aria-label="Select {{ company.career_job_title or 'this job' }}" /></label>
             <div class="summary-text">
-              <p class="summary-line summary-title"><strong>{{ company.career_job_title or 'Unknown Job' }}</strong><span class="summary-company">{{ company.name or 'Unknown Company' }}</span>
+              <p class="summary-line summary-title"><strong>{{ company.career_job_title or 'Unknown Job' }}</strong></p>
+              <p class="summary-line summary-facts"><span class="summary-company">{{ company.name or 'Unknown Company' }}</span><span>{% if company.city %}{{ company.city }}, {% endif %}{{ company.state or 'Location unknown' }}</span>{% if company.drive %}<span title="Estimated from your home ZIP, driving at 6 a.m.">{{ company.drive.text }}</span>{% elif company.distance_miles is not none %}<span>{{ '%.0f'|format(company.distance_miles) }} mi</span>{% endif %}{% if company.work_arrangement and company.work_arrangement|lower != (company.state or '')|lower %}<span>{{ company.work_arrangement }}</span>{% endif %}
               </p>
-              <p class="summary-line summary-facts"><span>{% if company.city %}{{ company.city }}, {% endif %}{{ company.state or 'Location unknown' }}</span>{% if company.drive %}<span title="Estimated from your home ZIP, driving at 6 a.m.">{{ company.drive.text }}</span>{% elif company.distance_miles is not none %}<span>{{ '%.0f'|format(company.distance_miles) }} mi</span>{% endif %}{% if company.work_arrangement and company.work_arrangement|lower != (company.state or '')|lower %}<span>{{ company.work_arrangement }}</span>{% endif %}<span>Job Fit {{ company.job_fit.score|string ~ '%' if company.job_fit.score is not none else '?' }}</span>
+              <p class="summary-line summary-status"><span class="application-indicator status-{{ (company.application_status or 'None')|lower|replace(' ', '-') }}">{{ company.application_status if company.application_status not in ['Saved', 'None', None] else 'Not applied' }}</span>{% if company.applied_on %}<span class="applied-on" title="Date you applied. Change it under Status below.">Applied {{ company.applied_label }}</span>{% endif %}<span class="summary-fit" title="Job Fit">Fit {{ company.job_fit.score|string ~ '%' if company.job_fit.score is not none else '?' }}</span><span class="job-open-state"><span class="status-dot {{ 'closed' if listing_status == 'closed' else 'open' if listing_status == 'open' else 'unknown' }}" data-tooltip="{{ 'This listing appears to still be active.' if listing_status == 'open' else 'This listing appears to no longer be active.' if listing_status == 'closed' else 'The current listing status could not be confirmed.' }}"></span>{{ company.job_open_status or 'Unknown' }}</span><span>Found {{ company.date_found|local_time('%b %d, %Y') if company.date_found else '?' }}</span>{% if company.notes %}<span class="summary-notes" title="{{ company.notes[:200] }}">Notes</span>{% endif %}
               </p>
-              <p class="summary-line summary-status"><span class="application-indicator status-{{ (company.application_status or 'None')|lower|replace(' ', '-') }}">{{ company.application_status if company.application_status not in ['Saved', 'None', None] else 'Not applied' }}</span><span class="job-open-state"><span class="status-dot {{ 'closed' if listing_status == 'closed' else 'open' if listing_status == 'open' else 'unknown' }}" data-tooltip="{{ 'This listing appears to still be active.' if listing_status == 'open' else 'This listing appears to no longer be active.' if listing_status == 'closed' else 'The current listing status could not be confirmed.' }}"></span>{{ company.job_open_status or 'Unknown' }}</span><span>Found {{ company.date_found|local_time('%b %d, %Y') if company.date_found else '?' }}</span>{% if company.notes %}<span class="summary-notes" title="{{ company.notes[:200] }}">Notes</span>{% endif %}
-              </p>
-            </div><span class="summary-chevron" aria-hidden="true"></span>
+            </div>
+            {% set listing_link = company.career_url if (company.career_url and company.source_type not in feed_names) else (company.source_url or company.career_url) %}<div class="summary-actions">{% if company.application_status in ['Applied', 'Talking With Recruiter', 'Interview'] %}{% elif company.apply_queued %}<span class="queued-note" title="It is in your Apply Queue at the top of this page">In Apply Queue</span>{% else %}<button class="bordered-button primary-action saved-apply-button" type="button" data-company-id="{{ company.id }}" title="Add to your Apply Queue">Apply</button>{% endif %}{% if listing_link %}<a class="bordered-button summary-listing-link" href="{{ listing_link }}" target="_blank" rel="noopener noreferrer" title="Open the job listing">Listing</a>{% endif %}</div>
+            <span class="summary-chevron" aria-hidden="true"></span>
           </summary>
           <div class="saved-job-body">
             <dl class="job-facts">
@@ -195,7 +198,7 @@
               <div><dt>Source</dt><dd>{{ "Web search" if company.source_type in (none, "", "SearXNG") else company.source_type }}</dd></div>
               <div><dt>Last Verified</dt><dd>{{ company.last_checked|local_time('%b %d, %Y') if company.last_checked else 'Never' }}</dd></div>
             </dl>
-            <div class="job-links">{% if company.career_url and company.source_type not in feed_names %}<a class="bordered-button" href="{{ company.career_url }}" target="_blank" rel="noopener noreferrer">Career Page</a>{% endif %}{% if company.source_url %}<a class="bordered-button" href="{{ company.source_url }}" target="_blank" rel="noopener noreferrer">{{ "View on " ~ company.source_type if company.source_type in feed_names else "Listing" }}</a>{% endif %}<button class="bordered-button details-action" type="button" data-details-target="dashboard-details-{{ company.id }}">View Details</button>
+            <div class="job-links">{% set career_href = company.career_url if (company.career_url and company.source_type not in feed_names) else '' %}{% set source_href = company.source_url or '' %}{% set same_link = career_href and source_href and career_href.rstrip('/') == source_href.rstrip('/') %}{% if same_link %}<a class="bordered-button" href="{{ career_href }}" target="_blank" rel="noopener noreferrer">Job Listing</a>{% else %}{% if career_href %}<a class="bordered-button" href="{{ career_href }}" target="_blank" rel="noopener noreferrer">Employer Career Page</a>{% endif %}{% if source_href %}<a class="bordered-button" href="{{ source_href }}" target="_blank" rel="noopener noreferrer">{{ "View on " ~ company.source_type if company.source_type in feed_names else "Job Listing" }}</a>{% endif %}{% endif %}<button class="bordered-button details-action" type="button" data-details-target="dashboard-details-{{ company.id }}">View Details</button>
             </div>
             <div id="dashboard-details-{{ company.id }}" class="card-details" hidden>
               <div class="detail-section"><strong>Listing Details</strong><span><strong>Domain:</strong> {% if domain_url %}<a href="{{ domain_url }}" target="_blank" rel="noopener noreferrer">{{ company.domain }}</a>{% else %}Unknown{% endif %}</span><span><strong>Country:</strong> {{ company.country or 'Unknown' }}</span><span><strong>Found:</strong> {{ company.date_found|local_time('%b %d, %Y %I:%M %p') if company.date_found else 'Unknown' }}</span>{% if company.result_updated_at %}<span><strong>Updated:</strong> {{ company.result_updated_at|local_time('%b %d, %Y %I:%M %p') }}</span>{% endif %}{% if company.last_checked %}<span><strong>Last verified:</strong> {{ company.last_checked|local_time('%b %d, %Y %I:%M %p') }}</span>{% endif %}
@@ -204,7 +207,7 @@
             <div class="card-panels">
               <section class="card-panel application-files">
                 <h4>Résumé and Cover Letter</h4>
-                {% if company.application_files %}<ul class="file-list">{% for file in company.application_files %}<li><span class="file-kind">{{ file.label }}</span><a href="/user-builds/{{ file.pdf }}" target="_blank" rel="noopener">{{ file.pdf }}</a><a class="file-edit" href="{{ resume_builder_url }}/build/{{ file.pdf }}">Edit</a></li>{% endfor %}</ul>
+                {% if company.application_files %}<ul class="file-list">{% for file in company.application_files %}<li><span class="file-kind">{{ file.label }}</span><a href="/user-builds/{{ file.pdf }}" target="_blank" rel="noopener">{{ file.pdf }}</a>{% if file.kind != 'combined' %}<a class="file-edit" href="{{ resume_builder_url }}/build/{{ file.pdf }}">Edit</a>{% endif %}</li>{% endfor %}</ul>
                 {% else %}<p class="field-help">None yet. Apply copies a request for Claude Desktop; what it makes shows up here.</p>{% endif %}
                 <button class="bordered-button apply-action" type="button" data-job-id="{{ company.id }}" data-job-title="{{ company.career_job_title or '' }}" data-company-name="{{ company.name or '' }}" title="Copy a request for a tailored résumé and cover letter, then open Claude Desktop to paste it.">{{ 'Make New Versions' if company.application_files else 'Apply' }}</button>
               </section>
@@ -212,6 +215,7 @@
                 <h4>Your Application</h4>
                 <form action="/update-kept/{{ company.id }}" method="post" class="saved-job-editor"><input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
                   <label for="status-{{ company.id }}">Status</label><select id="status-{{ company.id }}" name="application_status">{% for option in application_statuses %}<option value="{{ option }}" {% if company.application_status == option %}selected{% endif %}>{{ option }}</option>{% endfor %}</select>
+                  <label for="applied-on-{{ company.id }}">Date applied</label><input id="applied-on-{{ company.id }}" name="applied_on" type="date" value="{{ company.applied_on }}" title="Saved when you mark the job Applied. Change it here any time." />
                   <label for="notes-{{ company.id }}">Notes</label><textarea id="notes-{{ company.id }}" name="notes" rows="4" placeholder="Add notes about this job...">{{ company.notes or '' }}</textarea>
                   <button class="bordered-button primary-action" type="submit">Save Changes</button>
                 </form>
@@ -282,5 +286,5 @@
     </div>
   </div>
 </footer>
-<script src="/static/js/charts.js?v={{ app_version }}"></script><script src="/static/js/avoid-terms.js?v={{ app_version }}"></script>  <script src="/static/js/apply-queue.js?v={{ app_version }}"></script>
+<script src="/static/js/charts.js?v={{ asset_version }}"></script><script src="/static/js/avoid-terms.js?v={{ asset_version }}"></script>  <script src="/static/js/apply-queue.js?v={{ asset_version }}"></script><script src="/static/js/bulk-delete.js?v={{ asset_version }}"></script><script src="/static/js/applied-date.js?v={{ asset_version }}"></script><script src="/static/js/saved-apply.js?v={{ asset_version }}"></script>
 </body></html>

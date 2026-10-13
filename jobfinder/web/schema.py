@@ -8,7 +8,7 @@ from mysql.connector import Error
 
 from jobfinder import db
 from jobfinder.db_schema import ensure_unique_source_index
-from jobfinder.records.job_retention import CLOSED_KEEP_DAYS, tidy_closed_jobs
+from jobfinder.records.job_retention import CLOSED_KEEP_DAYS, UNSAVED_KEEP_DAYS, tidy_closed_jobs, tidy_old_jobs
 
 # Schema checks that already succeeded in this process; they only need to run once.
 _schema_ready = set()
@@ -205,6 +205,9 @@ def tidy_expired_closed_jobs():
         deleted = tidy_closed_jobs(connection)
         if deleted:
             print(f"Deleted {deleted} job(s) closed for more than {CLOSED_KEEP_DAYS} days (saved jobs are kept).")
+        old = tidy_old_jobs(connection)
+        if old:
+            print(f"Deleted {old} unsaved job(s) found more than {UNSAVED_KEEP_DAYS} days ago (saved jobs are kept).")
     except Error as error:
         print()
         print("Could not tidy closed jobs.")

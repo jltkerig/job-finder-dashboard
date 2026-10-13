@@ -7,9 +7,11 @@ location checks live in job_finder.py.
 """
 
 import csv
+import hashlib
 import json
 import re
 import shutil
+import time
 from datetime import date, timedelta
 from html import escape
 from pathlib import Path
@@ -44,7 +46,9 @@ IMPORT_ERRORS = {
     "profile": "E6008",    # the profile could not be read
 }
 IMPORTED_FILE = ".imported.json"
+SEEN_JOBS_FILE = ".imported-jobs.json"  # link -> fingerprint of each job as it was last imported
 KEEP_FOLDER_DAYS = 30
+QUIET_SECONDS = 600  # a capture file is offered for import once the extension has not rewritten it for 10 minutes
 CSV_FIELDS = ["site", "job_id", "title", "company", "location", "work_arrangement", "salary", "posted", "level",
               "applied", "closed", "page_kind", "url", "first_seen", "last_seen"]
 _LEVELS = {"seen": 0, "opened": 1}
@@ -53,7 +57,8 @@ _ARRANGEMENT_NOTE = re.compile(r"\((?:remote|hybrid|on-?site)\)", re.I)
 _TITLE_NOISE = {"remote", "hybrid", "onsite", "the", "a", "job"}
 # Badges LinkedIn adds to job titles ("Web Designer (Verified job)"); older capture files still have them.
 _BADGE = re.compile(r"\s*\(verified job\)\s*$|\s+with verification\s*$", re.I)
-_FOLDER_DATE = re.compile(r"^passive-(\d{2})-(\d{2})-(\d{4})$")
+# passive-mm-dd-yyyy (one file for a whole day, older versions) or passive-mm-dd-yyyy-hh.mm.ss.mmm (one scrape)
+_FOLDER_DATE = re.compile(r"^passive-(\d{2})-(\d{2})-(\d{4})(?:-\d{2}\.\d{2}\.\d{2}(?:\.\d{3})?)?$")
 
 
 def default_download_dir(home=None):
@@ -97,6 +102,58 @@ def pending_files(downloads_dir):
         found.append({"path": path, "relative": path.relative_to(root).as_posix(), "site": data["site"],
                       "jobs": len(data["jobs"]), "modified": path.stat().st_mtime})
     return found
+
+
+def job_fingerprint(job):
+    """A short fingerprint of a captured job's content: the same when it is only seen again (last_seen and
+    changed_at move on every sighting and are left out), different when anything about the job changed."""
+    stable = {key: value for key, value in job.items() if key not in ("last_seen", "changed_at", "written_at")}
+    return hashlib.sha1(json.dumps(stable, sort_keys=True, default=str).encode("utf-8")).hexdigest()[:16]
+
+
+def load_seen_jobs(searches_dir):
+    """{link: fingerprint} of the jobs already imported. The first time, it is built from the capture files that
+    were imported before this list existed, so nothing already imported is treated as new."""
+    searches_dir = Path(searches_dir)
+    path = searches_dir / SEEN_JOBS_FILE
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(data, dict):
+            return data
+    except (OSError, ValueError):
+        pass
+    seen = {}
+    for relative in _load_imported(searches_dir):
+        _, jobs = read_jobs(searches_dir / relative)
+        for job in jobs:
+            seen[job["url"]] = job_fingerprint(job)
+    return seen
+
+
+def save_seen_jobs(searches_dir, seen):
+    (Path(searches_dir) / SEEN_JOBS_FILE).write_text(json.dumps(seen, indent=0, sort_keys=True), encoding="utf-8")
+
+
+def new_or_changed(jobs, seen):
+    """The jobs that are not in `seen` or changed since they were imported."""
+    return [job for job in jobs if seen.get(job["url"]) != job_fingerprint(job)]
+
+
+def settled_files(files, searches_dir, now=None, quiet_seconds=QUIET_SECONDS):
+    """Waiting files the extension has stopped rewriting, each with "new": jobs not in the copy already imported.
+
+    The extension saves the whole day again every time it captures more, so a file that changed a minute ago is
+    still being written and is left out of the prompt until it has been quiet for quiet_seconds.
+    """
+    now = time.time() if now is None else now
+    seen = load_seen_jobs(searches_dir)
+    ready = []
+    for item in files:
+        if now - item["modified"] < quiet_seconds:
+            continue
+        _, jobs = read_jobs(item["path"])
+        ready.append({**item, "new": len(new_or_changed(jobs, seen))})
+    return ready
 
 
 def write_csv(json_path):
@@ -177,7 +234,7 @@ def mark_imported(searches_dir, paths):
 
 
 def remove_old_folders(searches_dir, today=None, keep_days=KEEP_FOLDER_DAYS):
-    """Delete passive-mm-dd-yyyy folders older than keep_days whose files were all imported. Returns their names."""
+    """Delete passive-mm-dd-yyyy[-time] folders older than keep_days whose files were all imported. Returns their names."""
     searches_dir = Path(searches_dir)
     if not searches_dir.is_dir():
         return []

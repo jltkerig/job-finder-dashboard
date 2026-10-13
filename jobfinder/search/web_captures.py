@@ -15,16 +15,23 @@ from jobfinder.records.capture_import import (
     SITES as CAPTURE_SITES,
     add_also_on,
     capture_dirs,
+    city_key,
+    company_key,
     files_to_import,
+    load_seen_jobs,
     mark_imported,
     match_key,
     merge_details,
+    new_or_changed,
     page_html as capture_page_html,
     read_jobs,
     remove_old_folders,
+    save_seen_jobs,
+    title_key,
+    job_fingerprint,
     unreadable_files,
 )
-from jobfinder.records.job_retention import CLOSED_KEEP_DAYS, tidy_closed_jobs
+from jobfinder.records.job_retention import CLOSED_KEEP_DAYS, UNSAVED_KEEP_DAYS, tidy_closed_jobs, tidy_old_jobs
 from jobfinder.search import geo
 from jobfinder.search import judging
 from jobfinder.search import relevance
@@ -43,6 +50,10 @@ from jobfinder.search.shared import (
 from jobfinder.search.usa_location import (US_STATES, arrangement_from_description, detect_work_arrangement, find_state_from_text,
                                             location_from_description, selected_state_codes)
 from jobfinder.sources.job_listings import canonical_url, matching_title as matching_job_title
+
+
+# Statuses that mean you applied: such a job is protected from being added again as a repost.
+MINE_STATUSES = ("Applied", "Talking With Recruiter", "Interview")
 
 
 def load_profile_filters(database):
@@ -96,9 +107,10 @@ class CaptureImport:
         self.rejected = storage.rejected_posting_urls(database)
         self.by_url = {}
         self.by_key = {}
+        self.mine = {}  # (company, title) -> jobs you saved or applied to: a repost of one is never added again
         with database.cursor(dictionary=True) as cursor:
             cursor.execute("""SELECT id, name, career_job_title, work_arrangement, city, state, source_url, source_type,
-                                     listing_details, is_kept
+                                     listing_details, is_kept, application_status
                               FROM companies WHERE is_rejected = 0""")
             for row in cursor.fetchall():
                 self._remember(row)
@@ -111,6 +123,20 @@ class CaptureImport:
         key = match_key(row.get("name"), row.get("career_job_title"), place, row.get("work_arrangement"))
         if key:
             self.by_key.setdefault(key, row)
+        if row.get("is_kept") or row.get("application_status") in MINE_STATUSES:
+            who, what = company_key(row.get("name")), title_key(row.get("career_job_title"))
+            if who and what:
+                self.mine.setdefault((who, what), []).append((row, city_key(place), str(row.get("work_arrangement") or "")))
+
+    def reposted_mine(self, company, title, location, arrangement):
+        """A job you saved or applied to that this one repeats (LinkedIn gives a reposted job a new id and link):
+        same company and title, and the same city unless either one has none (remote, or no place on the card)."""
+        city = city_key(location)
+        remote = str(arrangement or "").casefold() == "remote"
+        for row, row_city, row_arrangement in self.mine.get((company_key(company), title_key(title)), []):
+            if remote or row_arrangement.casefold() == "remote" or not city or not row_city or city == row_city:
+                return row
+        return None
 
     def _saved_row(self, url):
         with self.database.cursor(dictionary=True) as cursor:
@@ -207,6 +233,10 @@ class CaptureImport:
         company = tidy_company_name(job.get("company"), job.get("title")) or None
         applied = bool(job.get("applied"))
         row = self.by_url.get(url)
+        closed = bool(job.get("closed"))
+        if closed and row:
+            # Job Finder is told it is closed whatever the filters below decide about the rest of the capture.
+            self._mark_closed(row["id"])
         if not applied:
             if not row and url in self.rejected:
                 return "skipped", "Previously rejected"
@@ -216,7 +246,6 @@ class CaptureImport:
                 return "skipped", "Title matches none of your profile's job titles"
             if is_internship(title):
                 return "skipped", "Internship"
-        closed = bool(job.get("closed"))
         location = str(job.get("location") or "").strip()
         description = str(job.get("description") or "")
         # A card without a place is read again from the description ("Role is full time in Irving-Las Colinas, TX"),
@@ -238,7 +267,7 @@ class CaptureImport:
 
         if not row:
             key = match_key(company, title, location, arrangement)
-            same_job = self.by_key.get(key) if key else None
+            same_job = (self.by_key.get(key) if key else None) or self.reposted_mine(company, title, location, arrangement)
             if same_job:
                 details = _row_details(same_job)
                 if add_also_on(details, site, url):
@@ -295,11 +324,16 @@ def import_captures():
     for path in unreadable_files(searches_dir):
         print(f"[{IMPORT_ERRORS['bad_file']}] Skipped a capture file that could not be read: {path}")
     paths = files_to_import(searches_dir)
+    seen = load_seen_jobs(searches_dir)
     work = []
+    unchanged = 0
     for path in paths:
         site, jobs = read_jobs(path)
-        work.extend((path, site, job) for job in jobs)
-    print(f"Capture files to import: {len(paths)} ({len(work)} jobs) from {searches_dir}")
+        fresh = new_or_changed(jobs, seen)  # a job already imported, and not changed since, is left alone
+        unchanged += len(jobs) - len(fresh)
+        work.extend((path, site, job) for job in fresh)
+    print(f"Capture files to import: {len(paths)} ({len(work)} new or changed jobs, {unchanged} already imported) "
+          f"from {searches_dir}")
     if not paths:
         print("Stop reason: Nothing new to import.")
         return
@@ -339,10 +373,16 @@ def import_captures():
                 failed += 1
                 result, reason = "skipped", f"[{IMPORT_ERRORS['save']}] could not be saved: {error}"
             counts[result] += 1
+            if result in ("added", "updated", "linked"):
+                seen[job["url"]] = job_fingerprint(job)
             if result == "skipped":
                 print(f"Skipped ({reason}): {job['title'][:70]} {job['url']}")
             else:
                 print(f"{result.title()}: {job['title'][:70]}" + (f" — {reason}" if reason else ""))
+        try:
+            save_seen_jobs(searches_dir, seen)
+        except OSError as error:
+            print(f"[{IMPORT_ERRORS['files']}] Could not record which jobs were imported: {error}")
         if not stopped and not failed:
             try:
                 mark_imported(searches_dir, paths)
@@ -355,6 +395,9 @@ def import_captures():
             expired = tidy_closed_jobs(database)
             if expired:
                 print(f"Deleted {expired} job(s) closed for more than {CLOSED_KEEP_DAYS} days (saved jobs are kept).")
+            old = tidy_old_jobs(database)
+            if old:
+                print(f"Deleted {old} unsaved job(s) found more than {UNSAVED_KEEP_DAYS} days ago (saved jobs are kept).")
         except Error as error:
             print(f"[{IMPORT_ERRORS['tidy']}] Could not tidy closed jobs: {error}")
     finally:

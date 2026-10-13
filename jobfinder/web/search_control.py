@@ -13,7 +13,7 @@ import time
 
 from flask import jsonify, request
 
-from jobfinder.records.capture_import import capture_dirs, move_pending, pending_files
+from jobfinder.records.capture_import import capture_dirs, move_pending, pending_files, settled_files
 from jobfinder.web import profile_store
 from jobfinder.web import webfiles
 from jobfinder.web.core import api_error, app, log_error_code
@@ -325,12 +325,13 @@ def captures_pending():
     """Capture files the Web Job Scraper extension left in Downloads, for the import prompt."""
     downloads_dir, searches_dir = capture_dirs(read_tuning_settings(), BASE_DIR)
     try:
-        files = pending_files(downloads_dir)
+        files = settled_files(pending_files(downloads_dir), searches_dir)
     except OSError as error:
         return api_error("E2120", f"Could not read {downloads_dir}: {error}", 500)
     return jsonify({
         "count": len(files),
         "jobs": sum(item["jobs"] for item in files),
+        "new": sum(item["new"] for item in files),
         "from": str(downloads_dir),
         "to": str(searches_dir),
         # Changes whenever a file is added or rewritten, so "Not now" only hides the prompt until something new arrives.

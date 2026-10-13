@@ -98,11 +98,24 @@ def get_csrf_token():
     return token
 
 
+def asset_version(folder=None):
+    """The app version plus the newest static file's change time: browsers keep versioned static files for a year,
+    so an edited script or style must get a new ?v= even when the version number has not changed."""
+    newest = 0
+    for folder, _, names in os.walk(folder or app.static_folder):
+        for name in names:
+            try:
+                newest = max(newest, int(os.path.getmtime(os.path.join(folder, name))))
+            except OSError:
+                pass
+    return f"{app.config['APP_VERSION']}.{newest}"
+
+
 @app.context_processor
 def inject_csrf_token():
     # Job sites (National Labor Exchange) list many employers' jobs like the remote feeds: shown as job-board
     # postings, and their domain is never offered for blocking.
-    return {"csrf_token": get_csrf_token(), "app_version": app.config["APP_VERSION"], "feed_names": sorted(FEED_NAMES | JOB_SITE_NAMES),
+    return {"csrf_token": get_csrf_token(), "app_version": app.config["APP_VERSION"], "asset_version": asset_version(), "feed_names": sorted(FEED_NAMES | JOB_SITE_NAMES),
             "capture_sources": sorted(CAPTURE_SOURCES), "application_statuses": APPLICATION_STATUSES,
             "form_examples": form_examples.examples()}
 

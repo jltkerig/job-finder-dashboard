@@ -7,7 +7,7 @@ from mysql.connector import Error
 
 from jobfinder import db
 from jobfinder.sources.job_feeds import FEED_NAMES
-from jobfinder.web import schema
+from jobfinder.web import applied_dates, schema
 from jobfinder.web.blocklists import add_domain_to_blocklist
 from jobfinder.web.core import api_error, app
 from jobfinder.web.schema import ensure_keep_column
@@ -22,7 +22,7 @@ def reject_listing(company_id):
     cursor = None
     domain = None
     reason = (request.get_json(silent=True) or {}).get("reason") if request.is_json else request.form.get("reason")
-    if reason not in {"wrong_role", "wrong_location", "not_a_job", "duplicate", "other"}:
+    if reason not in {"wrong_role", "wrong_location", "not_a_job", "duplicate", "closed", "other"}:
         reason = "other"
     try:
         connection = db.connect()
@@ -219,10 +219,14 @@ def update_kept(company_id):
     try:
         connection = db.connect()
         cursor = connection.cursor()
+        cursor.execute("SELECT application_status FROM companies WHERE id = %s", (company_id,))
+        before = cursor.fetchone()
         cursor.execute(
             "UPDATE companies SET application_status = %s, notes = %s WHERE id = %s AND is_kept = 1",
             (application_status, notes, company_id),
         )
+        applied_dates.save(cursor, company_id, application_status, request.form.get("applied_on"),
+                           previous=before[0] if before else None)
         connection.commit()
     except Error as error:
         print("Could not update saved result.")
@@ -234,6 +238,34 @@ def update_kept(company_id):
             connection.close()
     # The #job anchor reopens this card on the Dashboard, where saved jobs start collapsed.
     return redirect((request.referrer or "/dashboard") + f"#job-{company_id}")
+
+
+@app.route("/delete-kept-many", methods=["POST"])
+def delete_kept_many():
+    """Delete the saved jobs ticked on the Dashboard (the page asks "are you sure?" first)."""
+    ids = (request.get_json(silent=True) or {}).get("ids")
+    if not isinstance(ids, list) or not ids or len(ids) > 1000:
+        return api_error("E3250", "Choose at least one saved job to delete.", 400)
+    try:
+        ids = [int(value) for value in ids]
+    except (TypeError, ValueError):
+        return api_error("E3250", "Choose at least one saved job to delete.", 400)
+    ensure_keep_column()
+    connection = cursor = None
+    try:
+        connection = db.connect()
+        cursor = connection.cursor()
+        cursor.execute(f"DELETE FROM companies WHERE is_kept = 1 AND id IN ({','.join(['%s'] * len(ids))})", ids)
+        deleted = cursor.rowcount
+        connection.commit()
+    except Error as error:
+        return api_error("E3251", f"Could not delete the saved jobs: {error}", 500)
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if connection is not None and connection.is_connected():
+            connection.close()
+    return jsonify({"status": "deleted", "count": deleted})
 
 
 @app.route("/delete-kept/<int:company_id>", methods=["POST"])

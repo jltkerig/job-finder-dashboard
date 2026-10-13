@@ -16,7 +16,7 @@ from flask import jsonify, request
 from mysql.connector import Error
 
 from jobfinder import db
-from jobfinder.web import queue_documents, webfiles
+from jobfinder.web import applied_dates, queue_documents, webfiles
 from jobfinder.web.core import api_error, app, log_error_code
 from jobfinder.web.schema import ensure_job_tracking_columns, ensure_keep_column
 from jobfinder.web.tuning import read_tuning_settings
@@ -188,6 +188,7 @@ def mark_queue_applied(company_id):
         connection = db.connect()
         cursor = connection.cursor()
         cursor.execute("UPDATE companies SET is_kept = 1, application_status = 'Applied' WHERE id = %s", (company_id,))
+        applied_dates.save(cursor, company_id, "Applied")
         connection.commit()
     except Error as error:
         return api_error("E3243", f"Could not mark it applied: {error}", 500)

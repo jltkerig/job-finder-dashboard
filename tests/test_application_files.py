@@ -1,4 +1,6 @@
 import json
+import os
+import shutil
 import sys
 import tempfile
 import unittest
@@ -47,9 +49,77 @@ class ResumesAndCoverLettersOnTheDashboard(unittest.TestCase):
         response = client.get("/user-builds/Jane_Doe_Acme_10-02-2026.pdf")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.mimetype, "application/pdf")
+        self.assertNotIn("attachment", response.headers.get("Content-Disposition", ""))
         response.close()
+        saved = client.get("/user-builds/Jane_Doe_Acme_10-02-2026.pdf?download=1")
+        self.assertIn("attachment", saved.headers["Content-Disposition"])
+        self.assertEqual(saved.mimetype, "application/octet-stream")  # never opened in a browser's PDF viewer
+        self.assertIn("Jane_Doe_Acme_10-02-2026.pdf", saved.headers["Content-Disposition"])
+        saved.close()
         self.assertEqual(client.get("/user-builds/missing.pdf").status_code, 404)
         self.assertEqual(client.get("/user-builds/..%5Csecret.pdf").status_code, 404)
+
+    def real_pdf(self, name, pages):
+        from pypdf import PdfWriter
+        writer = PdfWriter()
+        for _ in range(pages):
+            writer.add_blank_page(width=612, height=792)
+        with (self.output / name).open("wb") as handle:
+            writer.write(handle)
+
+    def test_combine_puts_the_resume_then_the_cover_letter_in_one_pdf(self):
+        from pypdf import PdfReader
+        resume, cover = "Jane_Doe_Acme_Web_Designer_10-02-2026.pdf", "Jane_Doe_Acme_Web_Designer_Cover_Letter_10-02-2026.pdf"
+        self.draft(resume, "resume", 7, "2026-10-02", make_pdf=False)
+        self.draft(cover, "cover_letter", 7, "2026-10-02", make_pdf=False)
+        self.real_pdf(resume, 1)
+        self.real_pdf(cover, 2)
+        client = dashboard.app.test_client()
+        with client.session_transaction() as session:
+            session["csrf_token"] = "token"
+        response = client.post("/apply-queue/combine/7", headers={"X-CSRF-Token": "token"})
+        self.assertEqual(response.status_code, 200)
+        combined = "Jane_Doe_Acme_Web_Designer_Resume_and_Cover_Letter_10-02-2026.pdf"
+        self.assertEqual(response.get_json()["pdf"], combined)
+        self.assertEqual(len(PdfReader(str(self.output / combined)).pages), 3)  # 1 résumé page + 2 cover letter pages
+        self.assertEqual([p.name for p in self.output.glob("*.tmp")], [])
+        listed = application_files.files_by_job()[7]
+        self.assertEqual([f["kind"] for f in listed if f["kind"] == "combined"], ["combined"])
+        companies = application_files.add_application_files([{"id": 7}])
+        self.assertTrue(companies[0]["can_combine"])
+        self.assertEqual(companies[0]["combined_pdf"], combined)
+        # Asking again replaces it rather than adding another file.
+        self.assertEqual(client.post("/apply-queue/combine/7", headers={"X-CSRF-Token": "token"}).status_code, 200)
+        self.assertEqual(len(list(self.output.glob("*Resume_and_Cover_Letter*.pdf"))), 1)
+
+    def test_combine_needs_both_documents(self):
+        self.draft("Jane_Doe_Acme_10-02-2026.pdf", "resume", 8, "2026-10-02")
+        client = dashboard.app.test_client()
+        with client.session_transaction() as session:
+            session["csrf_token"] = "token"
+        response = client.post("/apply-queue/combine/8", headers={"X-CSRF-Token": "token"})
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(application_files.add_application_files([{"id": 8}])[0]["can_combine"])
+
+    def test_the_save_as_window_copies_the_pdf_where_you_choose(self):
+        self.draft("Jane_Doe_Acme_10-02-2026.pdf", "resume", 7, "2026-10-02")
+        client = dashboard.app.test_client()
+        with client.session_transaction() as session:
+            session["csrf_token"] = "token"
+        target = Path(tempfile.mkdtemp()) / "My Resume.pdf"
+        self.addCleanup(lambda: shutil.rmtree(target.parent, ignore_errors=True))
+        post = lambda body: client.post("/user-builds/save-as", json=body, headers={"X-CSRF-Token": "token"})
+        with patch.object(application_files.save_dialog, "available", return_value=True),                 patch.object(application_files.save_dialog, "ask_save_path", return_value=target) as ask:
+            response = post({"names": ["Jane_Doe_Acme_10-02-2026.pdf"]})
+            self.assertEqual(response.get_json(), {"saved": [str(target)], "cancelled": False})
+            self.assertEqual(ask.call_args[0][0], "Jane_Doe_Acme_10-02-2026.pdf")
+            self.assertTrue(target.is_file())
+            self.assertEqual(post({"names": ["../secret.pdf"]}).status_code, 400)
+            self.assertEqual(post({"names": ["missing.pdf"]}).status_code, 400)
+        with patch.object(application_files.save_dialog, "available", return_value=True),                 patch.object(application_files.save_dialog, "ask_save_path", return_value=None):
+            self.assertEqual(post({"names": ["Jane_Doe_Acme_10-02-2026.pdf"]}).get_json(), {"saved": [], "cancelled": True})
+        with patch.object(application_files.save_dialog, "available", return_value=False):
+            self.assertEqual(post({"names": ["Jane_Doe_Acme_10-02-2026.pdf"]}).status_code, 501)
 
     def test_the_card_shows_the_files_and_a_quiet_row_of_remove_actions(self):
         html = (ROOT / "templates" / "user-dashboard.html").read_text(encoding="utf-8")
@@ -57,6 +127,20 @@ class ResumesAndCoverLettersOnTheDashboard(unittest.TestCase):
         self.assertIn('href="/user-builds/{{ file.pdf }}"', html)
         self.assertIn('class="card-footer-actions"', html)
         self.assertIn('class="bordered-button apply-action"', html)
+
+
+class AssetVersion(unittest.TestCase):
+    def test_an_edited_static_file_gets_a_new_version_without_a_version_bump(self):
+        from jobfinder.web import core
+        folder = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: shutil.rmtree(folder, ignore_errors=True))
+        script = folder / "app.js"
+        script.write_text("1", encoding="utf-8")
+        first = core.asset_version(folder)
+        os.utime(script, (script.stat().st_atime, script.stat().st_mtime + 100))
+        second = core.asset_version(folder)
+        self.assertTrue(first.startswith(core.app.config["APP_VERSION"] + "."))
+        self.assertNotEqual(first, second)
 
 
 if __name__ == "__main__":

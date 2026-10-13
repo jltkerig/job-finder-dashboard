@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="csrf-token" content="{{ csrf_token }}" />
   <title>Search | Job Finder</title>
-  <link rel="stylesheet" href="/static/css/style.css?v={{ app_version }}" />
+  <link rel="stylesheet" href="/static/css/style.css?v={{ asset_version }}" />
 </head>
 <body data-page="search" data-scraper-running="{{ 'true' if scraper_running else 'false' }}" data-scraper-mode="{{ scraper_mode }}" data-work-preferences="{{ profile_work_preferences|tojson|forceescape }}">
   <div id="search-progress-bar" class="search-progress-bar" hidden>
@@ -184,7 +184,7 @@
               {% if company.notes %}<section class="details-section details-notes"><h4>Notes</h4><p>{{ company.notes }}</p></section>{% endif %}
               <div class="details-footer">
                 <div class="details-links">{% if company.source_url %}<a href="{{ company.source_url }}" target="_blank" rel="noopener noreferrer">Original source</a>{% endif %}{% if company.details.source and company.details.source != company.source_url %}<a href="{{ company.details.source }}" target="_blank" rel="noopener noreferrer">Discovery source</a>{% endif %}</div>
-                <div class="details-blocks"><label class="reject-reason-label">If rejecting, why? <select class="reject-reason"><option value="other">Other reason</option><option value="wrong_role">Wrong role</option><option value="wrong_location">Wrong location</option><option value="not_a_job">Not a job</option><option value="duplicate">Duplicate</option></select></label>{% if company.source_type not in feed_names %}<button class="bordered-button block-action destructive-action" type="button" data-company-id="{{ company.id }}" data-domain="{{ company.domain or '' }}" title="Hide this website and all future jobs from it.">Block Domain</button>{% endif %}<button class="bordered-button block-company-action destructive-action" type="button" data-company-id="{{ company.id }}" data-company-name="{{ company.name or '' }}" title="Exclude this company name from future searches.">Block Company</button></div>
+                <div class="details-blocks"><label class="reject-reason-label">If rejecting, why? <select class="reject-reason"><option value="other">Other reason</option><option value="wrong_role">Wrong role</option><option value="wrong_location">Wrong location</option><option value="not_a_job">Not a job</option><option value="duplicate">Duplicate</option><option value="closed">Job is closed</option></select></label>{% if company.source_type not in feed_names %}<button class="bordered-button block-action destructive-action" type="button" data-company-id="{{ company.id }}" data-domain="{{ company.domain or '' }}" title="Hide this website and all future jobs from it.">Block Domain</button>{% endif %}<button class="bordered-button block-company-action destructive-action" type="button" data-company-id="{{ company.id }}" data-company-name="{{ company.name or '' }}" title="Exclude this company name from future searches.">Block Company</button></div>
               </div>
             </div></td>
           </tr>
@@ -225,12 +225,13 @@
     </div>
   </div>
 </footer>
-  <script src="/static/js/charts.js?v={{ app_version }}"></script>
-  <script src="/static/js/captures.js?v={{ app_version }}"></script>
-  <script src="/static/js/columns.js?v={{ app_version }}"></script>
-  <script src="/static/js/clear-results.js?v={{ app_version }}"></script>
-  <script src="/static/js/top-picks-score.js?v={{ app_version }}"></script>
-  <script src="/static/js/top-picks.js?v={{ app_version }}"></script>
-  <script src="/static/js/listing-preview.js?v={{ app_version }}"></script>
-  <script src="/static/js/avoid-terms.js?v={{ app_version }}"></script>
+  <script src="/static/js/charts.js?v={{ asset_version }}"></script>
+  <script src="/static/js/captures.js?v={{ asset_version }}"></script>
+  <script src="/static/js/columns.js?v={{ asset_version }}"></script>
+  <script src="/static/js/clear-results.js?v={{ asset_version }}"></script>
+  <script src="/static/js/top-picks-score.js?v={{ asset_version }}"></script>
+  <script src="/static/js/top-picks-facts.js?v={{ asset_version }}"></script>
+  <script src="/static/js/top-picks.js?v={{ asset_version }}"></script>
+  <script src="/static/js/listing-preview.js?v={{ asset_version }}"></script>
+  <script src="/static/js/avoid-terms.js?v={{ asset_version }}"></script>
 </body></html>

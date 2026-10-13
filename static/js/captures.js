@@ -55,7 +55,8 @@
 
   function render(data) {
     const files = `${data.count} new capture file${data.count === 1 ? "" : "s"}`;
-    const jobs = `${data.jobs} job${data.jobs === 1 ? "" : "s"}`;
+    // Each file holds the whole day, so say how many of its jobs are new since the last import.
+    const jobs = `${data.jobs} job${data.jobs === 1 ? "" : "s"}` + (data.new && data.new < data.jobs ? `, ${data.new} new` : "");
     const heading = document.createElement("strong");
     heading.textContent = `Found ${files} (${jobs}) in ${data.from}.`;
     const question = document.createElement("p");

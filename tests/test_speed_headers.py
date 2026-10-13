@@ -32,7 +32,7 @@ class SpeedHeaders(unittest.TestCase):
     def test_pages_link_the_stylesheet_with_the_version(self):
         for page in ("index", "user-dashboard", "tuning", "rejected-listings", "credibility-scores"):
             html = (Path(__file__).resolve().parents[1] / "templates" / f"{page}.html").read_text(encoding="utf-8")
-            self.assertIn('/static/css/style.css?v={{ app_version }}', html, page)
+            self.assertIn('/static/css/style.css?v={{ asset_version }}', html, page)  # app version + newest file change
 
 
 if __name__ == "__main__":

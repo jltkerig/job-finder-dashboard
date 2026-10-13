@@ -1388,6 +1388,8 @@ body[data-page="dashboard"] .saved-job-card { display: block; padding: 0; }
 .summary-status { font-size: .85rem; color: #4b5563; }
 .summary-status .job-open-state { font-weight: 600; gap: 6px; }
 .summary-notes { font-weight: 600; color: #6b4f00; }
+.summary-listing-link { font-weight: 600; }
+.applied-on { color: #3d4550; }
 .summary-chevron { flex: none; width: 10px; height: 10px; border-right: 2px solid #6b7280; border-bottom: 2px solid #6b7280; transform: rotate(45deg); transition: transform .15s ease; margin-right: 4px; }
 .saved-job-collapse[open] .summary-chevron { transform: rotate(-135deg); }
 .saved-job-collapse[open] > .saved-job-summary { border-bottom: 1px solid #e5e7eb; border-radius: 11px 11px 0 0; }
@@ -1976,6 +1978,11 @@ body[data-page="search"] #results-table .details-blocks .bordered-button { min-h
 .top-pick input { margin-top:5px; }
 .top-pick-title { display:block; font-weight:600; cursor:pointer; line-height:1.3; }
 .top-pick-company { display:block; color:#646c77; font-size:.9rem; }
+.top-pick-facts { display:flex; flex-wrap:wrap; gap:4px 16px; margin:6px 0 0; font-size:.82rem; }
+.top-pick-facts div { display:flex; gap:5px; }
+.top-pick-facts dt { color:#646c77; }
+.top-pick-facts dt::after { content:":"; }
+.top-pick-facts dd { margin:0; color:#1f2933; font-weight:600; }
 .top-pick-chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
 .top-pick-chip { padding:2px 8px; border-radius:999px; background:#eef0f3; color:#3d4550; font-size:.78rem; }
 .top-pick-gaps { margin:8px 0 0; padding:0; list-style:none; font-size:.82rem; color:#8a5a00; }
@@ -2063,3 +2070,26 @@ body[data-page="search"] #results-table tr.result-row td.row-actions .row-action
 .apply-queue-files { display:flex; gap:12px; margin-top:4px; font-size:.85rem; }
 .apply-queue-job { display:flex; flex-direction:column; }
 .apply-queue-needs { margin-top:4px; font-size:.85rem; color:#b45309; font-weight:600; }
+/* Dashboard: select saved jobs and delete them together (static/js/bulk-delete.js) */
+.bulk-bar { display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin:0 0 10px; padding:8px 12px; border:1px solid #e3e6ea; border-radius:8px; background:#fafbfc; }
+.bulk-bar .bulk-all { display:flex; align-items:center; gap:6px; font-weight:600; }
+.bulk-pick { display:flex; align-items:center; padding:4px; cursor:pointer; }
+.bulk-pick input { width:18px; height:18px; cursor:pointer; }
+/* Dashboard saved jobs: a cleaner collapsed row — title, then company and place, then status chips; actions on the right */
+body[data-page="dashboard"] .saved-job-summary { gap:14px; padding:16px 18px; }
+body[data-page="dashboard"] .summary-title strong { font-size:1.08rem; line-height:1.3; }
+body[data-page="dashboard"] .summary-facts { margin-top:4px; font-size:.92rem; color:#4b5563; }
+body[data-page="dashboard"] .summary-facts .summary-company { font-weight:600; color:#1f2933; }
+body[data-page="dashboard"] .summary-status { margin-top:8px; gap:6px 10px; font-size:.82rem; color:#6b7280; }
+body[data-page="dashboard"] .summary-status > span + span::before { content:none; }
+body[data-page="dashboard"] .summary-fit { padding:2px 8px; border-radius:999px; background:#eef0f3; color:#3d4550; font-weight:600; }
+body[data-page="dashboard"] .summary-actions { flex:none; display:flex; align-items:center; gap:8px; }
+body[data-page="dashboard"] .summary-actions .bordered-button { min-height:36px; padding:6px 16px; font-size:.88rem; white-space:nowrap; }
+body[data-page="dashboard"] .queued-note { padding:6px 12px; border-radius:6px; background:#eff6ff; color:#1e40af; font-size:.85rem; font-weight:600; white-space:nowrap; }
+@media (max-width: 760px) {
+  body[data-page="dashboard"] .saved-job-summary { flex-wrap:wrap; }
+  body[data-page="dashboard"] .summary-actions { order:3; width:100%; padding-left:34px; }
+}
+
+/* Apply Queue: Combine puts the résumé and cover letter into one PDF (static/js/apply-queue.js) */
+.apply-queue-combine { margin-left:6px; padding:3px 10px; min-height:0; font-size:.82rem; position:relative; top:-5px; }
