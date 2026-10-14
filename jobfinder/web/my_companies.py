@@ -1,0 +1,127 @@
+"""The companies you enter yourself on the Companies page.
+
+They are kept in user-data/my_companies.json (yours: updates leave it alone). An entry has a name and, optionally, a
+website, address, the town or ZIP code to measure distance from, a phone number and notes. When the town or ZIP code is a
+place Job Finder knows, the entry gets a map point, so it takes its place in the nearest-first list.
+"""
+
+import json
+import re
+import uuid
+from datetime import datetime
+
+from jobfinder import paths
+from jobfinder.profiles.travel import miles_between, place_point, zip_point
+
+FIELD_LIMITS = {"name": 150, "website": 200, "address": 200, "place": 100, "phone": 40, "notes": 500}
+MAX_COMPANIES = 1000
+
+
+def _path():
+    return paths.MY_COMPANIES_FILE
+
+
+def load():
+    """Every entered company, oldest first. A missing or unreadable file is an empty list."""
+    try:
+        data = json.loads(_path().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    return [item for item in data if isinstance(item, dict) and item.get("id") and item.get("name")] if isinstance(data, list) else []
+
+
+def _save(companies):
+    path = _path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp = path.with_suffix(".tmp")
+    temp.write_text(json.dumps(companies, indent=2), encoding="utf-8")
+    temp.replace(path)
+
+
+def _website(text):
+    text = str(text or "").strip()
+    if not text:
+        return ""
+    if not re.match(r"^https?://", text, re.I):
+        text = "https://" + text.lstrip("/")
+    return text if re.match(r"^https?://[^\s/]+\.[^\s/]+", text, re.I) else ""
+
+
+def _point(place, address, home_state=""):
+    """(lat, lon) for the place text (a ZIP code or "Town, ST"), else for a ZIP code inside the address, else None."""
+    place = str(place or "").strip()
+    if re.fullmatch(r"\d{5}(?:-\d{4})?", place):
+        point = zip_point(place)
+    else:
+        point = place_point(place, home_state) if place else None
+    if point:
+        return point
+    found = re.search(r"\b(\d{5})(?:-\d{4})?\b", str(address or ""))
+    return zip_point(found.group(1)) if found else None
+
+
+def clean(fields, home_state=""):
+    """The stored form of what was typed, or raises ValueError with a message for the page."""
+    values = {key: " ".join(str(fields.get(key) or "").split())[:limit] for key, limit in FIELD_LIMITS.items() if key != "notes"}
+    values["notes"] = str(fields.get("notes") or "").strip()[:FIELD_LIMITS["notes"]]
+    if not values["name"]:
+        raise ValueError("Enter the company's name.")
+    raw_site = values["website"]
+    values["website"] = _website(raw_site)
+    if raw_site and not values["website"]:
+        raise ValueError("That website doesn't look right. Use an address like acme.com.")
+    point = _point(values["place"], values["address"], home_state)
+    if values["place"] and not point and not re.search(r"\d{5}", values["address"]):
+        raise ValueError("That town wasn't found. Use a town and state such as Bel Air, MD, or a 5-digit ZIP code, "
+                         "or leave it empty.")
+    values["lat"], values["lon"] = (round(point[0], 6), round(point[1], 6)) if point else (None, None)
+    return values
+
+
+def add(fields, home_state=""):
+    companies = load()
+    if len(companies) >= MAX_COMPANIES:
+        raise ValueError(f"The list is full ({MAX_COMPANIES} companies). Delete some first.")
+    entry = dict(clean(fields, home_state), id=uuid.uuid4().hex[:12],
+                 added=datetime.now().astimezone().isoformat(timespec="seconds"))
+    _save(companies + [entry])
+    return entry
+
+
+def update(company_id, fields, home_state=""):
+    companies = load()
+    for index, item in enumerate(companies):
+        if item["id"] == company_id:
+            companies[index] = dict(item, **clean(fields, home_state))
+            _save(companies)
+            return companies[index]
+    raise KeyError(company_id)
+
+
+def delete(company_id):
+    companies = load()
+    kept = [item for item in companies if item["id"] != company_id]
+    if len(kept) == len(companies):
+        raise KeyError(company_id)
+    _save(kept)
+
+
+def as_result(item, center=None):
+    """An entered company in the shape the Companies page lists: miles from center, or None when it has no map point."""
+    miles = None
+    if center is not None and item.get("lat") is not None and item.get("lon") is not None:
+        miles = round(miles_between(center, (float(item["lat"]), float(item["lon"]))), 1)
+    return {"id": f"mine/{item['id']}", "mine": True, "name": item["name"], "type": "My company", "address": item.get("address", ""),
+            "place": item.get("place", ""), "website": item.get("website", ""), "phone": item.get("phone", ""),
+            "notes": item.get("notes", ""), "lat": item.get("lat"), "lon": item.get("lon"), "miles": miles}
+
+
+def near(lat, lon, miles):
+    """Entered companies within miles of a point, nearest first, then the ones with no map point (they cannot be measured
+    but are yours, so they are always listed)."""
+    center = (float(lat), float(lon))
+    results = [as_result(item, center) for item in load()]
+    measured = sorted((r for r in results if r["miles"] is not None and r["miles"] <= float(miles)),
+                      key=lambda r: (r["miles"], r["name"].casefold()))
+    unmeasured = sorted((r for r in results if r["miles"] is None), key=lambda r: r["name"].casefold())
+    return measured + unmeasured

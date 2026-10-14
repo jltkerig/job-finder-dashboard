@@ -2178,6 +2178,14 @@ body[data-page="search"] #results-table td[data-label="Listing"] .inline-action-
 .companies-saved { margin:0 0 14px; }
 .chip-button { margin:0 6px 0 0; padding:3px 11px; border:1px solid #c7cbd1; border-radius:999px; background:#f6f7f8; font:inherit; font-size:.85rem; cursor:pointer; }
 .chip-button:hover { background:#eaecef; }
+.companies-add { margin-top:14px; border:1px solid #d4d8dd; border-radius:8px; padding:10px 14px; background:#fafbfc; }
+.companies-add summary { cursor:pointer; font-weight:700; }
+.companies-add-form { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:10px 16px; margin-top:12px; }
+.companies-add-notes, .companies-add-actions { grid-column:1 / -1; }
+.companies-add-notes textarea { width:100%; padding:7px 10px; border:1px solid #c4c8ce; border-radius:6px; font:inherit; resize:vertical; }
+.companies-add-actions { display:flex; flex-wrap:wrap; align-items:center; gap:10px; }
+.companies-mine-badge { display:inline-block; margin-left:8px; padding:1px 8px; border-radius:999px; background:#1f2937; color:#fff; font-size:.72rem; font-weight:700; vertical-align:middle; }
+.companies-notes { display:block; margin-top:2px; color:#59636e; white-space:pre-line; }
 .companies-results { margin-top:16px; }
 .companies-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:10px 16px; margin:0 0 10px; }
 .companies-filter input { min-width:260px; padding:7px 10px; border:1px solid #c4c8ce; border-radius:6px; font:inherit; }

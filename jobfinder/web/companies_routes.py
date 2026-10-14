@@ -6,12 +6,14 @@ from flask import render_template, request, jsonify
 
 from jobfinder.profiles.travel import place_point, zip_point
 from jobfinder.sources import local_companies
-from jobfinder.web import listing_queries, profile_store
+from jobfinder.web import listing_queries, my_companies, profile_store
 from jobfinder.web.core import api_error, app
 
 MILE_CHOICES = (5, 10, 15, 25, 50)
 KNOWN = "known"  # employers from your own searches: answered from the database, with no network
 KNOWN_LABEL = "Employers from your searches"
+MINE = "mine"  # the companies you entered yourself (user-data/my_companies.json)
+MINE_LABEL = "My companies"
 
 
 def _saved_places(profile):
@@ -43,8 +45,9 @@ def resolve_place(text, profile):
 def companies_page():
     profile = profile_store.get_user_profile()
     return render_template("companies.html", saved_places=_saved_places(profile), mile_choices=MILE_CHOICES,
-                           kinds=[(KNOWN, KNOWN_LABEL)] + [(key, label) for key, (label, _) in local_companies.KINDS.items()],
-                           default_kinds=[KNOWN] + list(local_companies.DEFAULT_KINDS), default_miles=15)
+                           kinds=[(KNOWN, KNOWN_LABEL), (MINE, MINE_LABEL)]
+                           + [(key, label) for key, (label, _) in local_companies.KINDS.items()],
+                           default_kinds=[KNOWN, MINE] + list(local_companies.DEFAULT_KINDS), default_miles=15)
 
 
 @app.route("/companies/search")
@@ -66,9 +69,48 @@ def companies_search():
     try:
         if asked == [KNOWN]:
             companies = listing_queries.get_known_employers(lat, lon, miles)
+        elif asked == [MINE]:
+            companies = my_companies.near(lat, lon, miles)
         else:
             companies = local_companies.search(lat, lon, miles, kinds or local_companies.DEFAULT_KINDS)
     except ValueError as error:
         return api_error("E3503", str(error), 502)
     return jsonify({"status": "ok", "place": shown, "center": {"lat": lat, "lon": lon}, "miles": miles,
                     "count": len(companies), "companies": companies})
+
+
+def _fields_from_request():
+    data = request.get_json(silent=True)
+    return data if isinstance(data, dict) else {}
+
+
+@app.route("/companies/mine", methods=["POST"])
+def my_company_add():
+    """Add a company you entered yourself."""
+    state = str(profile_store.get_user_profile().get("state") or "")
+    try:
+        entry = my_companies.add(_fields_from_request(), state)
+    except ValueError as error:
+        return api_error("E3511", str(error), 400)
+    return jsonify({"status": "ok", "company": my_companies.as_result(entry)})
+
+
+@app.route("/companies/mine/<company_id>", methods=["POST"])
+def my_company_update(company_id):
+    state = str(profile_store.get_user_profile().get("state") or "")
+    try:
+        entry = my_companies.update(company_id, _fields_from_request(), state)
+    except ValueError as error:
+        return api_error("E3511", str(error), 400)
+    except KeyError:
+        return api_error("E3512", "That company is no longer in your list.", 404)
+    return jsonify({"status": "ok", "company": my_companies.as_result(entry)})
+
+
+@app.route("/companies/mine/<company_id>/delete", methods=["POST"])
+def my_company_delete(company_id):
+    try:
+        my_companies.delete(company_id)
+    except KeyError:
+        return api_error("E3512", "That company is no longer in your list.", 404)
+    return jsonify({"status": "ok"})
