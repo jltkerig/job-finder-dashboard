@@ -1,8 +1,11 @@
-"""The companies you enter yourself on the Companies page.
+"""The companies you enter yourself on the Companies page, and the employers from your résumé.
 
 They are kept in user-data/my_companies.json (yours: updates leave it alone). An entry has a name and, optionally, a
 website, address, the town or ZIP code to measure distance from, a phone number and notes. When the town or ZIP code is a
 place Job Finder knows, the entry gets a map point, so it takes its place in the nearest-first list.
+
+The employers in your work history (filled from your résumé) are added by sync_from_work_history, once each. One you
+delete is remembered in user-data/my_companies_removed.json and is not added again.
 """
 
 import json
@@ -104,6 +107,66 @@ def delete(company_id):
     if len(kept) == len(companies):
         raise KeyError(company_id)
     _save(kept)
+    gone = next(item for item in companies if item["id"] == company_id)
+    if gone.get("source") == "resume":
+        _remember_removed(gone["name"])
+
+
+def _same(name):
+    """A company name as compared: lower case, letters and digits only, without the Inc / LLC ending."""
+    text = re.sub(r"\b(?:inc|incorporated|llc|ltd|corp|corporation|co|company)\b\.?", " ", str(name or "").casefold())
+    return re.sub(r"[^a-z0-9]+", "", text)
+
+
+def _removed():
+    try:
+        data = json.loads(paths.MY_COMPANIES_REMOVED_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return set()
+    return {str(item) for item in data} if isinstance(data, list) else set()
+
+
+def _remember_removed(name):
+    removed = _removed() | {_same(name)}
+    path = paths.MY_COMPANIES_REMOVED_FILE
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(sorted(removed)), encoding="utf-8")
+
+
+def sync_from_work_history(work_history, home_state=""):
+    """Add the employers in a work history that are not in the list yet. Returns how many were added.
+
+    Each is added once with what the work history knows (town, ZIP, phone, website), a note saying where it came from,
+    and source "resume". A company you already have (by name, ignoring Inc / LLC) or one you deleted is left alone."""
+    companies = load()
+    have = {_same(item["name"]) for item in companies} | _removed()
+    added = []
+    for job in work_history or []:
+        if not isinstance(job, dict):
+            continue
+        name = " ".join(str(job.get("company") or "").split())[:FIELD_LIMITS["name"]]
+        key = _same(name)
+        if not name or not key or key in have:
+            continue
+        have.add(key)
+        town = ", ".join(part for part in (str(job.get("city") or "").strip(), str(job.get("state") or "").strip()) if part)
+        zip_code = str(job.get("zip") or "").strip()
+        place = town if town and "," in town else (zip_code or "")
+        street = str(job.get("street") or "").strip()
+        address = ", ".join(part for part in (street, town, zip_code) if part)
+        fields = {"name": name, "website": job.get("website") or "", "address": address, "place": place,
+                  "phone": job.get("phone") or "",
+                  "notes": "From your résumé: " + ", ".join(
+                      part for part in (str(job.get("role") or "").strip(), str(job.get("dates") or "").strip()) if part)}
+        try:
+            entry = clean(fields, home_state)
+        except ValueError:  # a place or website that can't be read is left out, the company is still worth listing
+            entry = clean({"name": name, "notes": fields["notes"]}, home_state)
+        added.append(dict(entry, id=uuid.uuid4().hex[:12], source="resume",
+                          added=datetime.now().astimezone().isoformat(timespec="seconds")))
+    if added:
+        _save((companies + added)[:MAX_COMPANIES])
+    return len(added)
 
 
 def as_result(item, center=None):

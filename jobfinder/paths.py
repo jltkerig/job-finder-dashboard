@@ -41,6 +41,7 @@ WATCHED_EMPLOYERS_FILE = USER_DIR / "watched_employers.json"
 DISCOVERED_EMPLOYERS_FILE = USER_DIR / "discovered_employers.json"
 BOARD_HEALTH_FILE = USER_DIR / "board_health.json"
 MY_COMPANIES_FILE = USER_DIR / "my_companies.json"  # the companies you entered on the Companies page
+MY_COMPANIES_REMOVED_FILE = USER_DIR / "my_companies_removed.json"  # résumé employers you deleted: not added again
 SEARCH_SKIPS_FILE = USER_DIR / "search_skips.jsonl"
 SEARCH_DEBUG_FILE = USER_DIR / "search_debug.json"
 SEARCH_SCOPE_FILE = USER_DIR / "search_scope.json"

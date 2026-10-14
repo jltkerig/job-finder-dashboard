@@ -44,6 +44,10 @@ def resolve_place(text, profile):
 @app.route("/companies")
 def companies_page():
     profile = profile_store.get_user_profile()
+    try:  # the employers in your work history (filled from your résumé) join your companies, once each
+        my_companies.sync_from_work_history(profile.get("work_history"), str(profile.get("state") or ""))
+    except OSError:
+        pass  # the list is a convenience; the page still opens
     return render_template("companies.html", saved_places=_saved_places(profile), mile_choices=MILE_CHOICES,
                            kinds=[(KNOWN, KNOWN_LABEL), (MINE, MINE_LABEL)]
                            + [(key, label) for key, (label, _) in local_companies.KINDS.items()],

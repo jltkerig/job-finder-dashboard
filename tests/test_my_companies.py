@@ -17,6 +17,66 @@ FAR = (40.5, -76.3)
 
 def reset():
     paths.MY_COMPANIES_FILE.unlink(missing_ok=True)
+    paths.MY_COMPANIES_REMOVED_FILE.unlink(missing_ok=True)
+
+
+WORK_HISTORY = [
+    {"company": "Example Co", "role": "Web Designer", "dates": "2025-01 – 2025-05", "city": "Springfield", "state": "MD",
+     "zip": "21015", "street": "10 Main Street", "phone": "410-555-0101", "website": "example.example.com"},
+    {"company": "Sample Corp", "role": "Front End Web Developer", "dates": "2015-05 – 2024-10"},
+    {"company": "example co, inc.", "role": "Intern", "dates": "2013"},  # the same company again
+    {"company": "", "role": "No company"},
+]
+
+
+class FromTheResume(unittest.TestCase):
+    def setUp(self):
+        reset()
+        self.addCleanup(reset)
+
+    def test_each_employer_is_added_once_with_what_the_work_history_knows(self):
+        with patch.object(my_companies, "place_point", return_value=NEAR):
+            added = my_companies.sync_from_work_history(WORK_HISTORY, "MD")
+        self.assertEqual(added, 2)
+        first, second = my_companies.load()
+        self.assertEqual(first["name"], "Example Co")
+        self.assertEqual(first["source"], "resume")
+        self.assertEqual(first["website"], "https://example.example.com")
+        self.assertEqual(first["address"], "10 Main Street, Springfield, MD, 21015")
+        self.assertEqual(first["phone"], "410-555-0101")
+        self.assertEqual((first["lat"], first["lon"]), NEAR)
+        self.assertIn("Web Designer", first["notes"])
+        self.assertEqual(second["name"], "Sample Corp")
+        self.assertIsNone(second["lat"])  # no place known: still listed
+
+    def test_running_it_again_adds_nothing(self):
+        my_companies.sync_from_work_history(WORK_HISTORY, "MD")
+        self.assertEqual(my_companies.sync_from_work_history(WORK_HISTORY, "MD"), 0)
+        self.assertEqual(len(my_companies.load()), 2)
+
+    def test_a_company_you_entered_yourself_is_not_added_again(self):
+        my_companies.add({"name": "Sample Corporation"})
+        self.assertEqual(my_companies.sync_from_work_history(WORK_HISTORY[1:2], "MD"), 0)
+
+    def test_one_you_deleted_does_not_come_back_but_your_own_do_not_block_others(self):
+        my_companies.sync_from_work_history(WORK_HISTORY, "MD")
+        gone = next(item for item in my_companies.load() if item["name"] == "Sample Corp")
+        my_companies.delete(gone["id"])
+        self.assertEqual(my_companies.sync_from_work_history(WORK_HISTORY, "MD"), 0)
+        self.assertEqual([c["name"] for c in my_companies.load()], ["Example Co"])
+
+    def test_an_unreadable_place_does_not_stop_the_company_being_listed(self):
+        job = {"company": "Odd Place Inc", "role": "Designer", "city": "Nowhereville", "state": "ZZ"}
+        with patch.object(my_companies, "place_point", return_value=None):
+            self.assertEqual(my_companies.sync_from_work_history([job], "MD"), 1)
+        self.assertEqual(my_companies.load()[0]["name"], "Odd Place Inc")
+
+    def test_the_page_adds_them_when_it_opens(self):
+        client = dashboard.app.test_client()
+        profile = {"cities": [], "state": "MD", "work_history": WORK_HISTORY[1:2]}
+        with patch.object(companies_routes.profile_store, "get_user_profile", return_value=profile):
+            client.get("/companies")
+        self.assertEqual([c["name"] for c in my_companies.load()], ["Sample Corp"])
 
 
 class Storage(unittest.TestCase):

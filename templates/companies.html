@@ -40,9 +40,9 @@
         <input type="hidden" id="companies-add-id" value="" />
         <div class="form-field"><label for="companies-add-name">Company name</label><input id="companies-add-name" name="name" type="text" maxlength="150" required /></div>
         <div class="form-field"><label for="companies-add-website">Website</label><input id="companies-add-website" name="website" type="text" maxlength="200" placeholder="acme.com" /></div>
-        <div class="form-field"><label for="companies-add-address">Address</label><input id="companies-add-address" name="address" type="text" maxlength="200" placeholder="10 Main Street, Bel Air, MD 21014" /></div>
-        <div class="form-field"><label for="companies-add-place">Town, State or ZIP <small>(measures the distance)</small></label><input id="companies-add-place" name="place" type="text" maxlength="100" placeholder="Bel Air, MD" /></div>
         <div class="form-field"><label for="companies-add-phone">Phone</label><input id="companies-add-phone" name="phone" type="text" maxlength="40" /></div>
+        <div class="form-field companies-add-address"><label for="companies-add-address">Address</label><input id="companies-add-address" name="address" type="text" maxlength="200" placeholder="10 Main Street, Bel Air, MD 21014" /></div>
+        <div class="form-field"><label for="companies-add-place">Town, State or ZIP</label><input id="companies-add-place" name="place" type="text" maxlength="100" placeholder="Bel Air, MD" title="Used to measure how far the company is from the place you search around" /></div>
         <div class="form-field companies-add-notes"><label for="companies-add-notes">Notes</label><textarea id="companies-add-notes" name="notes" rows="2" maxlength="500" placeholder="Who you know there, what they make, when to check back"></textarea></div>
         <div class="companies-add-actions">
           <button class="bordered-button primary-action" id="companies-add-save" type="submit">Add company</button>
@@ -50,7 +50,7 @@
           <span id="companies-add-status" class="field-help" role="status"></span>
         </div>
       </form>
-      <p class="field-help">Kept in this computer's user-data folder, in my_companies.json. They are listed under "My companies", nearest first when a town or ZIP code is given.</p>
+      <p class="field-help companies-add-help">The town or ZIP code is what measures the distance. Kept in this computer's user-data folder, in my_companies.json. They are listed under "My companies", nearest first when a town or ZIP code is given.</p>
     </details>
   </section>
   <section class="company-section companies-results" id="companies-results" hidden aria-live="polite">
