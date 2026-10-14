@@ -260,6 +260,10 @@
     render();
   }
 
+  // All / None: the long list of kinds is quicker to start from one end.
+  const setKinds = (on) => form.querySelectorAll('input[name="kinds"]').forEach((box) => { box.checked = on; });
+  document.getElementById("companies-kinds-all")?.addEventListener("click", () => setKinds(true));
+  document.getElementById("companies-kinds-none")?.addEventListener("click", () => setKinds(false));
   form.addEventListener("submit", (event) => { event.preventDefault(); search(); });
   filter.addEventListener("input", render);
   websiteOnly.addEventListener("change", render);

@@ -22,15 +22,24 @@ GAP_SECONDS = 1.1  # its usage rules: no more than one request a second
 RETRY_WAIT_SECONDS = 5
 CACHE_SECONDS = 6 * 3600
 
-# Kind key -> (label, the words asked for). Words Nominatim has nothing for just bring back nothing.
+# Kind key -> (label, the words asked for). Words Nominatim has nothing for just bring back nothing, so each list holds
+# words that brought back real places around a town. Shown in this order on the Companies page.
 KINDS = {
     "offices": ("Offices and companies", ["company", "insurance", "office"]),
     "finance": ("Banks", ["bank"]),
-    "healthcare": ("Healthcare", ["clinic", "doctors", "dentist", "pharmacy", "hospital"]),
+    "legal": ("Legal and real estate", ["real estate", "attorney"]),
+    "healthcare": ("Healthcare", ["clinic", "doctors", "dentist", "pharmacy", "hospital", "veterinary", "nursing home"]),
     "industry": ("Industry and trades", ["factory", "warehouse", "industrial", "car repair", "electrician"]),
-    "education": ("Schools and colleges", ["school", "college", "university"]),
+    "construction": ("Construction and logistics", ["construction", "carpenter", "freight", "logistics", "airport"]),
+    "government": ("Government and public services", ["fire station", "post office", "police", "library", "town hall", "courthouse"]),
+    "education": ("Schools and colleges", ["school", "college", "university", "kindergarten"]),
+    "creative": ("Design, media and tech", ["design", "studio", "gallery", "photographer", "printing", "computer"]),
+    "auto": ("Cars and fuel", ["car wash", "fuel", "car repair"]),
+    "personal": ("Beauty and fitness", ["hairdresser", "beauty", "spa", "fitness", "gym"]),
+    "community": ("Community and care", ["community centre", "association", "daycare"]),
+    "home": ("Home and garden", ["garden centre", "florist", "furniture"]),
     "retail": ("Shops", ["supermarket", "department store", "hardware"]),
-    "food": ("Food and lodging", ["restaurant", "hotel", "cafe"]),
+    "food": ("Food and lodging", ["restaurant", "hotel", "cafe", "bakery"]),
 }
 DEFAULT_KINDS = ("offices", "finance", "healthcare", "industry", "education")
 

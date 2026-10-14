@@ -108,8 +108,15 @@ class Searching(unittest.TestCase):
         self.assertIn(lc.RETRY_WAIT_SECONDS, waits)
 
     def test_a_word_that_fails_does_not_lose_the_others(self):
-        get = MagicMock(side_effect=[requests.ConnectionError("down"), answer(), answer([]), answer([]), answer([])])
-        found = lc.search(*CENTER, 10, ["healthcare"], http=get, sleep=no_wait)
+        words = lc.KINDS["healthcare"][1]
+
+        def ask(url, **kwargs):
+            word = kwargs["params"]["q"]
+            if word == words[0]:
+                raise requests.ConnectionError("down")  # the first word fails ...
+            return answer() if word == words[1] else answer([])  # ... the second one has places, the rest none
+
+        found = lc.search(*CENTER, 10, ["healthcare"], http=ask, sleep=no_wait)
         self.assertEqual(len(found), 2)
 
     def test_nothing_answering_is_a_message_for_the_page(self):

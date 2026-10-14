@@ -2178,6 +2178,11 @@ body[data-page="search"] #results-table td[data-label="Listing"] .inline-action-
 .companies-saved { margin:0 0 14px; }
 .chip-button { margin:0 6px 0 0; padding:3px 11px; border:1px solid #c7cbd1; border-radius:999px; background:#f6f7f8; font:inherit; font-size:.85rem; cursor:pointer; }
 .chip-button:hover { background:#eaecef; }
+/* Your places: white on dark, like the menu */
+.companies-saved-place { background:#1f2937; border-color:#1f2937; color:#fff; font-weight:600; }
+.companies-saved-place:hover, .companies-saved-place:focus-visible { background:#374151; border-color:#374151; color:#fff; }
+.companies-kinds-tools { display:inline-flex; gap:6px; margin-right:6px; }
+.companies-kinds-tools .chip-button { margin:0; padding:1px 10px; font-size:.8rem; }
 .companies-add { margin-top:14px; border:1px solid #d4d8dd; border-radius:8px; padding:10px 14px; background:#fafbfc; }
 .companies-add summary { cursor:pointer; font-weight:700; }
 .companies-add-form { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:12px 16px; align-items:end; margin-top:12px; }
