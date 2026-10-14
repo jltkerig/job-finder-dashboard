@@ -116,14 +116,6 @@ class SavedJobCard(unittest.TestCase):
         self.assertEqual([job["apply_queued"] for job in jobs], [True, False])
 
 
-class TopPicksBadPick(unittest.TestCase):
-    def test_a_bad_pick_leaves_the_top_10_and_is_not_picked_again(self):
-        picks = (ROOT / "static" / "js" / "top-picks.js").read_text(encoding="utf-8")
-        score = (ROOT / "static" / "js" / "top-picks-score.js").read_text(encoding="utf-8")
-        self.assertIn('if (next === "down") dropPick(pick,', picks)
-        self.assertIn('row.dataset.rating === "down"', score)
-
-
 class SavedJobCardMarkup(unittest.TestCase):
     def test_the_saved_job_card_has_matching_tags(self):
         """A stray </div> once closed the collapsed row early and scrambled the open card."""

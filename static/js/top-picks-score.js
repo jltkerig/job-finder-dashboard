@@ -48,10 +48,6 @@
   // Words close to most design and web titles count as yours even when none of your titles use them.
   const knownWords = new Set([...profileTitles.flat(), ...appliedTitles.flat(), "ux", "ui", "produ", "inter", "creat", "multi", "websi"]);
 
-  // Listings you turned down with "Not for Me" (or rejected as the wrong role) teach the other way.
-  let turnedDown = [];
-  try { turnedDown = JSON.parse(panel.dataset.turnedDown || "[]").map(titleWords).filter((words) => words.length); } catch {}
-
   // 0-1: how much the title shares with the closest of the examples (shared words over all words of both).
   function likeness(title, examples) {
     const words = new Set(titleWords(title));
@@ -119,10 +115,8 @@
       reasons.push("Title matches");
     }
     const liked = likeness(row.dataset.job, appliedTitles);
-    const disliked = likeness(row.dataset.job, turnedDown);
     if (liked >= 0.5) reasons.push("Like jobs you applied to");
-    if (disliked >= 0.5) gaps.push({ text: "Like jobs you turned down", hard: false });
-    return { row, score: score - penalty + Math.round(20 * liked) - Math.round(35 * disliked), reasons, gaps, fitPart: (fit === null ? 50 : fit) * 0.5 };
+    return { row, score: score - penalty + Math.round(20 * liked), reasons, gaps, fitPart: (fit === null ? 50 : fit) * 0.5 };
   }
 
   function shown(row) {
@@ -133,9 +127,9 @@
   // Pages that aren't one job (same idea as looks_like_not_a_job on the server): directories, job lists, agency pages.
   const NOT_A_JOB = /^\s*(?:find|hire|compare|top\s+\d+|best)\s|\bjobs\b|\b(?:web|website|graphic|logo|wordpress)\s+design\s+(?:in|near|services?|company|agency|packages?)\b/i;
 
-  // A job you already saved (Keep), added to the Apply queue, or rated 👎 (a bad pick) is not picked again.
+  // A job you already saved (Keep) or added to the Apply queue is not picked again.
   function isHandled(row) {
-    return row.dataset.saved === "true" || Boolean(row.dataset.queued) || row.dataset.rating === "down";
+    return row.dataset.saved === "true" || Boolean(row.dataset.queued);
   }
 
   function pick() {
@@ -148,19 +142,31 @@
 
   // Reads what the best 40 listings ask for (degrees, years, clearance) and moves down the ones the profile doesn't
   // show: a hard gap (a required degree with no alternative, an active clearance) means likely not a fit.
-  async function checkRequirements(ranked) {
+  // A job found closed: the row's red/green dot and label change too, not only its status.
+  function showClosed(row) {
+    row.dataset.status = "closed";
+    const state = row.querySelector(".job-open-state");
+    const dot = state?.querySelector(".status-dot");
+    if (!dot) return;
+    dot.className = "status-dot closed";
+    dot.dataset.tooltip = "This listing appears to no longer be active.";
+    dot.setAttribute("aria-label", "Closed");
+  }
+
+  // With refresh (one pick's Refresh button) the page is read again instead of using what was kept.
+  async function checkRequirements(ranked, { refresh = false } = {}) {
     const top = ranked.slice(0, PICKS * 4);
     const response = await fetch("/top-picks/requirements", {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
-      body: JSON.stringify({ company_ids: top.map((pick) => pick.row.dataset.companyId) }),
+      body: JSON.stringify({ company_ids: top.map((pick) => pick.row.dataset.companyId), refresh }),
     });
     if (!response.ok) throw new Error("Could not read the listings' requirements.");
     const { gaps } = await response.json();
     top.forEach((pick) => {
       const found = gaps[pick.row.dataset.companyId];
       if (!found) return;
-      if (found.closed) { pick.closed = true; pick.row.dataset.status = "closed"; return; }  // no longer accepting applications
+      if (found.closed) { pick.closed = true; showClosed(pick.row); return; }  // no longer accepting applications
       if (found.unread) { pick.gaps.push({ text: "Couldn't read the requirements, so check them yourself", hard: false }); return; }
       pick.gaps = pick.gaps.concat(found.items);
       pick.score -= found.items.reduce((total, gap) => total + (gap.hard ? 100 : gap.weight || (gap.avoid ? 30 : 15)), 0);
@@ -179,6 +185,5 @@
   }
 
 
-  // appliedTitles and turnedDown are shared: top-picks.js adds to them when you rate a pick (rejecting one teaches nothing).
-  window.TopPicksScore = { isHandled, PICKS, titleWords, byScore, pick, checkRequirements, likeness, rank, appliedTitles, turnedDown };
+  window.TopPicksScore = { isHandled, PICKS, titleWords, byScore, pick, checkRequirements, likeness, rank, appliedTitles };
 })();

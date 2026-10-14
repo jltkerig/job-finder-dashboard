@@ -107,6 +107,10 @@ Each entry: what went wrong, why, the fix, and the check that would have caught 
 
 ## Top 10
 
+- **A closed Ashby job stayed Open after Refresh** (2026-10-13): NETGEAR Graphic Designer, saved from LinkedIn. Refresh
+  skips LinkedIn rows and Ashby/Greenhouse/Lever pages are JavaScript shells (HTTP 200, no "closed" wording). Fix:
+  `sources/board_status.py` asks the employer board's own job list; Refresh Results and Top 10 mark a job Closed when it
+  is gone. Check: audit open rows with `board_status` (5 closed, 29 open, 122 unknown on 2026-10-13).
 - **Only 5 picks after a page refresh** (2026-10-06). The saved Top 10 was restored minus picks that had since closed.
   Fix: when any saved pick is gone, Top 10 ranks again instead. Check: after closing/rejecting jobs, reload and
   count the picks.

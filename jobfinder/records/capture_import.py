@@ -275,8 +275,20 @@ def read_jobs(path):
         url = canonical_url(str(job.get("url") or ""))
         title = _BADGE.sub("", str(job.get("title") or "")).strip()
         if url and title:
-            jobs.append(dict(job, url=url, title=title))
+            jobs.append(split_company_place(dict(job, url=url, title=title)))
     return data["site"], jobs
+
+
+_COMPANY_PLACE = re.compile(r"^(.+?)\s+[·•]\s+([^·•]+?,\s*[A-Z]{2}(?![A-Za-z])[^·•]*)$")
+
+
+def split_company_place(job):
+    """Some cards run the company and the place together ("Evans & Chambers Technology · Columbia, MD"): the company is
+    the part before the dot, and the place fills in a missing location."""
+    match = _COMPANY_PLACE.match(str(job.get("company") or "").strip())
+    if not match:
+        return job
+    return dict(job, company=match.group(1).strip(), location=str(job.get("location") or "").strip() or match.group(2).strip())
 
 
 # ---------- matching the same job across sites ----------

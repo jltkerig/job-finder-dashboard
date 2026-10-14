@@ -1993,10 +1993,6 @@ body[data-page="search"] #results-table .details-blocks .bordered-button { min-h
 .top-pick-buttons { display:flex; gap:6px; }
 .top-pick-buttons .bordered-button { padding:6px 12px; font-size:.82rem; min-height:0; }
 .top-pick-buttons .bordered-button:disabled { opacity:.5; cursor:default; }
-.top-pick-rating { display:flex; gap:4px; }
-.top-pick-thumb { width:32px; height:30px; border:1px solid #d6dbe1; border-radius:6px; background:#fff; font-size:1rem; line-height:1; cursor:pointer; filter:grayscale(1); opacity:.65; }
-.top-pick-thumb:hover { opacity:1; filter:none; }
-.top-pick-thumb.is-on { filter:none; opacity:1; border-color:#2a4a7a; background:#e8eef7; }
 @media (max-width: 640px) { .top-pick { grid-template-columns:26px 20px 1fr; } .top-pick-actions { grid-column:3; flex-direction:row; align-items:center; } }
 .top-picks-actions .loading::before { content:""; display:inline-block; width:14px; height:14px; margin-right:8px; vertical-align:-2px; border:2px solid #c9ced6; border-top-color:#2a4a7a; border-radius:50%; animation:top-picks-spin .8s linear infinite; }
 @keyframes top-picks-spin { to { transform:rotate(360deg); } }
@@ -2020,6 +2016,16 @@ body[data-page="search"] #results-table .details-blocks .bordered-button { min-h
 .job-posting-highlights { display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:14px; margin-top:8px; }
 .job-posting-highlights h5 { margin:0 0 4px; font-size:.85rem; color:#3d4550; }
 .job-posting-highlights ul { margin:0; padding-left:18px; font-size:.86rem; line-height:1.45; }
+/* The skills the posting lists, as dark bubbles (static/js/listing-preview.js): a tick = already yours, + adds it */
+.job-posting-skills { margin-top:12px; }
+.job-posting-skills h5 { margin:10px 0 6px; font-size:.85rem; color:#3d4550; }
+.job-posting-skills .skill-tally { font-weight:400; color:#6b7480; }
+.skill-bubbles { display:flex; flex-wrap:wrap; gap:6px; }
+.skill-bubble { border:0; border-radius:999px; padding:5px 12px; background:#1f2a3d; color:#fff; font:inherit; font-size:.82rem; font-weight:600; cursor:pointer; }
+.skill-bubble:hover:not(:disabled) { background:#2d3d5a; }
+.skill-bubble:focus-visible { outline:2px solid #2a6fd6; outline-offset:2px; }
+.skill-bubble.have, .skill-bubble:disabled { background:#4a5568; cursor:default; opacity:.85; }
+.skill-status { margin:8px 0 0; }
 .job-posting-full { margin-top:10px; font-size:.86rem; }
 .job-posting-full summary { cursor:pointer; color:#2a4a7a; font-weight:600; }
 .job-posting-text { white-space:pre-line; max-height:260px; overflow:auto; margin-top:8px; padding:10px 12px; border:1px solid #e3e6ea; border-radius:6px; background:#fafbfc; line-height:1.45; }
@@ -2057,7 +2063,7 @@ body[data-page="search"] #results-table .details-blocks .bordered-button { min-h
 /* Keep and Apply side by side on each result, sharing the line */
 body[data-page="search"] #results-table tr.result-row td[data-label="Save"] { display:flex !important; gap:8px; align-items:stretch; white-space:normal; }
 body[data-page="search"] #results-table tr.result-row td[data-label="Save"] .bordered-button { flex:1 1 0; width:auto !important; min-width:0 !important; max-width:none !important; margin:0; }
-body[data-page="search"] #results-table tr.result-row td.row-actions .row-action-grid { display:flex !important; gap:8px; }
+body[data-page="search"] #results-table tr.result-row td.row-actions .row-action-grid { display:grid !important; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
 body[data-page="search"] #results-table tr.result-row td.row-actions .row-action-grid .bordered-button:not(.block-action):not(.block-company-action) { flex:1 1 0; width:auto !important; min-width:0 !important; max-width:none !important; }
 
 /* One button size on result cards (Keep, Apply, Details, Reject) and on Top 10 picks */
@@ -2093,3 +2099,53 @@ body[data-page="dashboard"] .queued-note { padding:6px 12px; border-radius:6px; 
 
 /* Apply Queue: Combine puts the résumé and cover letter into one PDF (static/js/apply-queue.js) */
 .apply-queue-combine { margin-left:6px; padding:3px 10px; min-height:0; font-size:.82rem; position:relative; top:-5px; }
+
+/* Search results: the red/green/grey Open / Closed / Unknown dot under each job title */
+#results-table small.job-open-state { display:flex; align-items:center; gap:6px; margin:4px 0 0; font-size:.83rem; font-weight:600; }
+/* Top 10 pick buttons: two columns (Keep | Apply, Details | Refresh, Reject | Closed), the icon right of each word */
+.top-pick-buttons { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:6px; }
+.top-pick-buttons .bordered-button { width:100%; min-width:0; gap:6px; white-space:nowrap; }
+.top-pick-buttons .btn-icon { font-size:.95em; line-height:1; }
+.top-pick-title .status-dot { width:10px; height:10px; margin-left:4px; vertical-align:middle; }
+
+/* Search results: icons right of each button word, in two columns (Keep | Apply, Details | Refresh, Reject | Closed) */
+#results-table .keep-action::after, #results-table .apply-action::after, #results-table .details-action::after,
+#results-table .refresh-action::after, #results-table .reject-action::after, #results-table .closed-action::after { margin-left:6px; }
+#results-table .keep-action::after { content:"⭐"; }
+#results-table .keep-action.is-saved::after, #results-table .apply-action:disabled::after { content:"✔️"; }
+#results-table .apply-action::after { content:"📨"; }
+#results-table .details-action::after { content:"🔍"; }
+#results-table .refresh-action::after { content:"🔄"; }
+#results-table .reject-action::after { content:"🚫"; }
+#results-table .closed-action::after { content:"🔒"; }
+@media (min-width:0px) { body[data-page="search"] #results-table.compact-rows tbody tr.result-row { min-height:152px; } }
+#results-table .job-open-state .status-dot { margin-right:7px; vertical-align:middle; flex:none; }
+
+/* Search results: "Open listing" sits at the top right above the buttons, as on a Top 10 pick */
+body[data-page="search"] #results-table.compact-rows td[data-label="Listing"]::before { content:none; display:none; }
+body[data-page="search"] #results-table td[data-label="Listing"] .inline-action-link { font-size:.85rem; white-space:nowrap; }
+@media (min-width:761px) {
+  body[data-page="search"] #results-table.compact-rows td[data-label="Listing"] { position:absolute; top:12px; right:20px; width:228px; padding:0; border:0; background:none; text-align:right; font-size:.85rem; display:flex; justify-content:flex-end; align-items:baseline; gap:8px; }
+  body[data-page="search"] #results-table.compact-rows td[data-label="Save"] { top:38px; }
+  body[data-page="search"] #results-table.compact-rows td[data-label="Actions"] { top:80px; }
+  body[data-page="search"] #results-table.compact-rows tbody tr.result-row { min-height:176px; }
+}
+@media (max-width:760px) {
+  body[data-page="search"] #results-table.compact-rows td[data-label="Listing"] { order:19; flex-basis:100%; text-align:right; padding:10px 0 0; border:0; background:none; display:flex; justify-content:flex-end; align-items:baseline; gap:8px; }
+}
+
+/* Top 10 picks: styled like the listing cards (static/js/top-picks-facts.js) */
+.top-picks-list { gap:12px; }
+.top-pick { align-items:start; padding:16px 20px; border:1px solid #dfe3e8; border-radius:12px; background:#fff; box-shadow:0 1px 2px rgba(16,24,40,.05); }
+.top-pick-title { font-size:1.05rem; font-weight:700; color:#111827; }
+.top-pick-line { display:flex; flex-wrap:wrap; align-items:baseline; margin-top:4px; font-size:.9rem; color:#374151; }
+.top-pick-line > * + *::before { content:"\00b7"; margin:0 8px; color:#9ca3af; font-weight:400; }
+.top-pick-line .top-pick-company { display:inline; font-weight:700; color:#1f2937; font-size:inherit; }
+.top-pick-domain { display:block; margin-top:6px; font-size:.8rem; color:#6b7280; }
+.top-pick-verification { margin-left:8px; font-size:.75rem; }
+.top-pick-stats { display:flex; flex-wrap:wrap; gap:6px 8px; margin-top:10px; }
+.top-pick-stat { display:inline-flex; align-items:center; gap:6px; padding:3px 4px 3px 10px; border:1px solid #e5e7eb; border-radius:999px; background:#f9fafb; font-size:.78rem; font-weight:600; color:#4b5563; }
+.top-pick-stat .stat-plain { padding-right:8px; color:#374151; }
+.top-pick-stat .job-fit, .top-pick-stat .credibility-badge { min-width:0; padding:1px 8px; border-radius:999px; font-size:.78rem; }
+.top-pick-chips { margin-top:10px; }
+.top-pick-refreshed { margin:8px 0 0; font-size:.82rem; font-weight:600; color:#1a7f37; }

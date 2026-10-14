@@ -10,12 +10,31 @@
   const build = document.getElementById("top-picks-build");
   const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || "";
   if (!window.TopPicksScore) return;
-  const { isHandled, PICKS, titleWords, byScore, pick, checkRequirements, likeness, rank, appliedTitles, turnedDown } = window.TopPicksScore;
+  const { isHandled, PICKS, titleWords, byScore, pick, checkRequirements, likeness, rank, appliedTitles } = window.TopPicksScore;
 
   let current = [];  // every ranked listing from the last click, best first
 
-  // Reject / Closed: take the listing off the Search page and move the next pick up. Neither teaches Top 10 anything:
-  // only 👎 marks down jobs like it (a closed listing says nothing about the role, and a rejection can be for any reason).
+  // A pick's buttons read "Word icon": the icon sits to the right of the word, and follows it when the word changes.
+  const ICONS = { Keep: "⭐", Saved: "✔️", Apply: "📨", Added: "✔️", Details: "🔍", "Hide Details": "🔼", Refresh: "🔄",
+    "Refreshing…": "⏳", Reject: "🚫", Closed: "🔒" };
+  function setLabel(target, text) {
+    const label = Object.assign(document.createElement("span"), { className: "btn-label", textContent: text });
+    const icon = Object.assign(document.createElement("span"), { className: "btn-icon", textContent: ICONS[text] || "" });
+    icon.setAttribute("aria-hidden", "true");
+    target.replaceChildren(label, icon);
+  }
+
+  // The green / red / grey dot of a job's Open / Closed / Unknown status, as on the Search page's rows.
+  function statusDot(row) {
+    const state = ["open", "closed"].includes(row.dataset.status) ? row.dataset.status : "unknown";
+    const dot = document.createElement("span");
+    dot.className = `status-dot ${state}`;
+    dot.dataset.tooltip = state === "open" ? "This listing appears to still be active."
+      : state === "closed" ? "This listing appears to no longer be active." : "The current listing status could not be confirmed.";
+    return dot;
+  }
+
+  // Reject / Closed: take the listing off the Search page and move the next pick up. Neither teaches Top 10 anything.
   async function rejectListing(pick, button, reason, message) {
     button.disabled = true;
     try {
@@ -47,37 +66,6 @@
     }
     render(current.slice(0, PICKS));
     status.textContent = message;
-  }
-
-  // 👍 / 👎: saved on the listing and learned from next time. 👍 stays where it is (click it again to clear); 👎 is a bad
-  // pick and leaves the Top 10 at once.
-  async function rate(pick, rating, buttons) {
-    const next = pick.row.dataset.rating === rating ? "none" : rating;
-    try {
-      const response = await fetch("/top-picks/rate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
-        body: JSON.stringify({ company_id: pick.row.dataset.companyId, rating: next }),
-      });
-      if (!response.ok) throw new Error();
-    } catch {
-      status.textContent = "Could not save the rating. Try again.";
-      return;
-    }
-    const words = titleWords(pick.row.dataset.job);
-    const drop = (list) => { const at = list.findIndex((item) => item.join(" ") === words.join(" ")); if (at >= 0) list.splice(at, 1); };
-    if (pick.row.dataset.rating === "up") drop(appliedTitles);
-    if (pick.row.dataset.rating === "down") drop(turnedDown);
-    if (next === "up") appliedTitles.push(words);
-    if (next === "down") turnedDown.push(words);
-    pick.row.dataset.rating = next === "none" ? "" : next;
-    buttons.up.classList.toggle("is-on", next === "up");
-    buttons.down.classList.toggle("is-on", next === "down");
-    buttons.up.setAttribute("aria-pressed", String(next === "up"));
-    buttons.down.setAttribute("aria-pressed", String(next === "down"));
-    status.textContent = next === "none" ? "Rating cleared." : "Thanks. Top 10 will use that next time.";
-    // A bad pick leaves the Top 10 straight away and the next best one moves up.
-    if (next === "down") dropPick(pick, "Bad pick removed from your Top 10. The next one moved up.");
   }
 
   // Apply queue: queued jobs are kept on the Dashboard, where Apply opens them. After a daily search, Top 10 runs by
@@ -160,9 +148,7 @@
       title.className = "top-pick-title";
       title.htmlFor = box.id;
       title.textContent = row.dataset.job || `Job #${row.dataset.companyId}`;
-      const company = document.createElement("span");
-      company.className = "top-pick-company";
-      company.textContent = row.dataset.company || "";
+      title.append(" ", statusDot(row));
       const chips = document.createElement("div");
       chips.className = "top-pick-chips";
       reasons.forEach((reason) => {
@@ -171,8 +157,15 @@
         chip.textContent = reason;
         chips.append(chip);
       });
-      body.append(title, company);
-      if (window.TopPicksFacts) body.append(window.TopPicksFacts.build(row));
+      body.append(title);
+      if (window.TopPicksFacts) {
+        body.append(window.TopPicksFacts.line(row, row.dataset.company || ""));
+        const domain = window.TopPicksFacts.domain(row);
+        if (domain) body.append(domain);
+        body.append(window.TopPicksFacts.stats(row));
+      } else {
+        body.append(Object.assign(document.createElement("span"), { className: "top-pick-company", textContent: row.dataset.company || "" }));
+      }
       body.append(chips);
       if (gaps.length) {
         const warnings = document.createElement("ul");
@@ -206,11 +199,11 @@
         const keep = document.createElement("button");
         keep.type = "button";
         keep.className = "bordered-button keep-action-pick" + (rowKeep.classList.contains("is-saved") ? " is-saved" : "");
-        keep.textContent = rowKeep.classList.contains("is-saved") ? "Saved" : "Keep";
+        setLabel(keep, rowKeep.classList.contains("is-saved") ? "Saved" : "Keep");
         keep.addEventListener("click", () => {
           rowKeep.click();
           setTimeout(() => {
-            keep.textContent = rowKeep.textContent.trim();
+            setLabel(keep, rowKeep.textContent.trim());
             keep.classList.toggle("is-saved", rowKeep.classList.contains("is-saved"));
             if (isHandled(row)) dropPick(pick, "Saved to your Dashboard. The next pick moved up.");
           }, 800);
@@ -221,7 +214,7 @@
       const details = document.createElement("button");
       details.type = "button";
       details.className = "bordered-button top-pick-details-button";
-      details.textContent = "Details";
+      setLabel(details, "Details");
       details.setAttribute("aria-expanded", "false");
       const drop = document.createElement("div");
       drop.className = "top-pick-details";
@@ -229,7 +222,7 @@
       details.addEventListener("click", async () => {
         drop.hidden = !drop.hidden;
         details.setAttribute("aria-expanded", String(!drop.hidden));
-        details.textContent = drop.hidden ? "Details" : "Hide Details";
+        setLabel(details, drop.hidden ? "Details" : "Hide Details");
         if (drop.hidden || drop.dataset.loaded) return;
         drop.dataset.loaded = "1";
         drop.replaceChildren(Object.assign(document.createElement("p"), { className: "field-help job-posting-loading", textContent: "Reading the posting…" }));
@@ -247,31 +240,59 @@
             target: "_blank", rel: "noopener noreferrer", textContent: "Open listing" }));
         }
       });
-      buttons.append(details);
       const reject = document.createElement("button");
       reject.type = "button";
       reject.className = "bordered-button destructive-action";
-      reject.textContent = "Reject";
-      reject.title = "Reject this listing. Use 👎 instead to have Top 10 mark down jobs like it.";
+      setLabel(reject, "Reject");
+      reject.title = "Reject this listing and take it off the Search page.";
       reject.addEventListener("click", () => rejectListing(pick, reject, "other", "Rejected."));
       const closed = document.createElement("button");
       closed.type = "button";
       closed.className = "bordered-button destructive-action";
-      closed.textContent = "Closed";
+      setLabel(closed, "Closed");
       closed.title = "The job is closed. Rejects it without teaching Top 10 anything.";
       closed.addEventListener("click", () => rejectListing(pick, closed, "closed", "Rejected as closed."));
-      buttons.append(reject, closed);
+      // Refresh: reads this one posting again and re-checks its requirements (it may have closed or changed).
+      const refreshOne = document.createElement("button");
+      refreshOne.type = "button";
+      refreshOne.className = "bordered-button";
+      setLabel(refreshOne, "Refresh");
+      refreshOne.title = "Read this posting again and re-check its requirements";
+      refreshOne.addEventListener("click", async () => {
+        refreshOne.disabled = true;
+        setLabel(refreshOne, "Refreshing…");
+        try {
+          const [fresh] = await checkRequirements([rank(pick.row)], { refresh: true });
+          if (!fresh) {  // it has closed since: the server marked it Closed
+            dropPick(pick, "That posting has closed, so it was removed. The next pick moved up.");
+            return;
+          }
+          current = current.map((other) => (other === pick ? fresh : other)).sort(byScore);
+          render(current.slice(0, PICKS));
+          status.textContent = "Refreshed: the posting was read again.";
+          // Say so on the pick itself too: the status line is at the bottom of the panel, out of sight.
+          const shown = document.getElementById(`top-pick-${fresh.row.dataset.companyId}`)?.closest(".top-pick");
+          if (shown) {
+            shown.querySelector(".top-pick-body")?.append(Object.assign(document.createElement("p"),
+              { className: "top-pick-refreshed", textContent: "✓ Refreshed just now: the posting was read again." }));
+          }
+        } catch (error) {
+          status.textContent = error.message || "Could not refresh that listing. Try again.";
+          refreshOne.disabled = false;
+          setLabel(refreshOne, "Refresh");
+        }
+      });
       const queueButton = document.createElement("button");
       queueButton.type = "button";
       queueButton.className = "bordered-button";
-      queueButton.textContent = row.dataset.queued ? "Added" : "Apply";
+      setLabel(queueButton, row.dataset.queued ? "Added" : "Apply");
       queueButton.disabled = Boolean(row.dataset.queued);
       queueButton.title = "Add to the Apply queue on your Dashboard";
       queueButton.addEventListener("click", async () => {
         queueButton.disabled = true;
         try {
           await queue([row.dataset.companyId]);
-          queueButton.textContent = "Added";
+          setLabel(queueButton, "Added");
           row.dataset.queued = "1";
           const rowApply = row.querySelector(".apply-action");
           if (rowApply) { rowApply.textContent = "Added"; rowApply.disabled = true; }
@@ -283,21 +304,10 @@
       });
       const keepButton = buttons.querySelector(".keep-action-pick");
       if (keepButton) keepButton.after(queueButton); else buttons.prepend(queueButton);  // Keep and Apply together
-      const ratings = document.createElement("div");
-      ratings.className = "top-pick-rating";
-      const up = document.createElement("button");
-      const down = document.createElement("button");
-      [[up, "up", "👍", "Good pick"], [down, "down", "👎", "Bad pick"]].forEach(([button, value, icon, label]) => {
-        button.type = "button";
-        button.className = "top-pick-thumb" + (row.dataset.rating === value ? " is-on" : "");
-        button.textContent = icon;
-        button.title = label;
-        button.setAttribute("aria-label", label);
-        button.setAttribute("aria-pressed", String(row.dataset.rating === value));
-        button.addEventListener("click", () => rate(pick, value, { up, down }));
-        ratings.append(button);
-      });
-      actions.append(buttons, ratings);
+      // Two columns: Keep | Apply, Details | Refresh, Reject | Closed.
+      buttons.replaceChildren(...[buttons.querySelector(".keep-action-pick"), queueButton, details, refreshOne, reject, closed]
+        .filter(Boolean));
+      actions.append(buttons);
       item.append(actions, drop);
       list.append(item);
     });
@@ -336,6 +346,7 @@
     }
     panel.scrollIntoView({ behavior: "smooth", block: "start" });
   });
+
 
   if (autoQueue) {
     button.click();

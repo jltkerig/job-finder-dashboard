@@ -60,6 +60,7 @@ from jobfinder.sources.employer_jobs import (
     employer_for_url,
     load_employers,
 )
+from jobfinder.sources.board_status import board_status, clear_cache as clear_board_cache
 from jobfinder.sources.employer_site import clear_cache as clear_employer_cache, is_third_party
 from jobfinder.sources.job_feeds import FEEDS, FEED_NAMES
 from jobfinder.sources.job_listings import canonical_url, extract_jobs, looks_like_not_a_job, matching_title as matching_job_title
@@ -285,6 +286,7 @@ def update_existing_results(company_ids=None):
     selected_now = load_selected_states(database)
     city_targets_now, search_state_text = load_city_targets(database)
     clear_employer_cache()
+    clear_board_cache()
     shared._debug_run = DebugRun(shared.SEARCH_DEBUG_FILE, "update", JOB_FINDER_VERSION)
     shared._debug_run.set_inputs(rows_checked=len(companies), update_ids=company_ids,
                           titles_used_for_relevance=wanted_titles)
@@ -317,12 +319,19 @@ def update_existing_results(company_ids=None):
             print()
             print(f"Updating {index}/{len(companies)}: {company.get('name') or company.get('domain')}")
             print(f"Not rechecked: {company.get('source_type')} jobs are kept current by the Web Job Scraper extension.")
-            if posting_says_closed(company) and company.get("job_open_status") != "Closed":
-                # The posting text read for Top 10 already says "No longer accepting applications".
+            closed_because = None
+            if company.get("job_open_status") != "Closed":
+                if posting_says_closed(company):
+                    # The posting text read for Top 10 already says "No longer accepting applications".
+                    closed_because = "Its saved posting says it is no longer accepting applications"
+                elif company.get("career_url") and board_status(company["career_url"], employer_http) == "Closed":
+                    # The employer's own hiring board (Ashby, Greenhouse, Lever ...) no longer lists the job.
+                    closed_because = "The employer's hiring board no longer lists it"
+            if closed_because:
                 with database.cursor() as closed_cursor:
                     closed_cursor.execute("UPDATE companies SET job_open_status = 'Closed' WHERE id = %s", (company_id,))
                 database.commit()
-                print("Its saved posting says it is no longer accepting applications: marked Closed.")
+                print(f"{closed_because}: marked Closed.")
             continue
         career_url = company.get("career_url")
         source_url = company.get("source_url")

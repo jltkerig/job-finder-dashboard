@@ -20,8 +20,6 @@ from jobfinder.web.core import app
 from jobfinder.web.listing_queries import (
     add_current_distances,
     merge_duplicates,
-    liked_titles,
-    turned_down_titles,
     add_drive_times,
     add_job_fit,
     get_companies,
@@ -81,8 +79,6 @@ def home():
         applied_titles=[company.get("career_job_title") for company in companies
                         if company.get("application_status") in {"Applied", "Talking With Recruiter", "Interview"}
                         and company.get("career_job_title")],
-        turned_down_titles=turned_down_titles(),
-        liked_titles=liked_titles(),
         auto_queue=auto_apply.auto_queue_pending(auto_apply.read_tuning_settings()),
     )
 

@@ -6,7 +6,7 @@ This file only puts the app together and starts it. The pages and what they do l
     pages.py            Search, Dashboard, Settings and the credibility guide
     profile_routes.py   saving your profile, reading a résumé, title and city suggestions
     listing_actions.py  the buttons on a listing: reject, restore, keep, block, notes
-    top_picks_routes.py Top 10 Picks: requirements, posting preview, ratings
+    top_picks_routes.py Top 10 Picks: requirements, posting preview
     search_control.py   starting, refreshing, importing and stopping searches, and their progress
     blocklists.py       blocked domains and companies
     tuning.py           the Tuning page

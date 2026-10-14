@@ -10,6 +10,56 @@
     return node;
   }
 
+  // The skills Job Fit counted, as dark bubbles: ones you list show a tick, the others add themselves to your skills.
+  const GROUPS = [["required", "Required skills"], ["preferred", "Nice to have"], ["other", "Also mentioned"]];
+
+  function skillBubbles(skills) {
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || "";
+    const wrap = element("div", "job-posting-skills");
+    const status = element("p", "field-help skill-status");
+    status.setAttribute("role", "status");
+    GROUPS.forEach(([where, label]) => {
+      const group = skills.filter((skill) => (skill.where === where) || (where === "other" && !["required", "preferred"].includes(skill.where)));
+      if (!group.length) return;
+      const heading = element("h5", "", label);
+      const count = () => group.filter((skill) => skill.have).length;
+      const tally = element("span", "skill-tally", ` · you list ${count()} of ${group.length}`);
+      heading.append(tally);
+      const bubbles = element("div", "skill-bubbles");
+      group.forEach((skill) => {
+        const bubble = element("button", "skill-bubble" + (skill.have ? " have" : ""), skill.have ? `✓ ${skill.name}` : `+ ${skill.name}`);
+        bubble.type = "button";
+        bubble.disabled = skill.have;
+        bubble.title = skill.have ? "Already in your skills" : "Add to your skills";
+        bubble.addEventListener("click", async () => {
+          bubble.disabled = true;
+          try {
+            const response = await fetch("/profile/add-skill", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
+              body: JSON.stringify({ skill: skill.name }),
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.message || "Could not add the skill.");
+            skill.have = true;
+            bubble.textContent = `✓ ${skill.name}`;
+            bubble.classList.add("have");
+            bubble.title = "Already in your skills";
+            tally.textContent = ` · you list ${count()} of ${group.length}`;
+            status.textContent = `Added ${result.skill || skill.name} to your skills. Job Fit updates when the page reloads.`;
+          } catch (error) {
+            bubble.disabled = false;
+            status.textContent = error.message || "Could not add the skill.";
+          }
+        });
+        bubbles.append(bubble);
+      });
+      wrap.append(heading, bubbles);
+    });
+    wrap.append(status);
+    return wrap;
+  }
+
   function render(body, data) {
     body.replaceChildren();
     if (data.unread) {
@@ -36,6 +86,7 @@
       });
       body.append(grid);
     }
+    if (data.skills && data.skills.length) body.append(skillBubbles(data.skills));
     if (data.text) {
       const more = element("details", "job-posting-full");
       more.append(element("summary", "", highlights.length ? "Full posting" : "Posting text"));
@@ -63,6 +114,15 @@
       body.replaceChildren(element("p", "field-help", error.message || "Could not read the posting."));
     }
   }
+
+  // Refresh on a result row read the posting again: show the new text next time (now, if Details is open).
+  document.addEventListener("listing-refreshed", (event) => {
+    const id = String(event.detail?.id || "");
+    loaded.delete(id);
+    const section = document.querySelector(`.job-posting[data-preview-id="${id}"]`);
+    const target = section?.closest("tr, [hidden], .details-row");
+    if (section && target && !target.hidden) load(section);
+  });
 
   document.addEventListener("click", (event) => {
     const button = event.target.closest(".details-action");

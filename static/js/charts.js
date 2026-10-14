@@ -138,6 +138,38 @@ document.addEventListener("DOMContentLoaded", () => {
       showToast("Moved to Settings", "danger", "Undo", async () => { try { await restoreRejected(companyId); sessionStorage.setItem("jobFinderToast", JSON.stringify({ message: "Listing restored", type: "success" })); window.location.reload(); } catch (error) { showToast(error.message, "danger"); } }, 6500);
     } catch (error) { button.disabled = false; button.classList.remove("is-removing"); button.textContent = "Reject Listing"; showToast(error.message, "danger"); }
   }));
+  // Closed: the job is no longer open. Rejects it with the reason "closed", the same as Closed on a Top 10 pick.
+  $$(".closed-action").forEach((button) => button.addEventListener("click", async () => {
+    const companyId = button.dataset.companyId; if (!companyId || button.disabled) return;
+    button.disabled = true;
+    try {
+      const response = await fetch(`/reject-listing/${companyId}`, { method: "POST", headers: { "X-CSRF-Token": csrfToken, "X-Requested-With": "fetch", "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify({ reason: "closed" }) });
+      const data = await readJsonResponse(response, "Could not mark the listing closed.", "E3202"); if (!response.ok) throw new Error(serverMessage(data, "Could not mark the listing closed.", "E3202"));
+      fadeResultRows((row) => row.dataset.companyId === String(companyId));
+      if (page === "search") requestReplacement();
+      showToast("Marked closed and moved to Settings", "info", "Undo", async () => { try { await restoreRejected(companyId); sessionStorage.setItem("jobFinderToast", JSON.stringify({ message: "Listing restored", type: "success" })); window.location.reload(); } catch (error) { showToast(error.message, "danger"); } }, 6500);
+    } catch (error) { button.disabled = false; showToast(error.message, "danger"); }
+  }));
+
+  // Refresh: reads this one posting again (the same check as Refresh on a Top 10 pick); a job found closed turns red.
+  $$(".refresh-action").forEach((button) => button.addEventListener("click", async () => {
+    const companyId = button.dataset.companyId; if (!companyId || button.disabled) return;
+    const row = button.closest(".result-row"), label = button.textContent;
+    button.disabled = true; button.textContent = "Refreshing…";
+    try {
+      const response = await fetch("/top-picks/requirements", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken }, body: JSON.stringify({ company_ids: [companyId], refresh: true }) });
+      const data = await readJsonResponse(response, "Could not refresh this listing.", "E3230"); if (!response.ok) throw new Error(serverMessage(data, "Could not refresh this listing.", "E3230"));
+      const found = (data.gaps || {})[companyId] || {};
+      if (found.closed && row) {
+        row.dataset.status = "closed";
+        const state = row.querySelector(".job-open-state"), dot = state?.querySelector(".status-dot");
+        if (dot) { dot.className = "status-dot closed"; dot.dataset.tooltip = "This listing appears to no longer be active."; dot.setAttribute("aria-label", "Closed"); }
+      }
+      document.dispatchEvent(new CustomEvent("listing-refreshed", { detail: { id: companyId } }));
+      showToast(found.closed ? "That posting has closed." : found.unread ? "Couldn't read the posting, so nothing changed." : "Refreshed: the posting was read again.", found.closed ? "danger" : "info");
+    } catch (error) { showToast(error.message, "danger"); }
+    button.disabled = false; button.textContent = label;
+  }));
   $$(".restore-action").forEach((button) => button.addEventListener("click", async () => { if (!confirm(`Restore ${button.dataset.companyName || "this listing"}?`)) return; button.disabled = true; try { const data = await restoreRejected(button.dataset.companyId); button.closest(".saved-job-card")?.remove(); showToast(data.kept ? "Restored to Dashboard" : "Restored to search results", "success"); } catch (error) { button.disabled = false; showToast(error.message, "danger"); } }));
   $$(".block-action").forEach((button) => button.addEventListener("click", async () => {
     const companyId = button.dataset.companyId, domain = button.dataset.domain || "this domain"; if (!companyId || !confirm(`Block ${domain} from future searches? This blocks the entire website, not just this listing.`)) return;

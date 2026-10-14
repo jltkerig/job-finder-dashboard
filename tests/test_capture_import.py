@@ -482,5 +482,17 @@ class ClosedJobRetention(unittest.TestCase):
         self.assertEqual(params, (30, "Saved", "Applied", "Talking With Recruiter", "Interview"))
 
 
+
+class CompanyPlaceTests(unittest.TestCase):
+    def test_company_and_place_on_one_line_are_split(self):
+        from jobfinder.records.capture_import import split_company_place
+        job = split_company_place({"company": "Evans & Chambers Technology · Columbia, MD", "location": ""})
+        self.assertEqual((job["company"], job["location"]), ("Evans & Chambers Technology", "Columbia, MD"))
+        kept = split_company_place({"company": "Acme · Columbia, MD", "location": "Baltimore, MD"})
+        self.assertEqual((kept["company"], kept["location"]), ("Acme", "Baltimore, MD"))
+        plain = split_company_place({"company": "Plain Co", "location": "Austin, TX"})
+        self.assertEqual((plain["company"], plain["location"]), ("Plain Co", "Austin, TX"))
+
+
 if __name__ == "__main__":
     unittest.main()

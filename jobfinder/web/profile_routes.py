@@ -87,6 +87,28 @@ def save_profile_title():
     return jsonify({"status": "saved", "profile_version": profile_store.profile_version(profile_store.get_user_profile())})
 
 
+@app.route("/profile/add-skill", methods=["POST"])
+def add_profile_skill():
+    """One skill from a posting's skill bubbles, added to the profile's skills."""
+    from jobfinder.profiles.profile_tools import normalize_skills
+
+    data = request.get_json(silent=True) or {}
+    found = normalize_skills([str(data.get("skill", "")).strip()[:60]])
+    if not found:
+        return api_error("E3303", "Enter a skill.")
+    skill = found[0]
+    profile = profile_store.get_user_profile()
+    skills = list(profile.get("skills") or [])
+    if skill.casefold() in {str(item).casefold() for item in skills}:
+        return jsonify({"status": "already_saved", "skill": skill})
+    if not profile_store.save_user_profile(profile["first_name"], profile["last_name"], profile["state"],
+                                           profile["job_titles"], profile["cities"], skills=skills + [skill]):
+        return api_error("E3304", "Could not save the skill.", 500)
+    refresh_job_fit()  # listings saved earlier are read again for the new skill, as when the profile is saved
+    return jsonify({"status": "saved", "skill": skill,
+                    "profile_version": profile_store.profile_version(profile_store.get_user_profile())})
+
+
 @app.route("/profile/parse-resume", methods=["POST"])
 def parse_resume():
     upload = request.files.get("resume")

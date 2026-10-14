@@ -41,6 +41,17 @@ class EmployerSite(unittest.TestCase):
         self.assertEqual(result['method'], 'domain guess')
         self.assertIsNone(result['posting_url'])
 
+    def test_the_search_is_tried_before_a_shortened_name_guess(self):
+        # "Mach7 Technologies" guessed as mach7.com (another company); the search finds mach7t.com first.
+        pages = {'https://mach7.com/': '<title>Mach7 | Home</title>',
+                 'https://www.mach7.com/': '<title>Mach7 | Home</title>',
+                 'https://mach7t.com/': '<meta property="og:site_name" content="Mach7 Technologies"><a href="/careers/">Careers</a>',
+                 'https://mach7t.com/careers/': '<title>Careers | Mach7 Technologies</title><h1>Careers</h1>'}
+        search = lambda query: [{'url': 'https://mach7t.com/about'}]  # noqa: E731
+        result = resolve('Mach7 Technologies', pages=pages, search=search, allow_search=True, location_hint='')
+        self.assertEqual(result['domain'], 'mach7t.com')
+        self.assertEqual(result['method'], 'web search')
+
     def test_a_guessed_site_that_is_another_company_is_rejected(self):
         notes = []
         pages = {'https://www.youcanic.com/': '<title>Some Other Studio</title><a href="/careers/">Careers</a>',

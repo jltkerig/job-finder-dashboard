@@ -178,26 +178,34 @@ def _candidates(company, posting_url, posting_html, *, search, location_hint, al
             href = urljoin(posting_url, link["href"])
             if usable(href):
                 yield href, "company website link on the listing", True
+    def guesses(names):
+        for slug in names:
+            for tld in GUESS_TLDS:
+                for prefix in ("", "www."):
+                    url = f"https://{prefix}{slug}.{tld}/"
+                    if usable(url):
+                        yield url, "domain guess", False
+
     for slug in school_slugs(company):
         for prefix in ("", "www."):
             url = f"https://{prefix}{slug}.edu/"
             if usable(url):
                 yield url, "school domain guess", False
     if can_guess_domain(company):
-        # "Szco Supplies Inc" -> szcosupplies, then szco (without its generic ending words).
+        # "Szco Supplies Inc" -> szcosupplies, then szco (without its generic ending words). The shortened name is
+        # the weaker guess ("Mach7 Technologies" -> mach7.com is another company), so it waits until after the search.
         slugs = [name_slug(company)]
         tokens = name_tokens(company)
+        trimmed_slugs = []
         while len(tokens) > 1 and tokens[-1] in _GENERIC_TAIL:
             tokens = tokens[:-1]
             trimmed = "".join(tokens)
-            if len(trimmed) >= 4 and trimmed not in slugs:
-                slugs.append(trimmed)
-        for slug in slugs:
-            for tld in GUESS_TLDS:
-                for prefix in ("", "www."):
-                    url = f"https://{prefix}{slug}.{tld}/"
-                    if usable(url):
-                        yield url, "domain guess", False
+            if len(trimmed) >= 4 and trimmed not in slugs and trimmed not in trimmed_slugs:
+                trimmed_slugs.append(trimmed)
+
+        yield from guesses(slugs)
+    else:
+        trimmed_slugs = []
     if allow_search and search:
         seen = set()
         for result in (search(f'"{company}" {location_hint}'.strip()) or [])[:8]:
@@ -207,6 +215,7 @@ def _candidates(company, posting_url, posting_html, *, search, location_hint, al
                 seen.add(host)
                 parsed = urlparse(url)
                 yield f"{parsed.scheme}://{parsed.netloc}/", "web search", False
+    yield from guesses(trimmed_slugs)
 
 
 def _find_site(company, posting_url, posting_html, *, fetch, search, is_excluded, location_hint,

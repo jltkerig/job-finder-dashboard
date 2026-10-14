@@ -6,6 +6,7 @@ from flask import jsonify, request
 from mysql.connector import Error
 
 from jobfinder import db
+from jobfinder.sources.board_status import board_status
 from jobfinder.sources.posting_text import posting_text
 from jobfinder.web.core import api_error, app
 
@@ -43,6 +44,8 @@ def closed_posting(row, found, cursor, connection, live):
     except (TypeError, ValueError):
         details = {}
     today = date.today().isoformat()
+    if not closed and live and board_status(row.get("career_url") or "") == "Closed":
+        closed = True  # the employer's own hiring board (Ashby, Greenhouse, Lever ...) no longer lists it
     if not closed and live and details.get("closed_check") != today and (found or {}).get("read_on") != today:
         for url in posting_urls(row.get("career_url") or row.get("source_url")):
             body = reqs.page_text(posting_text(url))
@@ -60,9 +63,10 @@ def closed_posting(row, found, cursor, connection, live):
     return closed
 
 
-def _requirements_for(row, cursor, connection):
+def _requirements_for(row, cursor, connection, refresh=False):
     """The listing's requirements, read once from its saved description or page and kept in listing_details; None
-    when the page can't be read."""
+    when the page can't be read. With refresh, the live page is read again whatever was kept (the saved description
+    is the fallback when the page can't be read)."""
     import json
 
     from jobfinder.profiles import requirements as reqs
@@ -77,17 +81,21 @@ def _requirements_for(row, cursor, connection):
     except (TypeError, ValueError):
         details = {}
     found = details.get("requirements")
-    if found is not None and found.get("version") == reqs.VERSION:
+    if not refresh and found is not None and found.get("version") == reqs.VERSION:
         return found
     try:
         skills = json.loads(row.get("listing_skills") or "[]") or []
     except (TypeError, ValueError):
         skills = []
     text = details.get("description") or ""
+    stored = text if refresh else ""
+    if refresh:
+        text = ""
     today = date.today().isoformat()
     unread_key = f"unread_on_v{reqs.VERSION}"
-    if len(text) < MIN_POSTING_TEXT and details.get(unread_key) == today:
+    if not refresh and len(text) < MIN_POSTING_TEXT and details.get(unread_key) == today:
         return None  # already failed today: don't fetch it again on every Top 10
+    live_read = False
     if len(text) < MIN_POSTING_TEXT:
         text = ""
         for url in [link for base in (row.get("career_url"), row.get("source_url")) for link in posting_urls(base)]:
@@ -97,7 +105,10 @@ def _requirements_for(row, cursor, connection):
                 body = reqs.page_text(page.text) if page and page.text else ""
             if len(body) >= MIN_POSTING_TEXT:
                 text = body
+                live_read = True
                 break
+        if not text and len(stored) >= MIN_POSTING_TEXT:
+            text = stored
     if not text:
         details[unread_key] = today
         cursor.execute("UPDATE companies SET listing_details = %s WHERE id = %s", (json.dumps(details), row["id"]))
@@ -110,7 +121,7 @@ def _requirements_for(row, cursor, connection):
     named = [skill for skill in own if re.search(r"(?<![\w])" + re.escape(skill) + r"(?![\w])", text, re.I)]
     all_skills = normalize_skills(list(skills) + detect_skills(text) + named)
     found["skill_sections"] = reqs.skill_sections(text, all_skills)
-    found["read_on"] = today if not details.get("description") else ""  # a live page, read today
+    found["read_on"] = today if live_read or not details.get("description") else ""  # a live page, read today
     details["requirements"] = found
     cursor.execute("UPDATE companies SET listing_details = %s, listing_skills = %s WHERE id = %s",
                    (json.dumps(details), json.dumps(all_skills), row["id"]))
@@ -128,6 +139,7 @@ def top_pick_requirements():
     from jobfinder.web.profile_store import get_user_profile
 
     data = request.get_json(silent=True) or {}
+    refresh = bool(data.get("refresh"))  # one pick's Refresh button: read its page again
     ids = []
     for company_id in (data.get("company_ids") or [])[:50]:
         try:
@@ -146,7 +158,7 @@ def top_pick_requirements():
         rows = {row["id"]: row for row in cursor.fetchall()}
         for rank, company_id in enumerate(company_id for company_id in ids if company_id in rows):
             row = rows[company_id]
-            found = _requirements_for(row, cursor, connection)
+            found = _requirements_for(row, cursor, connection, refresh=refresh)
             if closed_posting(row, found, cursor, connection, live=rank < LIVE_CLOSED_CHECKS):
                 gaps[row["id"]] = {"closed": True, "unread": False, "items": []}
                 continue
@@ -190,47 +202,11 @@ def listing_preview(company_id):
     if found is None:
         return jsonify({"status": "ok", "unread": True})
     text = found.get("text") or ""
-    return jsonify({"status": "ok", "unread": False, "gaps": reqs.requirement_gaps(found, get_user_profile() or {}),
-                    "highlights": reqs.key_lines(text), "text": reqs.posting_body(text)[:12000]})
-
-
-@app.route("/top-picks/rate", methods=["POST"])
-def rate_top_pick():
-    """👍 / 👎 on a Top 10 pick: kept in listing_details so later picks favour or mark down listings like it. "none"
-    clears it."""
-    import json
-
-    data = request.get_json(silent=True) or {}
-    rating = data.get("rating")
-    try:
-        company_id = int(data.get("company_id"))
-    except (TypeError, ValueError):
-        return jsonify({"status": "error", "message": "Invalid listing."}), 400
-    if rating not in {"up", "down", "none"}:
-        return jsonify({"status": "error", "message": "Invalid rating."}), 400
-    connection = cursor = None
-    try:
-        connection = db.connect()
-        cursor = connection.cursor(dictionary=True)
-        cursor.execute("SELECT listing_details FROM companies WHERE id = %s", (company_id,))
-        row = cursor.fetchone()
-        if not row:
-            return api_error("E3232", "The listing could not be found.", 404)
-        try:
-            details = json.loads(row.get("listing_details") or "{}") or {}
-        except (TypeError, ValueError):
-            details = {}
-        if rating == "none":
-            details.pop("pick_rating", None)
-        else:
-            details["pick_rating"] = rating
-        cursor.execute("UPDATE companies SET listing_details = %s WHERE id = %s", (json.dumps(details), company_id))
-        connection.commit()
-    except Error as error:
-        return api_error("E3232", f"Could not save the rating: {error}", 500)
-    finally:
-        if cursor:
-            cursor.close()
-        if connection:
-            connection.close()
-    return jsonify({"status": "ok", "rating": rating})
+    profile = get_user_profile() or {}
+    mine = {str(skill).casefold() for skill in profile.get("skills") or []}
+    order = {"required": 0, "preferred": 1}  # then the ones only mentioned
+    skills = sorted(({"name": name, "where": where, "have": name.casefold() in mine}
+                     for name, where in (found.get("skill_sections") or {}).items()),
+                    key=lambda skill: order.get(skill["where"], 2))
+    return jsonify({"status": "ok", "unread": False, "gaps": reqs.requirement_gaps(found, profile),
+                    "highlights": reqs.key_lines(text), "skills": skills, "text": reqs.posting_body(text)[:12000]})

@@ -114,6 +114,34 @@ class RouteTests(unittest.TestCase):
         self.assertEqual(saved["requirements"]["clearance"]["level"], "Top Secret")
 
 
+    def test_refresh_reads_the_page_again_only_when_asked(self):
+        from jobfinder.profiles import requirements as reqs
+        from datetime import date
+        kept = {"requirements": {"version": reqs.VERSION, "text": "old", "skill_sections": {},
+                                 "read_on": date.today().isoformat()}}  # read today: no "still open?" fetch either
+        about = "<p>" + "We build friendly tools for small teams and care about clear, accessible design. " * 8 + "</p>"
+        page = MagicMock(text=about + "<h3>Requirements:</h3><p>HTML</p>")
+        client = dashboard.app.test_client()
+        with client.session_transaction() as session:
+            session["csrf_token"] = "t"
+        fetched = []
+        for refresh in (False, True):
+            cursor = MagicMock()
+            cursor.fetchall.return_value = [{"id": 7, "career_url": "https://example.com/job", "source_url": "",
+                                             "listing_details": json.dumps(kept), "listing_skills": "[]"}]
+            connection = MagicMock()
+            connection.cursor.return_value = cursor
+            with patch("jobfinder.web.top_picks_routes.db.connect", return_value=connection), \
+                    patch("jobfinder.search.relevance.fetch_text", return_value=page) as fetch, \
+                    patch("jobfinder.web.profile_store.get_user_profile", return_value=PROFILE):
+                response = client.post("/top-picks/requirements", json={"company_ids": [7], "refresh": refresh},
+                                       headers={"X-CSRF-Token": "t"})
+            self.assertEqual(response.status_code, 200)
+            fetched.append(fetch.call_count)
+        self.assertEqual(fetched[0], 0)  # kept requirements are used
+        self.assertGreaterEqual(fetched[1], 1)  # Refresh reads the live page
+
+
 class ClosedPostingTests(unittest.TestCase):
     def test_closed_wording_marks_the_listing_closed(self):
         from jobfinder.web.top_picks_routes import closed_posting

@@ -7,6 +7,7 @@ $ErrorActionPreference = "Stop"
 $ProjectDir = $PSScriptRoot
 $PythonDir = Split-Path $ProjectDir -Parent
 $BackupRoot = Join-Path $PythonDir "job-finder-dashboard-backups"
+$KeepBackups = 5  # copies kept locally
 $TempRoot = Join-Path $env:TEMP ("job-finder-update-" + [guid]::NewGuid().ToString("N"))
 $UpdateLog = Join-Path $ProjectDir "update.log"
 # Logs the running dashboard or a search keeps appending to. They are backed up
@@ -80,13 +81,26 @@ function Export-DatabaseBackup([string]$Name) {
             return
         }
         Write-UpdateLog "Database backup saved: $sqlPath"
-        # Keep the ten newest database backups.
+        # Keep the five newest database backups (see Remove-OldBackups for the file backups).
         Get-ChildItem -LiteralPath $BackupRoot -Filter "* - database.sql" -File | Sort-Object LastWriteTime -Descending |
-            Select-Object -Skip 10 | Remove-Item -Force -ErrorAction SilentlyContinue
+            Select-Object -Skip $KeepBackups | Remove-Item -Force -ErrorAction SilentlyContinue
     } catch {
         Write-UpdateLog ("Database backup failed: " + $_.Exception.Message + "; continuing with the file backup only.")
     } finally {
         Remove-Item -LiteralPath $config -Force -ErrorAction SilentlyContinue
+    }
+}
+
+# Only the newest five "Job Finder v... - date" folder backups are kept locally; the one just made is always among them.
+function Remove-OldBackups {
+    try {
+        Get-ChildItem -LiteralPath $BackupRoot -Directory -Filter "Job Finder v*" | Sort-Object CreationTime -Descending |
+            Select-Object -Skip $KeepBackups | ForEach-Object {
+                Remove-Item -LiteralPath $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
+                Write-UpdateLog "Removed old backup: $($_.Name)"
+            }
+    } catch {
+        Write-UpdateLog ("Could not remove old backups: " + $_.Exception.Message)
     }
 }
 
@@ -152,6 +166,7 @@ try {
     $backupVerified = $true
     Write-UpdateLog "Backup verified at $backup"
     Export-DatabaseBackup (Split-Path $backup -Leaf)
+    Remove-OldBackups
 
     $preserve = @(".env", "settings.json", "blocked_domains.txt", "blocked_companies.txt", "blocked_country_domains.txt", "block_metadata.json", "dashboard.log", "dashboard-error.log", "job_finder.log", "search_skips.jsonl", "search_debug.json", "watched_employers.json", "discovered_employers.json", "board_health.json", "update.log")
 
