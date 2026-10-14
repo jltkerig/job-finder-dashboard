@@ -111,6 +111,20 @@ class Storage(unittest.TestCase):
                 my_companies.add({"name": "Acme", "place": "Nowhereville"})
         self.assertEqual(my_companies.load(), [])
 
+    def test_a_job_board_address_is_kept_and_named_when_it_is_a_known_system(self):
+        entry = my_companies.add({"name": "Acme", "jobs_url": "jobs.lever.co/acme"})
+        self.assertEqual(entry["jobs_url"], "https://jobs.lever.co/acme")
+        shown = my_companies.as_result(entry)
+        self.assertEqual(shown["jobs_url"], "https://jobs.lever.co/acme")
+        self.assertEqual(shown["jobs_board"], "Lever")
+        own = my_companies.add({"name": "Beta", "jobs_url": "https://beta.example.com/careers"})
+        self.assertEqual(my_companies.as_result(own)["jobs_board"], "")
+
+    def test_a_bad_job_board_address_is_explained_and_it_may_be_left_empty(self):
+        with self.assertRaisesRegex(ValueError, "job board"):
+            my_companies.add({"name": "Acme", "jobs_url": "not a link"})
+        self.assertEqual(my_companies.add({"name": "Acme"})["jobs_url"], "")
+
     def test_a_zip_code_in_the_address_gives_the_map_point(self):
         with patch.object(my_companies, "zip_point", return_value=NEAR) as zip_point:
             entry = my_companies.add({"name": "Acme", "address": "10 Main St, Bel Air, MD 21014"})

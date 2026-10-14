@@ -15,8 +15,9 @@ from datetime import datetime
 
 from jobfinder import paths
 from jobfinder.profiles.travel import miles_between, place_point, zip_point
+from jobfinder.sources.ats_discovery import identify
 
-FIELD_LIMITS = {"name": 150, "website": 200, "address": 200, "place": 100, "phone": 40, "notes": 500}
+FIELD_LIMITS = {"name": 150, "website": 200, "jobs_url": 400, "address": 200, "place": 100, "phone": 40, "notes": 500}
 MAX_COMPANIES = 1000
 
 
@@ -73,6 +74,10 @@ def clean(fields, home_state=""):
     values["website"] = _website(raw_site)
     if raw_site and not values["website"]:
         raise ValueError("That website doesn't look right. Use an address like acme.com.")
+    raw_jobs = values["jobs_url"]
+    values["jobs_url"] = _website(raw_jobs)[:FIELD_LIMITS["jobs_url"]]
+    if raw_jobs and not values["jobs_url"]:
+        raise ValueError("That job board address doesn't look right. Paste the link to the company's jobs page.")
     point = _point(values["place"], values["address"], home_state)
     if values["place"] and not point and not re.search(r"\d{5}", values["address"]):
         raise ValueError("That town wasn't found. Use a town and state such as Bel Air, MD, or a 5-digit ZIP code, "
@@ -174,8 +179,11 @@ def as_result(item, center=None):
     miles = None
     if center is not None and item.get("lat") is not None and item.get("lon") is not None:
         miles = round(miles_between(center, (float(item["lat"]), float(item["lon"]))), 1)
+    jobs_url = item.get("jobs_url", "")
+    board = (identify(jobs_url) or {}).get("system", "") if jobs_url else ""
     return {"id": f"mine/{item['id']}", "mine": True, "name": item["name"], "type": "My company", "address": item.get("address", ""),
-            "place": item.get("place", ""), "website": item.get("website", ""), "phone": item.get("phone", ""),
+            "place": item.get("place", ""), "website": item.get("website", ""), "jobs_url": jobs_url,
+            "jobs_board": board.title() if board else "", "phone": item.get("phone", ""),
             "notes": item.get("notes", ""), "lat": item.get("lat"), "lon": item.get("lon"), "miles": miles}
 
 

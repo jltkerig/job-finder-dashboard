@@ -2185,11 +2185,12 @@ body[data-page="search"] #results-table td[data-label="Listing"] .inline-action-
 .companies-kinds-tools .chip-button { margin:0; padding:1px 10px; font-size:.8rem; }
 .companies-add { margin-top:14px; border:1px solid #d4d8dd; border-radius:8px; padding:10px 14px; background:#fafbfc; }
 .companies-add summary { cursor:pointer; font-weight:700; }
-.companies-add-form { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:12px 16px; align-items:end; margin-top:12px; }
+.companies-add-form { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:12px 16px; align-items:start; margin-top:12px; }
 .companies-add-form .form-field { margin:0; min-width:0; }
 .companies-add-form .form-field input, .companies-add-form .form-field textarea { width:100%; box-sizing:border-box; }
 .companies-add-address { grid-column:span 2; }
-.companies-add-notes, .companies-add-actions { grid-column:1 / -1; }
+.companies-add-notes { grid-column:span 2; }
+.companies-add-actions { grid-column:1 / -1; }
 .companies-add-notes textarea { padding:7px 10px; border:1px solid #c4c8ce; border-radius:6px; font:inherit; resize:vertical; }
 .companies-add-actions { display:flex; flex-wrap:wrap; align-items:center; gap:10px; }
 .companies-add-help { margin:12px 0 0; }
@@ -2222,3 +2223,4 @@ body[data-page="search"] #results-table td[data-label="Listing"] .inline-action-
 @media (min-width: 641px) {
   .nav-link { min-width: 96px; padding-left: 14px; padding-right: 14px; }
 }
+.companies-jobs-link { font-size:.85rem; font-weight:600; }

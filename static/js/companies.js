@@ -58,7 +58,7 @@
   const addSave = document.getElementById("companies-add-save");
   const addCancel = document.getElementById("companies-add-cancel");
   const addStatus = document.getElementById("companies-add-status");
-  const FIELDS = ["name", "website", "address", "place", "phone", "notes"];
+  const FIELDS = ["name", "website", "jobs_url", "address", "place", "phone", "notes"];
 
   const field = (name) => addForm.elements[name];
 
@@ -164,9 +164,19 @@
       link.rel = "noopener noreferrer";
       link.textContent = company.website.replace(/^https?:\/\/(www\.)?/i, "").replace(/\/$/, "");
       site.append(link);
-    } else {
-      site.textContent = "—";
     }
+    if (company.jobs_url) {
+      const jobs = document.createElement("a");
+      jobs.href = company.jobs_url;
+      jobs.target = "_blank";
+      jobs.rel = "noopener noreferrer";
+      jobs.className = "companies-jobs-link";
+      jobs.title = company.jobs_url;
+      jobs.textContent = company.jobs_board ? `Jobs (${company.jobs_board})` : "Jobs";
+      if (company.website) site.append(document.createElement("br"));
+      site.append(jobs);
+    }
+    if (!company.website && !company.jobs_url) site.textContent = "—";
     const actions = document.createElement("td");
     actions.className = "companies-row-actions";
     if (company.mine) {
