@@ -36,5 +36,47 @@ class ProfileFormKeepsWhatItDoesNotCarry(unittest.TestCase):
         self.assertEqual(sent["work_history"], [])
 
 
+class FakeCursor:
+    def __init__(self, existing):
+        self.existing, self.inserted = existing, []
+
+    def execute(self, sql, params=None):
+        if sql.startswith("INSERT INTO user_profile_education"):
+            self.inserted.append(params)
+
+    def fetchone(self):
+        return (self.existing,)
+
+
+class SchoolsFromTheResume(unittest.TestCase):
+    SCHOOLS = [{"school": "Springfield University", "degree": "Bachelor's Degree", "major": "Graphic Design"},
+               {"school": "", "degree": "GED"}]
+
+    def run_save(self, existing):
+        from contextlib import contextmanager
+        cursor = FakeCursor(existing)
+
+        @contextmanager
+        def fake(**kwargs):
+            yield cursor
+
+        with patch.object(profile_store, "ensure_profile_tables"), patch.object(profile_store.db, "cursor", fake):
+            return profile_store.save_schools_if_none(self.SCHOOLS), cursor
+
+    def test_schools_are_saved_when_none_are_saved_yet(self):
+        saved, cursor = self.run_save(0)
+        self.assertTrue(saved)
+        self.assertEqual(len(cursor.inserted), 1)  # the blank school is dropped
+        self.assertIn("Springfield University", cursor.inserted[0])
+
+    def test_saved_education_is_never_replaced(self):
+        saved, cursor = self.run_save(2)
+        self.assertFalse(saved)
+        self.assertEqual(cursor.inserted, [])
+
+    def test_no_database_is_just_false(self):
+        self.assertFalse(profile_store.save_schools_if_none(self.SCHOOLS))
+
+
 if __name__ == "__main__":
     unittest.main()

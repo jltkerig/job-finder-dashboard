@@ -197,6 +197,28 @@ def clean_education(entries):
     return cleaned
 
 
+def save_schools_if_none(schools):
+    """Save the schools read from the résumé when no education is saved yet, so the Dashboard and the Résumé Builder list
+    the same schools. Saved education is never replaced. Returns True when the schools were saved."""
+    rows = clean_education(schools)
+    if not rows:
+        return False
+    ensure_profile_tables()
+    try:
+        with db.cursor(commit=True) as cursor:
+            cursor.execute("SELECT COUNT(*) FROM user_profile_education WHERE profile_id = 1")
+            if cursor.fetchone()[0]:
+                return False
+            columns = ", ".join(name for name, _ in EDUCATION_FIELDS)
+            for item in rows:
+                cursor.execute(f"INSERT INTO user_profile_education (profile_id, {columns}) VALUES (1{', %s' * len(EDUCATION_FIELDS)})",
+                               [item[name] for name, _ in EDUCATION_FIELDS])
+        return True
+    except Error as error:
+        print(f"Could not save the schools from the resume: {error}")
+        return False
+
+
 def save_user_profile(first_name, last_name, state, job_titles, cities=None, *, home_location=None, home_zip=None,
                       primary_job_title=None, skills=None, work_history=None, avatar_data=None, work_preferences=None,
                       education=None, linkedin_url=None, portfolio_url=None):

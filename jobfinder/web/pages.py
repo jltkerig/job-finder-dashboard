@@ -112,6 +112,9 @@ def user_dashboard():
     # With no work history saved yet, the form is filled in from the uploaded résumé (nothing is saved until Save Profile).
     resume_history = [] if profile.get("work_history") else parse_work_history(uploaded_resume(RESUME_FOLDER)[1])
     resume_education = [] if profile.get("education") else parse_education(uploaded_resume(RESUME_FOLDER)[1])
+    if resume_education and profile_store.save_schools_if_none(resume_education):
+        profile["education"] = profile_store.clean_education(resume_education)  # saved: the Résumé Builder lists them too
+        resume_education = []
     demanded_skills = [{"skill": skill, "count": count} for skill, count in listing_skill_demand(profile.get("skills", []))]
     apply_queue = add_application_files(auto_apply.get_apply_queue())
     add_job_fit(apply_queue, profile.get("skills", []))  # for sorting the queue by Job Fit
