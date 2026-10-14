@@ -139,6 +139,28 @@ class Page(unittest.TestCase):
         self.assertIn('value="known"', html)  # employers from your own searches come first
         self.assertIn("Employers from your searches", html)
 
+    def test_the_page_searches_around_one_place_that_starts_at_home(self):
+        profile = {"cities": [{"city": "Baltimore, MD", "radius": 20}, {"city": "Newark, DE", "radius": 10}],
+                   "home_location": "Abingdon, MD", "home_zip": "21009", "state": "MD", "work_history": []}
+        with patch.object(companies_routes.profile_store, "get_user_profile", return_value=profile):
+            html = self.client.get("/companies").get_data(as_text=True)
+        self.assertNotIn("Your places", html)
+        self.assertNotIn("companies-saved-place", html)
+        self.assertIn('value="Abingdon, MD"', html)
+        self.assertIn('id="companies-miles-header"', html)
+
+    def test_home_is_the_place_when_none_is_typed(self):
+        home = companies_routes.home_place
+        self.assertEqual(home({"home_location": "Abingdon, MD", "home_zip": "21009", "cities": []}), "Abingdon, MD")
+        self.assertEqual(home({"home_location": "", "home_zip": "21009", "cities": []}), "21009")
+        self.assertEqual(home({"home_location": "", "home_zip": "", "cities": [{"city": "Newark, DE"}]}), "Newark, DE")
+        self.assertEqual(home({"cities": []}), "")
+        profile = {"home_location": "Abingdon, MD", "cities": [], "state": "MD"}
+        with patch.object(companies_routes, "place_point", return_value=CENTER) as point:
+            found = companies_routes.resolve_place("", profile)
+        self.assertEqual(found, (CENTER, "Abingdon, MD"))
+        point.assert_called_once_with("Abingdon, MD", "MD")
+
     def test_a_search_resolves_the_place_and_returns_companies(self):
         profile = {"cities": [{"city": "Bel Air, MD", "radius": 20}], "home_zip": "21015", "state": "MD"}
         with patch.object(companies_routes.profile_store, "get_user_profile", return_value=profile), \

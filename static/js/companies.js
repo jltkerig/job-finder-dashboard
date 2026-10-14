@@ -14,6 +14,7 @@
   const websiteOnly = document.getElementById("companies-website-only");
   const showHidden = document.getElementById("companies-show-hidden");
   const searchButton = document.getElementById("companies-search");
+  const milesHeader = document.getElementById("companies-miles-header");
   const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || "";
   const HIDDEN_KEY = "jobFinder.hiddenCompanies";
   let companies = [];
@@ -252,6 +253,7 @@
           throw new Error(data.message || "The search did not work.");
         }
         shown = data.place;
+        milesHeader.textContent = `Miles from ${shown}`;
         for (const company of data.companies || []) {
           if (seen.has(company.id)) continue;
           seen.add(company.id);
@@ -271,7 +273,7 @@
     }
     const note = failed.length ? ` Could not get: ${failed.join(", ")}. Search again to retry those.` : "";
     say(companies.length
-      ? `Near ${shown}, within ${miles.value} miles. Nearest first.${note}`
+      ? `Within ${miles.value} miles of ${shown}, nearest first. The Miles column is the distance from ${shown}.${note}`
       : `Nothing is mapped within ${miles.value} miles of ${shown || place.value} for those kinds of place. Try more kinds or a wider area.${note}`,
       failed.length > 0);
     render();
@@ -285,8 +287,4 @@
   filter.addEventListener("input", render);
   websiteOnly.addEventListener("change", render);
   showHidden.addEventListener("click", () => { revealHidden = !revealHidden; render(); });
-  document.querySelectorAll(".companies-saved-place").forEach((chip) => chip.addEventListener("click", () => {
-    place.value = chip.dataset.place;
-    search();
-  }));
 })();

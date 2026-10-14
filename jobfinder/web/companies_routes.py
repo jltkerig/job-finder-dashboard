@@ -25,14 +25,21 @@ def _saved_places(profile):
     return list(dict.fromkeys(places))
 
 
+def home_place(profile):
+    """The one place the page searches around unless you type another: your home (the Dashboard's Home City, State, else
+    the Home ZIP), else the first town you search jobs in. "" when the profile has none."""
+    for text in (profile.get("home_location"), profile.get("home_zip")):
+        if str(text or "").strip():
+            return str(text).strip()
+    saved = _saved_places(profile)
+    return saved[0] if saved else ""
+
+
 def resolve_place(text, profile):
-    """((lat, lon), the name to show) for a ZIP or "Town, ST"; blank uses your first saved place. None when unknown."""
-    text = str(text or "").strip()
+    """((lat, lon), the name to show) for a ZIP or "Town, ST"; blank uses your home. None when unknown."""
+    text = str(text or "").strip() or home_place(profile)
     if not text:
-        saved = _saved_places(profile)
-        if not saved:
-            return None
-        text = saved[0]
+        return None
     state = str(profile.get("state") or "")
     if re.fullmatch(r"\d{5}(?:-\d{4})?", text):
         point = zip_point(text)
@@ -48,7 +55,7 @@ def companies_page():
         my_companies.sync_from_work_history(profile.get("work_history"), str(profile.get("state") or ""))
     except OSError:
         pass  # the list is a convenience; the page still opens
-    return render_template("companies.html", saved_places=_saved_places(profile), mile_choices=MILE_CHOICES,
+    return render_template("companies.html", home_place=home_place(profile), mile_choices=MILE_CHOICES,
                            kinds=[(KNOWN, KNOWN_LABEL), (MINE, MINE_LABEL)]
                            + [(key, label) for key, (label, _) in local_companies.KINDS.items()],
                            default_kinds=[KNOWN, MINE] + list(local_companies.DEFAULT_KINDS), default_miles=15)

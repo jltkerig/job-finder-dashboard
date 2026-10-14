@@ -15,14 +15,10 @@
 </header>
 <main>
   <section class="company-section companies-search">
-    {% if saved_places %}<p class="field-help companies-saved">Your places:
-      {% for place in saved_places %}<button class="chip-button companies-saved-place" type="button" data-place="{{ place }}">{{ place }}</button>{% endfor %}
-    </p>{% endif %}
     <form id="companies-form" class="companies-form" autocomplete="off">
       <div class="form-field companies-place">
-        <label for="companies-place">Near</label>
-        <input id="companies-place" name="place" type="text" list="companies-places" placeholder="Bel Air, MD or a ZIP code" value="{{ saved_places[0] if saved_places else '' }}" />
-        <datalist id="companies-places">{% for place in saved_places %}<option value="{{ place }}"></option>{% endfor %}</datalist>
+        <label for="companies-place">Search around</label>
+        <input id="companies-place" name="place" type="text" placeholder="Bel Air, MD or a ZIP code" value="{{ home_place }}" />
       </div>
       <div class="form-field companies-miles">
         <label for="companies-miles">Within</label>
@@ -35,6 +31,7 @@
       </fieldset>
       <div class="companies-actions"><button class="bordered-button primary-action" id="companies-search" type="submit">Search</button></div>
     </form>
+    <p class="field-help companies-origin">One place at a time: it starts at your home. The miles in the list are straight-line miles from the place in the box.</p>
     <details class="companies-add" id="companies-add">
       <summary>Add a company of your own</summary>
       <form id="companies-add-form" class="companies-add-form" autocomplete="off">
@@ -64,7 +61,7 @@
     </div>
     <div class="table-wrapper companies-table-wrapper">
       <table class="companies-table">
-        <thead><tr><th>Company</th><th>Type</th><th>Address</th><th>Miles</th><th>Website</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
+        <thead><tr><th>Company</th><th>Type</th><th>Address</th><th id="companies-miles-header">Miles</th><th>Website</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
         <tbody id="companies-body"></tbody>
       </table>
     </div>
