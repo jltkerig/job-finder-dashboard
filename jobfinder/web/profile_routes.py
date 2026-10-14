@@ -33,6 +33,8 @@ def save_profile():
     except json.JSONDecodeError:
         cities = []
     def read_list(key):
+        if key not in request.form:
+            return None  # a form without this box (an older page left open) says nothing about it: what is saved stays
         try:
             value = json.loads(request.form.get(key, "[]"))
             return value if isinstance(value, list) else []
@@ -66,7 +68,8 @@ def save_profile():
         profile_store.save_avoid_terms(re.split(r"[,\n]+", request.form.get("avoid_terms", "")[:5000]))
     # Changed skills: the percentages on the pages follow at once (they are worked out on each load); listings saved
     # earlier are re-read so they also list skills the current skills list recognizes.
-    if {str(skill).casefold() for skill in read_list("skills_json")} != previous_skills:
+    sent_skills = read_list("skills_json")
+    if sent_skills is not None and {str(skill).casefold() for skill in sent_skills} != previous_skills:
         return redirect(f"/dashboard?fit_updated={refresh_job_fit()}")
     return redirect("/dashboard")
 
