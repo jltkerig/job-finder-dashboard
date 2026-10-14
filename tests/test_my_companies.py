@@ -111,19 +111,24 @@ class Storage(unittest.TestCase):
                 my_companies.add({"name": "Acme", "place": "Nowhereville"})
         self.assertEqual(my_companies.load(), [])
 
-    def test_a_job_board_address_is_kept_and_named_when_it_is_a_known_system(self):
-        entry = my_companies.add({"name": "Acme", "jobs_url": "jobs.lever.co/acme"})
-        self.assertEqual(entry["jobs_url"], "https://jobs.lever.co/acme")
+    def test_a_job_board_link_is_kept_and_named_when_it_is_a_known_system(self):
+        entry = my_companies.add({"name": "Acme", "jobs_board": "jobs.lever.co/acme"})
         shown = my_companies.as_result(entry)
         self.assertEqual(shown["jobs_url"], "https://jobs.lever.co/acme")
-        self.assertEqual(shown["jobs_board"], "Lever")
-        own = my_companies.add({"name": "Beta", "jobs_url": "https://beta.example.com/careers"})
-        self.assertEqual(my_companies.as_result(own)["jobs_board"], "")
+        self.assertEqual(shown["jobs_system"], "Lever")
+        own = my_companies.as_result(my_companies.add({"name": "Beta", "jobs_board": "https://beta.example.com/careers"}))
+        self.assertEqual((own["jobs_url"], own["jobs_system"]), ("https://beta.example.com/careers", ""))
 
-    def test_a_bad_job_board_address_is_explained_and_it_may_be_left_empty(self):
-        with self.assertRaisesRegex(ValueError, "job board"):
-            my_companies.add({"name": "Acme", "jobs_url": "not a link"})
-        self.assertEqual(my_companies.add({"name": "Acme"})["jobs_url"], "")
+    def test_a_job_board_may_be_just_a_name_and_is_never_refused(self):
+        for text in ("Indeed", "the company's own portal", "not a link"):
+            shown = my_companies.as_result(my_companies.add({"name": "Acme " + text, "jobs_board": text}))
+            self.assertEqual(shown["jobs_board"], text)
+            self.assertEqual(shown["jobs_url"], "")  # shown as text, not as a link
+        self.assertEqual(my_companies.as_result(my_companies.add({"name": "Plain"}))["jobs_board"], "")
+
+    def test_the_older_field_name_is_still_read(self):
+        entry = my_companies.add({"name": "Acme", "jobs_url": "jobs.lever.co/acme"})
+        self.assertEqual(my_companies.as_result(entry)["jobs_url"], "https://jobs.lever.co/acme")
 
     def test_a_zip_code_in_the_address_gives_the_map_point(self):
         with patch.object(my_companies, "zip_point", return_value=NEAR) as zip_point:

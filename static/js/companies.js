@@ -58,7 +58,7 @@
   const addSave = document.getElementById("companies-add-save");
   const addCancel = document.getElementById("companies-add-cancel");
   const addStatus = document.getElementById("companies-add-status");
-  const FIELDS = ["name", "website", "jobs_url", "address", "place", "phone", "notes"];
+  const FIELDS = ["name", "website", "jobs_board", "address", "place", "phone", "notes"];
 
   const field = (name) => addForm.elements[name];
 
@@ -172,11 +172,18 @@
       jobs.rel = "noopener noreferrer";
       jobs.className = "companies-jobs-link";
       jobs.title = company.jobs_url;
-      jobs.textContent = company.jobs_board ? `Jobs (${company.jobs_board})` : "Jobs";
+      jobs.textContent = company.jobs_system ? `Jobs (${company.jobs_system})` : "Jobs";
+      if (company.website) site.append(document.createElement("br"));
+      site.append(jobs);
+    } else if (company.jobs_board) {
+      // Only a name was entered ("Indeed"): shown as it was typed, not as a link.
+      const jobs = document.createElement("small");
+      jobs.className = "companies-jobs-text";
+      jobs.textContent = `Jobs: ${company.jobs_board}`;
       if (company.website) site.append(document.createElement("br"));
       site.append(jobs);
     }
-    if (!company.website && !company.jobs_url) site.textContent = "—";
+    if (!company.website && !company.jobs_url && !company.jobs_board) site.textContent = "—";
     const actions = document.createElement("td");
     actions.className = "companies-row-actions";
     if (company.mine) {
