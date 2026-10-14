@@ -104,10 +104,12 @@ def user_dashboard():
     # With no work history saved yet, the form is filled in from the uploaded résumé (nothing is saved until Save Profile).
     resume_history = [] if profile.get("work_history") else parse_work_history(uploaded_resume(RESUME_FOLDER)[1])
     demanded_skills = [{"skill": skill, "count": count} for skill, count in listing_skill_demand(profile.get("skills", []))]
+    apply_queue = add_application_files(auto_apply.get_apply_queue())
+    add_job_fit(apply_queue, profile.get("skills", []))  # for sorting the queue by Job Fit
     return render_template(
         "user-dashboard.html",
         companies=companies,
-        apply_queue=add_application_files(auto_apply.get_apply_queue()),
+        apply_queue=apply_queue,
         queue_writing=queue_documents.writing_ids(),
         profile=profile,
         resume_builder_url=RESUME_BUILDER_URL,

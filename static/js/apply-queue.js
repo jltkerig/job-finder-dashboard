@@ -39,7 +39,15 @@
       }
       link.href = `/user-builds/${data.pdf}`;
       button.textContent = "Combine again";
-      status.textContent = "Combined into one PDF. Use the Combined link to open it, or Download to save it.";
+      if (!item.querySelector(".apply-queue-download-combined")) {
+        const save = document.createElement("button");
+        save.type = "button";
+        save.className = "bordered-button apply-queue-download-combined";
+        save.title = "Save the combined résumé and cover letter as one PDF";
+        save.textContent = "Download Combined";
+        button.after(save);
+      }
+      status.textContent = "Combined into one PDF. Use Download Combined to save it, or the Combined link to open it.";
     } catch (error) {
       status.textContent = error.message || "Could not combine the files. Try again.";
     } finally {
@@ -143,6 +151,37 @@
     }
   });
 
+  // Download Combined saves the one PDF made by Combine, the same way Download saves each file.
+  section.addEventListener("click", async (event) => {
+    const button = event.target.closest(".apply-queue-download-combined");
+    if (!button) return;
+    const link = button.closest(".apply-queue-item").querySelector(".apply-queue-combined-link");
+    if (!link) {
+      status.textContent = "Combine the résumé and cover letter first.";
+      return;
+    }
+    button.disabled = true;
+    try {
+      const saved = await saveWithPrompt(link);
+      if (saved === null) return;
+      if (saved === false) {
+        status.textContent = "Choose where to save in the Save As window.";
+        const result = await saveViaApp([decodeURIComponent(link.pathname.split("/").pop())]);
+        if (result === null) {
+          saveAsDownload(link);
+        } else {
+          status.textContent = result.saved.length ? "Saved the combined PDF." : "Not saved.";
+          return;
+        }
+      }
+      status.textContent = "Saved the combined PDF.";
+    } catch {
+      status.textContent = "Could not save that file. Try again.";
+    } finally {
+      button.disabled = false;
+    }
+  });
+
   section.addEventListener("click", async (event) => {
     const button = event.target.closest(".apply-queue-applied, .apply-queue-remove");
     if (!button) return;
@@ -160,4 +199,38 @@
       button.disabled = false;
     }
   });
+})();
+
+// Sort the queue by Job Fit or by when a job was added. The choice is remembered in this browser; jobs added before
+// the date was kept sort by the order they were saved in.
+(() => {
+  const select = document.getElementById("apply-queue-sort");
+  const list = document.querySelector("#apply-queue .apply-queue-list");
+  if (!select || !list) return;
+  const KEY = "jobFinder.applyQueueSort";
+  const order = (item) => Number(item.dataset.order) || 0;
+  const added = (item) => item.dataset.added || "";
+  const sorters = {
+    oldest: (a, b) => added(a).localeCompare(added(b)) || order(a) - order(b),
+    newest: (a, b) => added(b).localeCompare(added(a)) || order(b) - order(a),
+    fit: (a, b) => Number(b.dataset.fit) - Number(a.dataset.fit) || order(a) - order(b),
+  };
+  function apply() {
+    const sorter = sorters[select.value] || sorters.oldest;
+    // Keep the sort control where it is on the screen: moving the rows must not scroll the page (Firefox follows a row
+    // that moved), so the page is put back by however far the control shifted.
+    const before = select.getBoundingClientRect().top;
+    list.append(...Array.from(list.querySelectorAll(":scope > .apply-queue-item")).sort(sorter));
+    const shift = select.getBoundingClientRect().top - before;
+    if (shift) window.scrollBy(0, shift);
+  }
+  try {
+    const saved = localStorage.getItem(KEY);
+    if (saved && sorters[saved]) select.value = saved;
+  } catch {}
+  select.addEventListener("change", () => {
+    try { localStorage.setItem(KEY, select.value); } catch {}
+    apply();
+  });
+  apply();
 })();

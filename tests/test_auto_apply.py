@@ -49,8 +49,19 @@ class QueueRouteTests(unittest.TestCase):
             response = self.client.post("/apply-queue", json={"company_ids": [5]}, headers={"X-CSRF-Token": "t"})
         self.assertEqual(response.status_code, 200)
         saved = json.loads(cursor.execute.call_args_list[1][0][1][0])
+        self.assertTrue(saved.pop("apply_queued_at"))  # when it was added, for sorting the queue
         self.assertEqual(saved, {"pick_rating": "up", "apply_queued": True})
         self.assertIn("is_kept = 1", cursor.execute.call_args_list[2][0][0])
+
+    def test_a_job_already_queued_keeps_the_date_it_was_added(self):
+        cursor = MagicMock()
+        cursor.fetchall.return_value = [{"id": 5, "listing_details": '{"apply_queued": true, "apply_queued_at": "2026-10-01T09:00:00"}'}]
+        connection = MagicMock()
+        connection.cursor.return_value = cursor
+        with patch("jobfinder.web.auto_apply.db.connect", return_value=connection),                 patch("jobfinder.web.auto_apply.ensure_keep_column"),                 patch("jobfinder.web.auto_apply.ensure_job_tracking_columns"):
+            self.client.post("/apply-queue", json={"company_ids": [5]}, headers={"X-CSRF-Token": "t"})
+        saved = json.loads(cursor.execute.call_args_list[1][0][1][0])
+        self.assertEqual(saved["apply_queued_at"], "2026-10-01T09:00:00")
 
     def test_bad_ids_are_refused(self):
         with patch("jobfinder.web.auto_apply.ensure_keep_column"), patch("jobfinder.web.auto_apply.ensure_job_tracking_columns"):

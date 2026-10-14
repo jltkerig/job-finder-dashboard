@@ -106,8 +106,9 @@ def get_apply_queue():
     try:
         connection = db.connect()
         cursor = connection.cursor(dictionary=True)
-        cursor.execute("SELECT id, name, career_job_title, career_url, source_url, application_status, listing_details "
-                       "FROM companies WHERE listing_details LIKE %s AND COALESCE(is_rejected, 0) = 0 ORDER BY id",
+        cursor.execute("SELECT id, name, career_job_title, career_url, source_url, application_status, listing_skills, "
+                       "listing_details FROM companies "
+                       "WHERE listing_details LIKE %s AND COALESCE(is_rejected, 0) = 0 ORDER BY id",
                        ('%"apply_queued"%',))
         rows = cursor.fetchall()
     except Error as error:
@@ -120,8 +121,10 @@ def get_apply_queue():
             connection.close()
     queue = []
     for row in rows:
-        if _details(row.pop("listing_details")).get("apply_queued") and row.get("application_status") not in QUEUE_DONE:
+        details = _details(row.pop("listing_details"))
+        if details.get("apply_queued") and row.get("application_status") not in QUEUE_DONE:
             row["url"] = row.get("career_url") or row.get("source_url") or ""
+            row["queued_at"] = str(details.get("apply_queued_at") or "")  # when it was added; blank for older ones
             queue.append(row)
     return queue
 
@@ -159,9 +162,12 @@ def update_apply_queue():
         for row in cursor.fetchall():
             details = _details(row.get("listing_details"))
             if queued:
+                if not details.get("apply_queued"):
+                    details["apply_queued_at"] = datetime.now().isoformat(timespec="seconds")  # for sorting by date added
                 details["apply_queued"] = True
             else:
                 details.pop("apply_queued", None)
+                details.pop("apply_queued_at", None)
             cursor.execute("UPDATE companies SET listing_details = %s WHERE id = %s", (json.dumps(details), row["id"]))
         if queued:
             cursor.execute(f"UPDATE companies SET is_kept = 1, application_status = 'Saved' WHERE id IN ({marks}) "

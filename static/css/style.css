@@ -2151,3 +2151,5 @@ body[data-page="search"] #results-table td[data-label="Listing"] .inline-action-
 .top-pick-refreshed { margin:8px 0 0; font-size:.82rem; font-weight:600; color:#1a7f37; }
 .top-pick-buttons .top-pick-block { grid-column:1 / -1; }
 .top-pick-rank { width:auto; height:auto; border-radius:0; background:none; color:#000; font-size:1.5rem; line-height:1; margin-top:2px; }
+/* Re-sorting the Apply Queue moves its rows: they must not be scroll anchors, or the page follows a row that moved */
+#apply-queue .apply-queue-list { overflow-anchor:none; }
