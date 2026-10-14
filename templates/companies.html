@@ -15,6 +15,9 @@
 </header>
 <main>
   <section class="company-section companies-search">
+    {% if saved_places %}<p class="field-help companies-saved">Your places:
+      {% for place in saved_places %}<button class="chip-button companies-saved-place" type="button" data-place="{{ place }}">{{ place }}</button>{% endfor %}
+    </p>{% endif %}
     <form id="companies-form" class="companies-form" autocomplete="off">
       <div class="form-field companies-place">
         <label for="companies-place">Near</label>
@@ -31,9 +34,6 @@
       </fieldset>
       <div class="companies-actions"><button class="bordered-button primary-action" id="companies-search" type="submit">Search</button></div>
     </form>
-    {% if saved_places %}<p class="field-help companies-saved">Your places:
-      {% for place in saved_places %}<button class="chip-button companies-saved-place" type="button" data-place="{{ place }}">{{ place }}</button>{% endfor %}
-    </p>{% endif %}
   </section>
   <section class="company-section companies-results" id="companies-results" hidden aria-live="polite">
     <div class="companies-toolbar">

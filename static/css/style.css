@@ -2175,7 +2175,7 @@ body[data-page="search"] #results-table td[data-label="Listing"] .inline-action-
 .companies-kinds { flex:1 1 100%; display:flex; flex-wrap:wrap; gap:6px 18px; margin:0; padding:10px 14px; border:1px solid #d4d8dd; border-radius:8px; }
 .companies-kinds legend { padding:0 6px; font-weight:700; font-size:.88rem; }
 .companies-kind { display:inline-flex; align-items:center; gap:6px; font-size:.92rem; }
-.companies-saved { margin:10px 0 0; }
+.companies-saved { margin:0 0 14px; }
 .chip-button { margin:0 6px 0 0; padding:3px 11px; border:1px solid #c7cbd1; border-radius:999px; background:#f6f7f8; font:inherit; font-size:.85rem; cursor:pointer; }
 .chip-button:hover { background:#eaecef; }
 .companies-results { margin-top:16px; }
