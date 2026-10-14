@@ -56,9 +56,8 @@ def companies_page():
     except OSError:
         pass  # the list is a convenience; the page still opens
     return render_template("companies.html", home_place=home_place(profile), mile_choices=MILE_CHOICES,
-                           kinds=[(KNOWN, KNOWN_LABEL), (MINE, MINE_LABEL)]
-                           + [(key, label) for key, (label, _) in local_companies.KINDS.items()],
-                           default_kinds=[KNOWN, MINE] + list(local_companies.DEFAULT_KINDS), default_miles=15)
+                           kinds=[(KNOWN, KNOWN_LABEL)] + [(key, label) for key, (label, _) in local_companies.KINDS.items()],
+                           default_kinds=[KNOWN] + list(local_companies.DEFAULT_KINDS), default_miles=15)
 
 
 @app.route("/companies/search")
@@ -93,6 +92,16 @@ def companies_search():
 def _fields_from_request():
     data = request.get_json(silent=True)
     return data if isinstance(data, dict) else {}
+
+
+@app.route("/companies/mine", methods=["GET"])
+def my_company_list():
+    """All of your own companies, nearest first from the place given (or your home); the page shows them in their own box."""
+    profile = profile_store.get_user_profile()
+    found = resolve_place(request.args.get("place"), profile)
+    center, shown = (found[0], found[1]) if found else (None, "")
+    companies = my_companies.everything(center)
+    return jsonify({"status": "ok", "place": shown, "count": len(companies), "companies": companies})
 
 
 @app.route("/companies/mine", methods=["POST"])

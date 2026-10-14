@@ -15,6 +15,11 @@
   const showHidden = document.getElementById("companies-show-hidden");
   const searchButton = document.getElementById("companies-search");
   const milesHeader = document.getElementById("companies-miles-header");
+  const mineBody = document.getElementById("companies-mine-body");
+  const mineCount = document.getElementById("companies-mine-count");
+  const mineEmpty = document.getElementById("companies-mine-empty");
+  const mineWrapper = document.getElementById("companies-mine-table-wrapper");
+  const mineMilesHeader = document.getElementById("companies-mine-miles-header");
   const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || "";
   const HIDDEN_KEY = "jobFinder.hiddenCompanies";
   let companies = [];
@@ -96,8 +101,7 @@
     if (!window.confirm(`Delete ${company.name} from your companies?`)) return;
     try {
       await post(`/companies/mine/${encodeURIComponent(company.id.replace(/^mine\//, ""))}/delete`);
-      companies = companies.filter((item) => item.id !== company.id);
-      render();
+      await loadMine();
     } catch (error) {
       say(error.message, true);
     }
@@ -114,10 +118,7 @@
         const reply = await post(editing ? `/companies/mine/${encodeURIComponent(editing)}` : "/companies/mine", data);
         addStatus.textContent = editing ? `Saved ${reply.company.name}.` : `Added ${reply.company.name}.`;
         resetAddForm();
-        // Show it at once: where it falls in the list depends on the town you are searching around, so ask again.
-        const mine = form.querySelector('input[name="kinds"][value="mine"]');
-        if (mine) mine.checked = true;
-        if (place.value.trim()) search(); else say("Type a town or ZIP code above and press Search to see where it falls.");
+        await loadMine();
       } catch (error) {
         addStatus.textContent = error.message;
       } finally {
@@ -211,6 +212,25 @@
     return tr;
   }
 
+  // ---- your own companies: their own box, listed as soon as the page opens, nearest first from the place in the box ----
+  async function loadMine() {
+    try {
+      const response = await fetch(`/companies/mine?${new URLSearchParams({ place: place.value.trim() })}`, { cache: "no-store" });
+      const data = await response.json();
+      if (!response.ok) throw new Error();
+      const mine = data.companies || [];
+      mineMilesHeader.textContent = data.place ? `Miles from ${data.place}` : "Miles";
+      const none = new Set();
+      mineBody.replaceChildren(...mine.map((company) => row(company, none)));
+      mineCount.textContent = mine.length ? `(${mine.length})` : "";
+      mineEmpty.hidden = mine.length > 0;
+      mineWrapper.hidden = mine.length === 0;
+    } catch {
+      mineEmpty.hidden = false;
+      mineEmpty.textContent = "Could not read your companies. Reload the page to try again.";
+    }
+  }
+
   function render() {
     const hidden = readHidden();
     const words = filter.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
@@ -266,6 +286,7 @@
       }
     }
     searchButton.disabled = false;
+    loadMine();  // the miles in your own box are from this place too
     if (problem) { say(problem, true); return; }
     if (!companies.length && failed.length === boxes.length) {
       say("OpenStreetMap's free service did not answer (it is often busy). Try again in a minute.", true);
@@ -279,6 +300,7 @@
     render();
   }
 
+  loadMine();
   // All / None: the long list of kinds is quicker to start from one end.
   const setKinds = (on) => form.querySelectorAll('input[name="kinds"]').forEach((box) => { box.checked = on; });
   document.getElementById("companies-kinds-all")?.addEventListener("click", () => setKinds(true));

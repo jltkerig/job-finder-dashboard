@@ -32,6 +32,16 @@
       <div class="companies-actions"><button class="bordered-button primary-action" id="companies-search" type="submit">Search</button></div>
     </form>
     <p class="field-help companies-origin">One place at a time: it starts at your home. The miles in the list are straight-line miles from the place in the box.</p>
+    <section class="companies-mine" id="companies-mine" aria-labelledby="companies-mine-heading">
+    <h2 id="companies-mine-heading">My Companies <span class="field-help" id="companies-mine-count"></span></h2>
+    <p class="field-help" id="companies-mine-empty" hidden>None yet. The employers in your work history are added here, and you can add your own above.</p>
+    <div class="table-wrapper companies-table-wrapper" id="companies-mine-table-wrapper" hidden>
+      <table class="companies-table companies-mine-table">
+        <thead><tr><th>Company</th><th>Type</th><th>Address</th><th id="companies-mine-miles-header">Miles</th><th>Website and jobs</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
+        <tbody id="companies-mine-body"></tbody>
+      </table>
+    </div>
+  </section>
     <details class="companies-add" id="companies-add">
       <summary>Add a company of your own</summary>
       <form id="companies-add-form" class="companies-add-form" autocomplete="off">
@@ -49,7 +59,7 @@
           <span id="companies-add-status" class="field-help" role="status"></span>
         </div>
       </form>
-      <p class="field-help companies-add-help">The town or ZIP code is what measures the distance. Kept in this computer's user-data folder, in my_companies.json. They are listed under "My companies", nearest first when a town or ZIP code is given.</p>
+      <p class="field-help companies-add-help">The town or ZIP code is what measures the distance. Kept in this computer's user-data folder, in my_companies.json. They are listed in the My Companies box above, nearest first when a town or ZIP code is given.</p>
     </details>
   </section>
   <section class="company-section companies-results" id="companies-results" hidden aria-live="polite">

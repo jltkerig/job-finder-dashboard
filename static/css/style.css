@@ -2226,3 +2226,7 @@ body[data-page="search"] #results-table td[data-label="Listing"] .inline-action-
 .companies-jobs-link { font-size:.85rem; font-weight:600; }
 .companies-jobs-text { font-size:.85rem; color:#59636e; }
 .companies-origin { margin:10px 0 0; }
+.companies-mine { margin:16px 0 0; padding:14px 16px; border:1px solid #d4d8dd; border-radius:8px; background:#fff; }
+.companies-mine h2 { margin:0 0 8px; font-size:1.15rem; }
+.companies-mine-table th:nth-child(2), .companies-mine-table td:nth-child(2) { display:none; }
+.companies-mine-table .companies-mine-badge { display:none; }

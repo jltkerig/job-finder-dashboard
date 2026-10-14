@@ -196,6 +196,15 @@ def as_result(item, center=None):
             "notes": item.get("notes", ""), "lat": item.get("lat"), "lon": item.get("lon"), "miles": miles}
 
 
+def everything(center=None):
+    """All of your companies as the page lists them: nearest first when a center is given, then the ones that cannot be
+    measured. Unlike near, none is left out for being far away."""
+    results = [as_result(item, center) for item in load()]
+    measured = sorted((r for r in results if r["miles"] is not None), key=lambda r: (r["miles"], r["name"].casefold()))
+    unmeasured = sorted((r for r in results if r["miles"] is None), key=lambda r: r["name"].casefold())
+    return measured + unmeasured
+
+
 def near(lat, lon, miles):
     """Entered companies within miles of a point, nearest first, then the ones with no map point (they cannot be measured
     but are yours, so they are always listed)."""

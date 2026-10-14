@@ -211,11 +211,31 @@ class Routes(unittest.TestCase):
         self.assertEqual([c["name"] for c in data["companies"]], ["Acme"])
         search.assert_not_called()
 
-    def test_the_page_offers_the_form_and_the_kind(self):
+    def test_the_page_has_the_form_and_a_box_of_its_own_for_your_companies(self):
         html = self.client.get("/companies").get_data(as_text=True)
         self.assertIn('id="companies-add-form"', html)
-        self.assertIn('value="mine"', html)
-        self.assertIn("My companies", html)
+        self.assertIn('id="companies-mine"', html)
+        self.assertIn('id="companies-mine-body"', html)
+        self.assertNotIn('value="mine"', html)  # not a kind to tick: they are always in their own box
+
+    def test_the_box_lists_all_of_them_nearest_first_including_far_and_unplaced_ones(self):
+        with patch.object(my_companies, "place_point", side_effect=[NEAR, FAR]):
+            my_companies.add({"name": "Near Co", "place": "Bel Air, MD"})
+            my_companies.add({"name": "Far Co", "place": "Somewhere, PA"})
+        my_companies.add({"name": "Anywhere Co"})
+        with patch.object(companies_routes, "place_point", return_value=CENTER):
+            data = self.client.get("/companies/mine?place=Bel+Air,+MD").get_json()
+        self.assertEqual([c["name"] for c in data["companies"]], ["Near Co", "Far Co", "Anywhere Co"])
+        self.assertEqual(data["place"], "Bel Air, MD")
+        self.assertGreater(data["companies"][1]["miles"], 50)  # far, but still listed
+        self.assertIsNone(data["companies"][2]["miles"])
+
+    def test_the_box_still_lists_them_when_the_place_is_unknown(self):
+        my_companies.add({"name": "Acme"})
+        with patch.object(companies_routes, "place_point", return_value=None):
+            data = self.client.get("/companies/mine?place=Nowhereville").get_json()
+        self.assertEqual([c["name"] for c in data["companies"]], ["Acme"])
+        self.assertIsNone(data["companies"][0]["miles"])
 
 
 if __name__ == "__main__":
