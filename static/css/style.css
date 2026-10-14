@@ -2149,3 +2149,5 @@ body[data-page="search"] #results-table td[data-label="Listing"] .inline-action-
 .top-pick-stat .job-fit, .top-pick-stat .credibility-badge { min-width:0; padding:1px 8px; border-radius:999px; font-size:.78rem; }
 .top-pick-chips { margin-top:10px; }
 .top-pick-refreshed { margin:8px 0 0; font-size:.82rem; font-weight:600; color:#1a7f37; }
+.top-pick-buttons .top-pick-block { grid-column:1 / -1; }
+.top-pick-rank { width:auto; height:auto; border-radius:0; background:none; color:#000; font-size:1.5rem; line-height:1; margin-top:2px; }

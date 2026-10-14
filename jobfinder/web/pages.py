@@ -19,6 +19,7 @@ from jobfinder.web.blocklists import block_details
 from jobfinder.web.core import app
 from jobfinder.web.listing_queries import (
     add_current_distances,
+    sort_by_job_fit,
     merge_duplicates,
     add_drive_times,
     add_job_fit,
@@ -94,6 +95,8 @@ def user_dashboard():
     companies = get_kept_companies(status_filter, state_filter, title_filter, sort_by)
     profile = profile_store.get_user_profile()
     add_job_fit(companies, profile.get("skills", []))
+    if sort_by == "fit":
+        sort_by_job_fit(companies)
     add_drive_times(companies, profile.get("home_zip"), profile.get("state") or "")
     add_application_files(companies)
     applied_dates.add_to(companies)

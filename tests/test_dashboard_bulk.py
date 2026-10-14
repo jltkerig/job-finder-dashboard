@@ -129,5 +129,20 @@ class SavedJobCardMarkup(unittest.TestCase):
             self.assertEqual(opened, closed, f"<{tag}> opened {opened} times but closed {closed}")
 
 
+class ReplacementSearch(unittest.TestCase):
+    def test_rejecting_a_result_only_looks_for_a_replacement_when_it_is_a_top_10_pick(self):
+        script = (ROOT / "static" / "js" / "charts.js").read_text(encoding="utf-8")
+        self.assertIn("document.getElementById(`top-pick-${companyId}`)", script)
+        self.assertNotIn("requestReplacement();", script.replace("requestReplacement(); }", ""))  # only inside the guard
+
+
+class SortByJobFit(unittest.TestCase):
+    def test_highest_fit_first_and_unknown_last(self):
+        from jobfinder.web.listing_queries import sort_by_job_fit
+        jobs = [{"id": 1, "job_fit": {"score": 40}}, {"id": 2, "job_fit": {"score": None}}, {"id": 3, "job_fit": {"score": 82}},
+                {"id": 4, "job_fit": {"score": 40}}, {"id": 5, "job_fit": {"score": 0}}]
+        self.assertEqual([job["id"] for job in sort_by_job_fit(jobs)], [3, 1, 4, 5, 2])  # equal fits keep their order
+
+
 if __name__ == "__main__":
     unittest.main()

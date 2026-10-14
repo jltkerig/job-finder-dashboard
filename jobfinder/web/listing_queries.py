@@ -11,6 +11,7 @@ from jobfinder.profiles.profile_tools import fit_score
 from jobfinder.profiles.travel import describe as describe_trip
 from jobfinder.records.capture_import import CAPTURE_SOURCES
 from jobfinder.records.job_retention import SAVED_STATUSES
+from jobfinder.search.company_check import is_aggregator
 from jobfinder.sources.job_feeds import FEED_NAMES
 from jobfinder.sources.job_listings import NON_JOB_PATH
 from jobfinder.sources.job_sites import JOB_SITE_NAMES
@@ -157,6 +158,12 @@ def add_job_fit(companies, skills):
         company["job_fit"] = fit_score(skills, found if isinstance(found, list) else [])
 
 
+def sort_by_job_fit(companies):
+    """Highest Job Fit first; jobs with no Job Fit (no skills known) last. Equal fits keep their existing order."""
+    companies.sort(key=lambda company: (company["job_fit"]["score"] is None, -(company["job_fit"]["score"] or 0)))
+    return companies
+
+
 def get_companies():
     connection = None
     cursor = None
@@ -228,6 +235,10 @@ def get_companies():
             if not isinstance(row["details"], dict):
                 row["details"] = {}
             row["source_host"] = (urlparse(row.get("source_url") or "").hostname or "").removeprefix("www.")
+            # A job site's own address (linkedin.com) is never blocked as a domain: its company is.
+            domain = row.get("domain") or ""
+            site = urlparse(domain if "://" in domain else "//" + domain).hostname or ""
+            row["domain_is_job_site"] = bool(site) and is_aggregator(site)
         return visible_rows
 
     except Error as error:

@@ -16,7 +16,7 @@
 
   // A pick's buttons read "Word icon": the icon sits to the right of the word, and follows it when the word changes.
   const ICONS = { Keep: "⭐", Saved: "✔️", Apply: "📨", Added: "✔️", Details: "🔍", "Hide Details": "🔼", Refresh: "🔄",
-    "Refreshing…": "⏳", Reject: "🚫", Closed: "🔒" };
+    "Refreshing…": "⏳", Reject: "🚫", Closed: "🔒", "Block Company": "🚷", "Block Domain": "🌐" };
   function setLabel(target, text) {
     const label = Object.assign(document.createElement("span"), { className: "btn-label", textContent: text });
     const icon = Object.assign(document.createElement("span"), { className: "btn-icon", textContent: ICONS[text] || "" });
@@ -49,12 +49,51 @@
       status.textContent = "Could not reject that listing. Try again.";
       return;
     }
+    window.requestReplacementSearch?.();  // a Top 10 pick is replaced by a new search result
     pick.row.hidden = true;
     const details = pick.row.nextElementSibling;
     if (details?.classList.contains("details-row")) details.hidden = true;
     current = current.filter((other) => other !== pick);
     render(current.slice(0, PICKS));
     status.textContent = message;
+  }
+
+  // Block Company / Block Domain: the same call as the Search page's block buttons. The employer's jobs leave the results
+  // and the Top 10, and the next picks move up.
+  async function blockEmployer(pick, button, kind, question) {
+    if (!confirm(question)) return;
+    const id = pick.row.dataset.companyId;
+    button.disabled = true;
+    try {
+      const response = await fetch(`/block-${kind}/${encodeURIComponent(id)}`, {
+        method: "POST",
+        headers: { "X-CSRF-Token": csrfToken, "X-Requested-With": "fetch", Accept: "application/json" },
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || "Could not block that.");
+      const company = (pick.row.dataset.company || "").toLowerCase();
+      const domainOf = (row) => (row.querySelector('td[data-label="Domain"] a')?.textContent || "").trim().toLowerCase();
+      const domain = domainOf(pick.row);
+      const same = (row) => (kind === "company" ? (row.dataset.company || "").toLowerCase() === company
+        : Boolean(domain) && domainOf(row) === domain);
+      document.querySelectorAll("#results-table .result-row").forEach((row) => {
+        if (!same(row)) return;
+        const details = row.nextElementSibling;
+        if (details?.classList.contains("details-row")) details.remove();
+        row.remove();
+      });
+      current = current.filter((other) => document.contains(other.row));
+      window.requestReplacementSearch?.();
+      if (current.length < PICKS) {  // some picks went with it: rank again so the list is full
+        document.getElementById("top-picks-button")?.click();
+        return;
+      }
+      render(current.slice(0, PICKS));
+      status.textContent = `${kind === "company" ? (data.company || pick.row.dataset.company || "That company") : (data.domain || domain)} is blocked from future searches. The next picks moved up.`;
+    } catch (error) {
+      button.disabled = false;
+      status.textContent = error.message || "Could not block that.";
+    }
   }
 
   // Keep or Apply on a pick: it is handled, so it leaves the list and the next best one moves up.
@@ -133,7 +172,8 @@
       item.dataset.score = Math.round(pick.score);
       const rankNumber = document.createElement("span");
       rankNumber.className = "top-pick-rank";
-      rankNumber.textContent = index + 1;
+      rankNumber.textContent = "•";  // a black bullet; the order of the list is the ranking
+      rankNumber.setAttribute("aria-label", `Pick ${index + 1}`);
       const box = document.createElement("input");
       box.type = "checkbox";
       box.checked = !hard;
@@ -307,6 +347,21 @@
       // Two columns: Keep | Apply, Details | Refresh, Reject | Closed.
       buttons.replaceChildren(...[buttons.querySelector(".keep-action-pick"), queueButton, details, refreshOne, reject, closed]
         .filter(Boolean));
+      // Block: keeps this employer out of future searches. A job site's own address (linkedin.com) is never blocked.
+      const blocks = [["Block Company", "company", `Block ${row.dataset.company || "this company"} from future searches?`]];
+      const domainLink = row.querySelector('td[data-label="Domain"] a');
+      if (!row.dataset.jobSiteDomain && domainLink) {
+        blocks.push(["Block Domain", "domain", `Block ${domainLink.textContent.trim()} from future searches? This blocks the entire website, not just this listing.`]);
+      }
+      blocks.forEach(([label, kind, question]) => {
+        const block = document.createElement("button");
+        block.type = "button";
+        block.className = "bordered-button destructive-action top-pick-block";
+        setLabel(block, label);
+        block.title = kind === "company" ? "Exclude this company name from future searches." : "Hide this website and all future jobs from it.";
+        block.addEventListener("click", () => blockEmployer(pick, block, kind, question));
+        buttons.append(block);
+      });
       actions.append(buttons);
       item.append(actions, drop);
       list.append(item);

@@ -7,6 +7,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const toastRegion = document.getElementById("toast-region");
   let currentUpdateController = null;
   let requestReplacement = async () => {};
+  // A replacement search only runs for a listing that is one of the Top 10 picks; any other result just goes.
+  const requestReplacementIfTopPick = (companyId) => { if (document.getElementById(`top-pick-${companyId}`)) requestReplacement(); };
 
   const CITY_STATE_OPTIONS = [
     "Birmingham, AL","Huntsville, AL","Mobile, AL","Montgomery, AL","Anchorage, AK","Fairbanks, AK","Phoenix, AZ","Tucson, AZ","Mesa, AZ","Little Rock, AR","Fayetteville, AR",
@@ -134,7 +136,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const response = await fetch(`/reject-listing/${companyId}`, { method: "POST", headers: { "X-CSRF-Token": csrfToken, "X-Requested-With": "fetch", "Content-Type":"application/json", Accept: "application/json" }, body: JSON.stringify({reason}) });
       const data = await readJsonResponse(response, "Could not reject the listing.", "E3202"); if (!response.ok) throw new Error(serverMessage(data, "Could not reject the listing.", "E3202"));
       const item = button.closest(".result-row, .saved-job-card"); if (item) { item.classList.add("is-removing"); setTimeout(() => { if (item.matches("tr")) { const next = item.nextElementSibling; if (next?.classList.contains("details-row")) next.remove(); } item.remove(); updateClientResults(); }, 330); }
-      if(page==="search")requestReplacement();
+      if(page==="search")requestReplacementIfTopPick(companyId);
       showToast("Moved to Settings", "danger", "Undo", async () => { try { await restoreRejected(companyId); sessionStorage.setItem("jobFinderToast", JSON.stringify({ message: "Listing restored", type: "success" })); window.location.reload(); } catch (error) { showToast(error.message, "danger"); } }, 6500);
     } catch (error) { button.disabled = false; button.classList.remove("is-removing"); button.textContent = "Reject Listing"; showToast(error.message, "danger"); }
   }));
@@ -146,7 +148,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const response = await fetch(`/reject-listing/${companyId}`, { method: "POST", headers: { "X-CSRF-Token": csrfToken, "X-Requested-With": "fetch", "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify({ reason: "closed" }) });
       const data = await readJsonResponse(response, "Could not mark the listing closed.", "E3202"); if (!response.ok) throw new Error(serverMessage(data, "Could not mark the listing closed.", "E3202"));
       fadeResultRows((row) => row.dataset.companyId === String(companyId));
-      if (page === "search") requestReplacement();
+      if (page === "search") requestReplacementIfTopPick(companyId);
       showToast("Marked closed and moved to Settings", "info", "Undo", async () => { try { await restoreRejected(companyId); sessionStorage.setItem("jobFinderToast", JSON.stringify({ message: "Listing restored", type: "success" })); window.location.reload(); } catch (error) { showToast(error.message, "danger"); } }, 6500);
     } catch (error) { button.disabled = false; showToast(error.message, "danger"); }
   }));
@@ -174,7 +176,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $$(".block-action").forEach((button) => button.addEventListener("click", async () => {
     const companyId = button.dataset.companyId, domain = button.dataset.domain || "this domain"; if (!companyId || !confirm(`Block ${domain} from future searches? This blocks the entire website, not just this listing.`)) return;
     button.disabled = true; try { const response = await fetch(`/block-domain/${companyId}`, { method: "POST", headers: { "X-CSRF-Token": csrfToken, "X-Requested-With": "fetch", Accept: "application/json" } }); const data = await readJsonResponse(response, "Could not block the domain.", "E3211"); if (!response.ok) throw new Error(serverMessage(data, "Could not block the domain.", "E3211")); button.textContent = "Blocked";
-      if(page==="search") { fadeResultRows(row => (row.dataset.companyId === String(companyId)) || (row.querySelector('td[data-label="Domain"]')?.textContent||"").trim().toLowerCase().endsWith(data.domain.toLowerCase())); requestReplacement(); }
+      if(page==="search") { fadeResultRows(row => (row.dataset.companyId === String(companyId)) || (row.querySelector('td[data-label="Domain"]')?.textContent||"").trim().toLowerCase().endsWith(data.domain.toLowerCase())); requestReplacementIfTopPick(companyId); }
       showToast(`${data.domain || domain} blocked from future searches`, "info"); } catch (error) { button.disabled = false; showToast(error.message, "danger"); }
   }));
 
@@ -187,7 +189,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const data=await readJsonResponse(response,"Could not block the company.","E3221");
       if(!response.ok)throw new Error(serverMessage(data,"Could not block the company.","E3221"));
       button.textContent="Company Blocked";
-      if(page==="search") { fadeResultRows(row => (row.dataset.company||"").toLowerCase() === (data.company||name).toLowerCase()); requestReplacement(); }
+      if(page==="search") { fadeResultRows(row => (row.dataset.company||"").toLowerCase() === (data.company||name).toLowerCase()); requestReplacementIfTopPick(companyId); }
       showToast(`${data.company||name} blocked from future searches`,"info");
     }catch(error){button.disabled=false;showToast(error.message,"danger");}
   }));
@@ -654,6 +656,7 @@ document.addEventListener("DOMContentLoaded", () => {
         showToast("Searching for a replacement listing…","info");
       } catch(error) { showToast(error.message||"Could not start replacement search.","danger"); }
     };
+    window.requestReplacementSearch = requestReplacement; // Top 10's own Reject / Closed / Block use it
     async function startAction(url,mode,payload=null){
       setActivity(true,mode);
       currentMode=mode;
