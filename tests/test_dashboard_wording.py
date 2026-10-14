@@ -52,7 +52,7 @@ class DashboardWording(unittest.TestCase):
         import re
         for page in PAGES:
             labels = re.findall(r'<a class="nav-link[^"]*" href="[^"]*">([^<]+)</a>', read("templates", f"{page}.html"))
-            self.assertEqual(labels[:5], ["Search", "Dashboard", "Résumé Builder", "Settings", "Tuning"], page)
+            self.assertEqual(labels[:6], ["Search", "Dashboard", "Companies", "Résumé Builder", "Settings", "Tuning"], page)
 
     def test_search_settings_on_the_tuning_page_collapses(self):
         html = read("templates", "tuning.html")

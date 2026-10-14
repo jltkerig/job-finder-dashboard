@@ -1,6 +1,7 @@
 """Reading saved companies and jobs from the database for the Search, Dashboard and Settings pages."""
 
 import json
+import math
 import re
 from urllib.parse import urlparse
 
@@ -16,6 +17,52 @@ from jobfinder.sources.job_listings import NON_JOB_PATH
 from jobfinder.sources.job_sites import JOB_SITE_NAMES
 from jobfinder.web import blocklists
 from jobfinder.web import schema
+
+
+def get_known_employers(lat, lon, miles, limit=400):
+    """Employers Job Finder has seen hiring within miles of a point, nearest first, as the Companies page lists them.
+
+    One entry per company name and town, from the jobs found in earlier searches that have a map point. No network needed."""
+    from jobfinder.profiles.travel import miles_between
+    degrees = float(miles) / 69.0 + 0.02
+    cos = max(math.cos(math.radians(float(lat))), 0.2)
+    found = {}
+    connection = cursor = None
+    try:
+        connection = db.connect()
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT id, name, domain, city, state, latitude, longitude, career_job_title
+            FROM companies
+            WHERE is_rejected = 0 AND name IS NOT NULL AND name <> '' AND latitude IS NOT NULL AND longitude IS NOT NULL
+              AND latitude BETWEEN %s AND %s AND longitude BETWEEN %s AND %s
+            ORDER BY date_found DESC
+        """, (float(lat) - degrees, float(lat) + degrees, float(lon) - degrees / cos, float(lon) + degrees / cos))
+        rows = cursor.fetchall()
+    except Error as error:
+        print("Could not read the known employers.")
+        print(error)
+        return []
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if connection is not None and connection.is_connected():
+            connection.close()
+    for row in rows:
+        away = miles_between((float(lat), float(lon)), (float(row["latitude"]), float(row["longitude"])))
+        if away > float(miles):
+            continue
+        key = (str(row["name"]).casefold(), str(row.get("city") or "").casefold())
+        if key in found:
+            continue
+        host = str(row.get("domain") or "").lower().removeprefix("www.")
+        own_site = bool(host) and "." in host and not (is_aggregator(host) or is_ats_host(host)) and host != PLACEHOLDER_DOMAIN
+        found[key] = {
+            "id": f"known/{row['id']}", "name": row["name"], "type": ("Hiring: " + row["career_job_title"])[:60]
+            if row.get("career_job_title") else "Employer", "address": ", ".join(p for p in (row.get("city"), row.get("state")) if p),
+            "website": f"https://{host}" if own_site else "", "phone": "",
+            "lat": round(float(row["latitude"]), 6), "lon": round(float(row["longitude"]), 6), "miles": round(away, 1)}
+    return sorted(found.values(), key=lambda company: (company["miles"], company["name"].casefold()))[:limit]
 
 
 PLACEHOLDER_DOMAIN = "boards.example"  # older searches saved this for boards set up by a slug (Ashby, Greenhouse, Lever)

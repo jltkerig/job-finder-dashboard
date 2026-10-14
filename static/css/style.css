@@ -2166,3 +2166,32 @@ body[data-page="search"] #results-table td[data-label="Listing"] .inline-action-
 .top-pick-buttons .top-pick-block { grid-column:1 / -1; }
 /* Re-sorting the Apply Queue moves its rows: they must not be scroll anchors, or the page follows a row that moved */
 #apply-queue .apply-queue-list { overflow-anchor:none; }
+
+/* Companies page (static/js/companies.js): businesses near a place */
+.visually-hidden { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+.companies-form { display:flex; flex-wrap:wrap; gap:14px 18px; align-items:flex-end; }
+.companies-place { flex:1 1 280px; min-width:220px; }
+.companies-miles { flex:0 0 140px; }
+.companies-kinds { flex:1 1 100%; display:flex; flex-wrap:wrap; gap:6px 18px; margin:0; padding:10px 14px; border:1px solid #d4d8dd; border-radius:8px; }
+.companies-kinds legend { padding:0 6px; font-weight:700; font-size:.88rem; }
+.companies-kind { display:inline-flex; align-items:center; gap:6px; font-size:.92rem; }
+.companies-saved { margin:10px 0 0; }
+.chip-button { margin:0 6px 0 0; padding:3px 11px; border:1px solid #c7cbd1; border-radius:999px; background:#f6f7f8; font:inherit; font-size:.85rem; cursor:pointer; }
+.chip-button:hover { background:#eaecef; }
+.companies-results { margin-top:16px; }
+.companies-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:10px 16px; margin:0 0 10px; }
+.companies-filter input { min-width:260px; padding:7px 10px; border:1px solid #c4c8ce; border-radius:6px; font:inherit; }
+.companies-website-only { display:inline-flex; align-items:center; gap:6px; font-size:.92rem; }
+.companies-table { width:100%; border-collapse:collapse; font-size:.92rem; }
+.companies-table th, .companies-table td { padding:8px 10px; border-bottom:1px solid #e6e8eb; text-align:left; vertical-align:top; }
+.companies-table th { font-size:.8rem; text-transform:uppercase; letter-spacing:.04em; color:#59636e; }
+.companies-miles-cell { white-space:nowrap; font-variant-numeric:tabular-nums; }
+.companies-phone { color:#59636e; }
+.companies-row-actions { display:flex; gap:6px; justify-content:flex-end; white-space:nowrap; }
+.companies-row-actions .bordered-button { min-height:30px; padding:3px 10px; font-size:.82rem; }
+.is-hidden-company { opacity:.5; }
+.companies-status { margin:12px 0; }
+.companies-error { color:#b42318; font-weight:600; }
+@media (max-width: 760px) {
+  .companies-table th:nth-child(3), .companies-table td:nth-child(3) { display:none; }
+}
