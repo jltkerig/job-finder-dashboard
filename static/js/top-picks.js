@@ -336,6 +336,7 @@
           row.dataset.queued = "1";
           const rowApply = row.querySelector(".apply-action");
           if (rowApply) { rowApply.textContent = "Added"; rowApply.disabled = true; }
+          window.removeResultRows?.([row.dataset.companyId]);  // an added job leaves the results table too
           dropPick(pick, "Added to your Apply queue. The next pick moved up.");
         } catch (error) {
           status.textContent = error.message;

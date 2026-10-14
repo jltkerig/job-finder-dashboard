@@ -363,6 +363,19 @@ def _duplicate_key(company):
 APPLIED_STATUSES = ("Applied", "Talking With Recruiter", "Interview")
 
 
+def hide_queued(companies, everything):
+    """The Search page's results without the jobs you added to the Apply Queue, or their copies on other boards: once
+    added, a job is worked on from the Dashboard. everything is the list before merge_duplicates, so a queued copy that
+    was merged away still counts. A job taken off the queue shows here again."""
+    def queued(company):
+        details = company.get("details")
+        return isinstance(details, dict) and bool(details.get("apply_queued"))
+
+    queued_keys = {_duplicate_key(company) for company in everything if queued(company)} - {None}
+    return [company for company in companies
+            if not queued(company) and _duplicate_key(company) not in queued_keys]
+
+
 def hide_closed(rows):
     """A job found to be closed leaves the Search results, saved or not (a saved one stays on the Dashboard, marked
     Closed; an unsaved one is deleted after CLOSED_KEEP_DAYS). Refresh checks each listing again and a reopened one
