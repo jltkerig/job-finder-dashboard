@@ -145,9 +145,9 @@ class ResumeBuilderTests(unittest.TestCase):
         first = builds.save_build("resume", SAMPLE, job_title="Front-End Web Developer", profile=PROFILE)
         second = builds.save_build("resume", SAMPLE, job_title="Front-End Web Developer", profile=PROFILE)
         letter = builds.save_build("cover_letter", LETTER, job_title="Front-End Web Developer", profile=PROFILE)
-        self.assertEqual(first["pdf"], f"Jane_Doe_Front_End_Web_Developer_{today}.pdf")
-        self.assertEqual(second["pdf"], f"Jane_Doe_Front_End_Web_Developer_{today}_2.pdf")
-        self.assertEqual(letter["pdf"], f"Jane_Doe_Front_End_Web_Developer_Cover_Letter_{today}.pdf")
+        self.assertEqual(first["pdf"], f"Jane_Doe_Front_End_Web_{today}.pdf")
+        self.assertEqual(second["pdf"], f"Jane_Doe_Front_End_Web_{today}_2.pdf")
+        self.assertEqual(letter["pdf"], f"Jane_Doe_Front_End_Web_Cover_Letter_{today}.pdf")
         for record in (first, second, letter):
             self.assertTrue((config.OUTPUT_DIR / record["pdf"]).read_bytes().startswith(b"%PDF"))
 
@@ -159,6 +159,16 @@ class ResumeBuilderTests(unittest.TestCase):
                          "Jane_Doe_Pacvue_Web_Designer_09-23-2026.pdf")
         self.assertEqual(builds.build_filename("Jane", "Doe", "cover_letter", "Web Designer", "Pacvue", when),
                          "Jane_Doe_Pacvue_Web_Designer_Cover_Letter_09-23-2026.pdf")
+
+    def test_the_job_title_in_a_file_name_is_cut_to_three_words(self):
+        when = date(2026, 10, 14)
+        name = lambda title: builds.build_filename("Jane", "Doe", "resume", title, "Food Bank", when)
+        self.assertEqual(name("Manager, Website & Search"), "Jane_Doe_Food_Bank_Manager_Website_Search_10-14-2026.pdf")
+        self.assertEqual(name("Webinar & Email Marketing Associate"), "Jane_Doe_Food_Bank_Webinar_Email_Marketing_10-14-2026.pdf")
+        self.assertEqual(name("Sr. Web Developer (5601) (TS/SCI)"), "Jane_Doe_Food_Bank_Sr_Web_Developer_10-14-2026.pdf")
+        self.assertEqual(name("ATS Senior Web Designer"), "Jane_Doe_Food_Bank_Senior_Web_Designer_10-14-2026.pdf")
+        self.assertEqual(name("Designer"), "Jane_Doe_Food_Bank_Designer_10-14-2026.pdf")
+        self.assertEqual(name(""), "Jane_Doe_Food_Bank_General_10-14-2026.pdf")
 
     def test_name_falls_back_to_resume_name(self):
         record = builds.save_build("resume", SAMPLE, job_title="Analyst", profile={})
@@ -434,9 +444,9 @@ class ConnectorTests(unittest.TestCase):
     def test_save_resume_and_letter_by_job_id(self):
         today = date.today().strftime("%m-%d-%Y")
         out = self.text(self.call("save_resume", {"content": SAMPLE, "job_id": 7}))
-        self.assertIn(f"Jane_Doe_Acme_Widgets_Front_End_Web_Developer_{today}.pdf", out)
+        self.assertIn(f"Jane_Doe_Acme_Widgets_Front_End_Web_{today}.pdf", out)
         out = self.text(self.call("save_cover_letter", {"content": LETTER, "job_id": 7}))
-        self.assertIn(f"Jane_Doe_Acme_Widgets_Front_End_Web_Developer_Cover_Letter_{today}.pdf", out)
+        self.assertIn(f"Jane_Doe_Acme_Widgets_Front_End_Web_Cover_Letter_{today}.pdf", out)
         listed = self.text(self.call("list_builds"))
         self.assertIn("Acme Widgets", listed)
 

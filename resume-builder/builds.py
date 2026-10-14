@@ -19,15 +19,26 @@ KINDS = {"resume": ("", ResumeContent, render_resume),
 SAFE_NAME = re.compile(r"^[A-Za-z0-9_.-]+\.pdf$")
 
 
+TITLE_WORDS = 3  # a file name carries only the first few words of the job title
+
+
 def _part(text):
     return re.sub(r"[^A-Za-z0-9]+", "_", text or "").strip("_")[:60]
 
 
+def _title_part(title):
+    """The first TITLE_WORDS words of the job title ("Manager, Website & Search Engines" -> Manager_Website_Search),
+    never counting the word ATS."""
+    words = [word for word in re.findall(r"[A-Za-z0-9]+", title or "") if word.upper() != "ATS"]
+    return _part(" ".join(words[:TITLE_WORDS]))
+
+
 def build_filename(first, last, kind, job_title, company="", when=None):
     """Firstname_Lastname_Company_JobTitle_MM-DD-YYYY.pdf for a resume (never the word "ATS"), and
-    Firstname_Lastname_Company_JobTitle_Cover_Letter_MM-DD-YYYY.pdf for a cover letter; _2, _3 ... if the name is taken."""
+    Firstname_Lastname_Company_JobTitle_Cover_Letter_MM-DD-YYYY.pdf for a cover letter; _2, _3 ... if the name is taken.
+    The job title part is its first three words."""
     label = KINDS[kind][0]
-    parts = [_part(first), _part(last), _part(company), _part(job_title) or "General", label,
+    parts = [_part(first), _part(last), _part(company), _title_part(job_title) or "General", label,
              (when or date.today()).strftime("%m-%d-%Y")]
     stem = "_".join(p for p in parts if p)
     stem = re.sub(r"(?i)(?:^|_)ATS(?=_|$)", "", stem).strip("_")
