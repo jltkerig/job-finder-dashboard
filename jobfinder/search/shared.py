@@ -182,6 +182,14 @@ def timing_summary():
     return {name: round(seconds, 1) for name, seconds in _timings.items()}
 
 
+_run_started = time.monotonic()
+
+
+def run_seconds():
+    """Seconds since this run's process started (each search, refresh or import is its own process)."""
+    return time.monotonic() - _run_started
+
+
 _host_lock = threading.Lock()
 _host_next_request = {}
 _last_failure_status = None

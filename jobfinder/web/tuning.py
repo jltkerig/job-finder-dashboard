@@ -20,7 +20,7 @@ TUNING_FIELDS = {
     "request_delay_seconds": ("Pause between requests to one site (seconds)", "Lower is faster; keep at 1 or more to stay polite.", float, 0, 10, 1),
     "search_query_delay_seconds": ("Pause between search-engine queries (seconds)", "Too low can get the engines to rate-limit Job Finder.", float, 0, 10, 2),
     "website_timeout_seconds": ("Wait for a slow page (seconds)", "A page that has not answered by then is skipped.", int, 5, 60, 15),
-    "parallel_page_fetches": ("Pages downloaded at once", "More is faster but uses more of your connection.", int, 1, 12, 6),
+    "parallel_page_fetches": ("Pages and career boards read at once", "More is faster but uses more of your connection. 1 reads one at a time.", int, 1, 12, 6),
     "auto_search_hour": ("Daily search starts after (hour, 0–23)", "Used when the daily search is on. 8 means 8 a.m.", int, 0, 23, 8),
     "stop_after_empty_queries": ("Stop after this many empty queries in a row", "Many empty queries usually mean the engines are refusing us.", int, 2, 30, 8),
 }

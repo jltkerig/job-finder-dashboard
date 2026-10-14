@@ -15,7 +15,7 @@ from flask import jsonify, request
 
 from jobfinder.records.capture_import import capture_dirs, move_pending, pending_files, settled_files
 from jobfinder.web import profile_store
-from jobfinder.web import webfiles
+from jobfinder.web import log_rotation, webfiles
 from jobfinder.web.core import api_error, app, log_error_code
 from jobfinder.web.search_history import get_search_history, record_search_history
 from jobfinder.web.tuning import read_tuning_settings
@@ -27,6 +27,12 @@ scraper_last_error = None
 scraper_lock = threading.Lock()
 scraper_started_at = None
 scraper_stopping = False
+
+
+def open_run_log():
+    """The search log, opened to add a run to it; a log that has grown large is archived first."""
+    log_rotation.rotate(webfiles.SCRAPER_LOG_FILE)
+    return webfiles.SCRAPER_LOG_FILE.open("a", encoding="utf-8")
 
 
 def scraper_status():
@@ -176,7 +182,7 @@ def launch_search_process(job_title, state, cities=None, mode="search"):
             scraper_last_error = None
             # A leftover request from an earlier stop would end this search immediately.
             webfiles.STOP_REQUEST_FILE.unlink(missing_ok=True)
-            with webfiles.SCRAPER_LOG_FILE.open("a", encoding="utf-8") as log_file:
+            with open_run_log() as log_file:
                 log_file.write(
                     f"\n=== {datetime.now().isoformat(timespec='seconds')} | {mode} | "
                     f"{job_title or '(any job)'} | {state} ===\n"
@@ -264,7 +270,7 @@ def refresh_search():
         try:
             flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
             scraper_last_error = None
-            with webfiles.SCRAPER_LOG_FILE.open("a", encoding="utf-8") as log_file:
+            with open_run_log() as log_file:
                 log_file.write(f"\n=== {datetime.now().isoformat(timespec='seconds')} | update-existing ===\n")
                 log_file.flush()
                 scraper_process = subprocess.Popen(
@@ -298,7 +304,7 @@ def update_existing():
 
             global scraper_last_error
             scraper_last_error = None
-            with webfiles.SCRAPER_LOG_FILE.open("a", encoding="utf-8") as log_file:
+            with open_run_log() as log_file:
                 log_file.write(
                     f"\n=== {datetime.now().isoformat(timespec='seconds')} | update-existing ===\n"
                 )
@@ -354,7 +360,7 @@ def captures_import():
         try:
             flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
             scraper_last_error = None
-            with webfiles.SCRAPER_LOG_FILE.open("a", encoding="utf-8") as log_file:
+            with open_run_log() as log_file:
                 log_file.write(f"\n=== {datetime.now().isoformat(timespec='seconds')} | import | "
                                f"{len(moved)} capture file(s) ===\n")
                 log_file.flush()

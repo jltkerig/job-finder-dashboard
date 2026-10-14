@@ -4,8 +4,10 @@ import html as html_lib
 import json
 import os
 import re
+import threading
 import time
 from datetime import date, datetime, timezone
+from http.cookiejar import DefaultCookiePolicy
 from pathlib import Path
 from urllib.parse import urljoin, urlparse
 
@@ -21,26 +23,42 @@ MAX_PAGES = 3  # result pages read per keyword on paged boards (tests may lower 
 HTML = "text/html,application/xhtml+xml"
 
 
+# The pause between calls is kept per site, across every Http and every thread, so boards read at the same time
+# still never hit one site faster than `delay` (the 30 Ashby boards all live on one host).
+_host_next = {}
+_host_lock = threading.Lock()
+
+
 class Http:
-    """requests with a user agent, a timeout, and a short pause between calls."""
+    """requests with a user agent, a timeout, and a short pause between calls to the same site. One connection is kept
+    open per Http (so a Workday board's many searches share one TLS handshake); cookies are not kept, so every call
+    is answered as it was before. Use one Http per thread."""
 
     def __init__(self, delay=0.4, timeout=30):
-        self.delay, self.timeout, self._last = delay, timeout, 0.0
+        self.delay, self.timeout = delay, timeout
+        self._session = requests.Session()
+        self._session.cookies.set_policy(DefaultCookiePolicy(allowed_domains=[]))
 
-    def _wait(self):
-        pause = self.delay - (time.monotonic() - self._last)
-        if pause > 0:
-            time.sleep(pause)
-        self._last = time.monotonic()
+    def _wait(self, url):
+        host = (urlparse(url).hostname or "").casefold()
+        with _host_lock:
+            now = time.monotonic()
+            start = max(now, _host_next.get(host, 0.0))
+            _host_next[host] = start + self.delay
+        if start > now:
+            time.sleep(start - now)
+
+    def close(self):
+        self._session.close()
 
     def get(self, url, params=None, accept="application/json", headers=None):
-        self._wait()
-        return requests.get(url, params=params, headers=dict({"User-Agent": USER_AGENT, "Accept": accept}, **(headers or {})),
-                            timeout=self.timeout)
+        self._wait(url)
+        return self._session.get(url, params=params, headers=dict({"User-Agent": USER_AGENT, "Accept": accept}, **(headers or {})),
+                                 timeout=self.timeout)
 
     def post_json(self, url, payload):
-        self._wait()
-        return requests.post(url, json=payload, timeout=self.timeout, headers={
+        self._wait(url)
+        return self._session.post(url, json=payload, timeout=self.timeout, headers={
             "User-Agent": USER_AGENT, "Accept": "application/json", "Content-Type": "application/json"})
 
 

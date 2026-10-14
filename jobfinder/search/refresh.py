@@ -46,7 +46,7 @@ from jobfinder.search.relevance import (
     reject_irrelevant_row,
     stale_remote_limit,
 )
-from jobfinder.search.shared import CAREER_CREDIBILITY_THRESHOLD, related_family_titles
+from jobfinder.search.shared import CAREER_CREDIBILITY_THRESHOLD, related_family_titles, timed, timing_summary
 from jobfinder.search.usa_location import (
     US_STATES,
     analyze_usa_location,
@@ -231,16 +231,20 @@ def update_existing_results(company_ids=None):
     print("================================")
     print()
 
-    database = storage.connect_database()
-    if database is None:
-        return
+    with timed("Opening the database"):
+        database = storage.connect_database()
+        if database is None:
+            return
 
-    if not storage.ensure_database_schema(database):
-        database.close()
-        return
-    refresh_job_fit_quietly(database)
-    recheck_system_rejections_quietly(database)
-    close_expired_listings_quietly(database)
+        if not storage.ensure_database_schema(database):
+            database.close()
+            return
+    with timed("Start-up check: Job Fit of saved listings"):
+        refresh_job_fit_quietly(database)
+    with timed("Start-up check: listings rejected earlier"):
+        recheck_system_rejections_quietly(database)
+    with timed("Start-up check: listings past their closing date"):
+        close_expired_listings_quietly(database)
     cursor = None
     try:
         cursor = database.cursor(dictionary=True)
@@ -282,9 +286,10 @@ def update_existing_results(company_ids=None):
 
     print(f"Found {len(companies)} existing results to verify.")
 
-    wanted_titles = expand_job_titles(load_user_titles(database))
-    selected_now = load_selected_states(database)
-    city_targets_now, search_state_text = load_city_targets(database)
+    with timed("Reading your titles and cities"):
+        wanted_titles = expand_job_titles(load_user_titles(database))
+        selected_now = load_selected_states(database)
+        city_targets_now, search_state_text = load_city_targets(database)
     clear_employer_cache()
     clear_board_cache()
     shared._debug_run = DebugRun(shared.SEARCH_DEBUG_FILE, "update", JOB_FINDER_VERSION)
@@ -300,7 +305,8 @@ def update_existing_results(company_ids=None):
     for feed in FEEDS:
         if any(row.get("source_type") == feed.name for row in companies):
             try:
-                feed_listings[feed.name] = feed.index(feed.fetch())
+                with timed("Remote job feeds"):
+                    feed_listings[feed.name] = feed.index(feed.fetch())
             except (requests.RequestException, ValueError, TypeError) as error:
                 feed_listings[feed.name] = None
                 print(f"{feed.name} refresh unavailable: {error}")
@@ -389,7 +395,8 @@ def update_existing_results(company_ids=None):
         if site_class:
             # A job-site opening is open while the site still lists it (its page is an app that shows nothing to
             # a plain download, so the page itself can't be checked).
-            status = site_class().status(source_url)
+            with timed("Checking job sites"):
+                status = site_class().status(source_url)
             try:
                 with database.cursor() as status_cursor:
                     status_cursor.execute(
@@ -409,7 +416,8 @@ def update_existing_results(company_ids=None):
         if company.get("source_type") == EMPLOYER_SOURCE:
             employer = employer_for_url(source_url or "", employers)
             try:
-                status = employer.status(source_url, employer_http) if employer else "Unknown"
+                with timed("Checking employer boards"):
+                    status = employer.status(source_url, employer_http) if employer else "Unknown"
             except (requests.RequestException, ValueError, KeyError, TypeError) as error:
                 status = "Unknown"
                 print(f"Could not check {company.get('name')}: {error}")
@@ -495,24 +503,27 @@ def update_existing_results(company_ids=None):
                 {"JobPosting data", "job detail page", "direct listing link"} & set(details.get("evidence") or [])))
             # A row with missing location data still gets the deep read, so refresh keeps filling it in.
             direct_posting = direct_posting and bool(company.get("country")) and bool(company.get("usa_credibility"))
-            source_data = inspect_company_site(
-                homepage=source_url,
-                search_title=search_title,
-                domain=company.get("domain") or get_domain(source_url),
-                deep=not direct_posting,
-            )
+            with timed("Reading each listing's page and company site"):
+                source_data = inspect_company_site(
+                    homepage=source_url,
+                    search_title=search_title,
+                    domain=company.get("domain") or get_domain(source_url),
+                    deep=not direct_posting,
+                )
             location_data = merge_location_data(location_data, source_data["location"])
             work_arrangement = work_arrangement or detect_work_arrangement("", source_data.get("landing_html", ""))
             landing_html = source_data.get("landing_html", "")
             # A job-board repost can outlive the real opening; check where its Apply button leads.
             if is_third_party(source_url, company.get("name") or ""):
-                apply_closed = apply_link_closed(source_url, source_data.get("landing_html", ""))
+                with timed("Checking where Apply leads"):
+                    apply_closed = apply_link_closed(source_url, source_data.get("landing_html", ""))
             # A listing found through a job board should link to the employer's own careers page.
             if not details.get("employer_site") and is_third_party(source_url, company.get("name") or ""):
-                employer = relevance.find_employer_site(
-                    company.get("name") or "", search_title, source_url, source_data.get("landing_html", ""),
-                    wanted_titles or [search_title], location_hint=str(details.get("location") or ""),
-                    allow_search=False, notes=employer_notes)
+                with timed("Finding the employer's own site"):
+                    employer = relevance.find_employer_site(
+                        company.get("name") or "", search_title, source_url, source_data.get("landing_html", ""),
+                        wanted_titles or [search_title], location_hint=str(details.get("location") or ""),
+                        allow_search=False, notes=employer_notes)
                 if employer:
                     career_url = employer["posting_url"] or source_url
                     details["employer_site"] = {"domain": employer["domain"], "careers_url": employer["careers_url"],
@@ -525,7 +536,8 @@ def update_existing_results(company_ids=None):
                     print("Employer site not found: " + "; ".join(employer_notes or ["no candidates"]))
         if (not details.get("ats_posting") and source_url and is_third_party(source_url, company.get("name") or "")
                 and not company.get("is_kept")):
-            board_posting = company_board_posting(company.get("name") or "", search_title)
+            with timed("Looking for the company's own board"):
+                board_posting = company_board_posting(company.get("name") or "", search_title)
             if board_posting:
                 career_url = board_posting["url"]
                 details["ats_posting"] = {"system": board_posting["system"], "url": board_posting["url"]}
@@ -553,7 +565,8 @@ def update_existing_results(company_ids=None):
 
         if career_url and is_valid_url(career_url):
             shared._last_failure_status = None
-            response = fetching.safe_request(career_url)
+            with timed("Reading the posting's page"):
+                response = fetching.safe_request(career_url)
             if response is not None:
                 # The employer's careers page is not the job description, so keep the skills already saved.
                 if not employer_row or canonical_url(career_url) == canonical_url(source_url or ""):
@@ -718,7 +731,8 @@ def update_existing_results(company_ids=None):
     # With a Brave Search key, a refresh also looks for employers' own postings of job-site listings.
     if brave_key() and not shared.stop_requested():
         try:
-            found = company_check.check_listings(database, lambda query: search_web(query), fetch_text)
+            with timed("Company-site check"):
+                found = company_check.check_listings(database, lambda query: search_web(query), fetch_text)
             print(f"Company-site check: found {found} on the employer's own site.")
         except Exception as error:
             print(f"Company-site check stopped early: {error}")
@@ -730,5 +744,9 @@ def update_existing_results(company_ids=None):
     print(f"Rows updated: {updated}")
     print(f"Rows rejected (wrong role or outside the U.S.): {rejected_count}")
     print(f"Rows failed: {failed}")
+    for timing_name, timing_seconds in timing_summary().items():
+        print(f"Time: {timing_name}: {timing_seconds:.0f}s")
+    print(f"Time: Whole run: {shared.run_seconds():.0f}s")
+    shared._debug_run.data["summary"] = {"seconds_spent": dict(timing_summary(), **{"Whole run": round(shared.run_seconds(), 1)})}
     shared._debug_run.finish(f"update complete: {updated} updated, {rejected_count} rejected, {failed} failed")
     shared._debug_run = None

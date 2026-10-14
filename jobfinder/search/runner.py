@@ -104,6 +104,7 @@ from jobfinder.sources.job_listings import (
 )
 from jobfinder.sources.job_sites import JOB_SITES, SiteBlocked, search_places
 from jobfinder.search.area_queries import area_queries
+from jobfinder.search.board_readahead import BoardReadAhead
 
 def _title_label(title):
     return ANY_TITLE_LABEL if title == ANY_TITLE else title
@@ -121,17 +122,21 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
     print("================================")
     print()
 
-    database = storage.connect_database()
+    with timed("Opening the database"):
+        database = storage.connect_database()
 
-    if database is None:
-        return
+        if database is None:
+            return
 
-    if not storage.ensure_database_schema(database):
-        database.close()
-        return
-    refresh_job_fit_quietly(database)
-    recheck_system_rejections_quietly(database)
-    close_expired_listings_quietly(database)
+        if not storage.ensure_database_schema(database):
+            database.close()
+            return
+    with timed("Start-up check: Job Fit of saved listings"):
+        refresh_job_fit_quietly(database)
+    with timed("Start-up check: listings rejected earlier"):
+        recheck_system_rejections_quietly(database)
+    with timed("Start-up check: listings past their closing date"):
+        close_expired_listings_quietly(database)
 
     rejected_urls = storage.rejected_posting_urls(database)
 
@@ -188,7 +193,8 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
                         for item in cities if isinstance(item, dict)
                         and str(item.get("city", "")).strip().casefold() in US_STATES}
     selected_states = selected_state_codes(state, cities, statewide_states)
-    city_targets = geo.prepare_city_targets(database, state, cities)
+    with timed("Looking up your cities"):
+        city_targets = geo.prepare_city_targets(database, state, cities)
     requested_cities = [item for item in cities if isinstance(item, dict)
                         and str(item.get("city", "")).strip()
                         and str(item.get("city", "")).strip().casefold() not in US_STATES]
@@ -250,7 +256,8 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
             continue
         print(f"Checking {feed.name} for matching remote listings...")
         try:
-            feed_jobs = list(feed.matching(feed.fetch(), job_titles, USA_ONLY))
+            with timed("Remote job feeds"):
+                feed_jobs = list(feed.matching(feed.fetch(), job_titles, USA_ONLY))
         except (requests.RequestException, ValueError, TypeError) as error:
             print(f"{feed.name} unavailable; continuing: {error}")
             _board_health.failed(feed.name, "Remote feed", error)
@@ -313,6 +320,7 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
     # Employer boards share up to half of a search's jobs, two per board, so several get a turn.
     employer_cap = max(1, shared.MAX_SEARCH_RESULTS // 2)
     employer_http = EmployerHttp()
+    read_ahead = None  # the boards being read ahead of their turn (see search_known_employers)
     def search_employer(employer, per_employer_cap, total_cap):
         """Search one employer's board and save passing openings; returns how many were saved."""
         nonlocal candidate_number, results_checked, companies_saved, existing_companies, passed_count, employer_saved_total
@@ -320,7 +328,9 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
             return 0
         print(f"Checking {employer.name} careers...")
         try:
-            employer_openings = employer.find_openings(job_titles, employer_http)
+            employer_openings = read_ahead.openings(employer) if read_ahead else None  # already read while the last board was checked
+            if employer_openings is None:
+                employer_openings = employer.find_openings(job_titles, employer_http)
         except (requests.RequestException, ValueError, KeyError, TypeError) as error:
             print(f"{employer.name} careers unavailable; continuing: {error}")
             _board_health.failed(employer.name, "Discovered board" if employer.discovered else "Employer board", error)
@@ -611,6 +621,12 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
             _board_health.note(site.name, "Job site", "ok" if found else "no matches", found, saved)
 
     def search_known_employers():
+        nonlocal read_ahead
+        # Boards are read a few at a time ("Pages downloaded at once" on the Tuning page); each board's openings are still
+        # checked and saved one board at a time, in the same order.
+        workers = min(shared.PREFETCH_WORKERS, len(known_employers))
+        if workers > 1:
+            read_ahead = BoardReadAhead(known_employers, job_titles, workers)
         try:
             with timed("Employer career boards"):
                 for employer in known_employers:
@@ -619,6 +635,10 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
                         break
         except Exception as error:
             print(f"Employer career search stopped early: {error}", flush=True)
+        finally:
+            if read_ahead:
+                read_ahead.close()
+                read_ahead = None
         try:
             with timed("Job sites"):
                 search_job_sites()
@@ -927,7 +947,8 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
         print()
         print("Checking company sites for job-site listings...", flush=True)
         try:
-            found_on_site = company_check.check_listings(database, search_web, fetch_text)
+            with timed("Company-site check"):
+                found_on_site = company_check.check_listings(database, search_web, fetch_text)
             print(f"Company-site check: found {found_on_site} on the employer's own site.", flush=True)
         except Exception as error:
             print(f"Company-site check stopped early: {error}", flush=True)
@@ -946,12 +967,14 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
             "results_checked": results_checked, "search_pages_checked": pages_checked,
             "websites_checked": websites_checked, "passed_validation": passed_count,
             "saved_new": companies_saved, "already_saved": existing_companies,
-            "search_engines_blocking": bool(blocked_message), "seconds_spent": timing_summary()}
+            "search_engines_blocking": bool(blocked_message),
+            "seconds_spent": dict(timing_summary(), **{"Whole run": round(shared.run_seconds(), 1)})}
 
     print(f"Search results checked: {results_checked}")
     print(f"Search pages checked: {pages_checked}")
     for timing_name, timing_seconds in timing_summary().items():
         print(f"Time: {timing_name}: {timing_seconds:.0f}s")
+    print(f"Time: Whole run: {shared.run_seconds():.0f}s")
 
     print(f"Aggregators skipped: " f"{blocked_sites}")
 

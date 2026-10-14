@@ -105,6 +105,21 @@ Each entry: what went wrong, why, the fix, and the check that would have caught 
 - **A search stopped right after starting** (2026-10-06) because Stop was pressed in another open Search tab. Not a
   code bug; keep in mind when a test search ends with "Stop requested before the web search started".
 
+## Search speed (2026-10-14)
+
+- **Employer boards were read one after another** and took about 15 of a search's 22-36 minutes (87 boards; a Workday
+  board is up to 16 keywords x 3 pages). Boards are on different sites, so nothing needed to wait. Fix:
+  `search/board_readahead.py` reads the next few boards while the current one is checked ("Pages and career boards read
+  at once" on Tuning, default 6); checks and saves still go one board at a time in the same order. The pause between
+  calls is now kept per site across all threads (`employer_common._host_next`), and each board keeps one connection
+  open. A real run of the board phase took 240 s instead of about 900 s. Check: with `parallel_page_fetches` at 1 and
+  at 6, the same jobs come out in the same order (`tests/test_board_readahead.py`).
+- **A slow run could not be explained** because the log had no times. Fix: every run ends with `Time: ...` lines for
+  its phases and `Time: Whole run`, also saved in `search_debug.json` (`seconds_spent`). Read them first when a search
+  or refresh feels slow.
+- **The search log grew without end** (5 MB, 61,000 lines). Fix: `web/log_rotation.py` compresses it to
+  `job_finder.log.1.gz` (3 kept) when a run starts and it is over 2 MB.
+
 ## Top 10
 
 - **A closed Ashby job stayed Open after Refresh** (2026-10-13): NETGEAR Graphic Designer, saved from LinkedIn. Refresh
