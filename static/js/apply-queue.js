@@ -5,6 +5,28 @@
   const status = document.getElementById("apply-queue-status");
   const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || "";
 
+  // Keep the Job Apply Stats box beside the profile and the heading count in step without a reload.
+  function bump(name, by) {
+    const cell = document.querySelector(`[data-stat="${name}"]`);
+    if (cell) cell.textContent = Math.max(0, (Number(cell.textContent) || 0) + by);
+  }
+  function refreshCount() {
+    const count = section.querySelectorAll(".apply-queue-item").length;
+    const label = document.querySelector("#apply-queue-heading .field-help");
+    if (label) label.textContent = `(${count})`;
+    if (!count) section.hidden = true;
+  }
+  // Rejecting (or marking Closed) a saved job elsewhere on the page takes it off the queue too (static/js/charts.js).
+  window.ApplyQueueDrop = (ids) => {
+    new Set((ids || []).map(String)).forEach((id) => {
+      const item = section.querySelector(`.apply-queue-item[data-company-id="${id}"]`);
+      if (!item) return;
+      item.remove();
+      bump("queue", -1);
+    });
+    refreshCount();
+  };
+
   async function send(url, body) {
     const response = await fetch(url, {
       method: "POST",
@@ -12,6 +34,7 @@
       body: JSON.stringify(body || {}),
     });
     if (!response.ok) throw new Error();
+    return response.json().catch(() => ({}));
   }
 
   // Combine puts the résumé and cover letter into one PDF (résumé first) and adds a "Combined" link beside them.
@@ -189,11 +212,22 @@
     const id = item.dataset.companyId;
     button.disabled = true;
     try {
-      if (button.classList.contains("apply-queue-applied")) await send(`/apply-queue/applied/${id}`);
+      let data = {};
+      if (button.classList.contains("apply-queue-applied")) data = await send(`/apply-queue/applied/${id}`);
       else await send("/apply-queue", { company_ids: [id], queued: false });
       item.remove();
+      bump("queue", -1);
+      if (button.classList.contains("apply-queue-applied")) {
+        // The month is the one the server saved the job under (a date typed earlier wins over today).
+        const now = new Date();
+        const month = /^\d{4}-\d{2}/.test(data.applied_on || "") ? data.applied_on.slice(0, 7)
+          : `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+        bump("applied", 1);
+        bump("total", 1);
+        bump(`month-${month}`, 1);
+      }
       status.textContent = button.classList.contains("apply-queue-applied") ? "Marked Applied." : "Removed from the queue.";
-      if (!section.querySelector(".apply-queue-item")) section.hidden = true;
+      refreshCount();
     } catch {
       status.textContent = "Could not save that. Try again.";
       button.disabled = false;

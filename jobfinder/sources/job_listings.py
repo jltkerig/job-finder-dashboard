@@ -7,7 +7,8 @@ from urllib.parse import urljoin, urlparse, urlunparse, parse_qsl, urlencode
 from bs4 import BeautifulSoup
 
 
-ATS_HOSTS = ("greenhouse.io", "lever.co", "ashbyhq.com", "workdayjobs.com", "smartrecruiters.com", "icims.com", "jobvite.com", "bamboohr.com")
+ATS_HOSTS = ("greenhouse.io", "lever.co", "ashbyhq.com", "workdayjobs.com", "smartrecruiters.com", "icims.com", "jobvite.com", "bamboohr.com",
+             "ats.rippling.com")
 _ALWAYS_NON_JOB = re.compile(r"/(?:news|blog|stories|magazine|financial-aid|financialaid|types-of-aid|work-study)(?:/|$)", re.I)
 _SERVICES_PATH = re.compile(r"/services?(?:/|$)", re.I)
 _JOB_CONTEXT = re.compile(r"/(?:jobs?|careers?|positions?|openings?|vacanc(?:y|ies)|opportunit(?:y|ies)|employment)(?:/|$)", re.I)
@@ -340,7 +341,12 @@ def extract_jobs(url, html, wanted):
                 if remote_type:  # Workday marks many onsite jobs TELECOMMUTE in its page data
                     location_type = remote_type
                     remote = bool(re.search(r"\bremote\b", remote_type, re.I)) and not re.search(r"\b(?:not|non)\b", remote_type, re.I)
-            arrangement = posting_arrangement(title, location, location_type, description, remote)
+            arrangement = None
+            if re.search(r"(?:^|\.)(?:ashbyhq|lever)\.co", urlparse(direct).hostname or ""):
+                # Ashby's page data says TELECOMMUTE for hybrid jobs; the employer's own board says how it is worked.
+                from jobfinder.sources.board_status import board_workplace  # here: it imports this module's users
+                arrangement = board_workplace(direct)
+            arrangement = arrangement or posting_arrangement(title, location, location_type, description, remote)
             evidence = ["JobPosting data", "title matches search", "direct listing link"]
             posted = _freshness(node.get("datePosted"))
             if posted:

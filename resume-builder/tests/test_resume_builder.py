@@ -527,8 +527,9 @@ class ProfileImportTests(unittest.TestCase):
             answered = client.post("/profile/fill-from-resume", data={"csrf": "token"})
         self.assertEqual(answered.status_code, 302)
         self.assertTrue(save.called)
-        saved_history = save.call_args.args[-1]
+        saved_history = save.call_args.args[6]
         self.assertEqual([j["role"] for j in saved_history], ["Web Designer", "Front End Web Developer"])
+        self.assertEqual([s["school"] for s in save.call_args.args[7]], ["State University"])  # the résumé's school came too
 
     def test_the_header_shows_only_the_version_under_the_title(self):
         html = (Path(__file__).resolve().parents[1] / "templates" / "index.html").read_text(encoding="utf-8")
@@ -554,8 +555,10 @@ class ProfileImportTests(unittest.TestCase):
         self.assertEqual(added[:2], ["name", "location"])
         self.assertIn("2 jobs", added)
         self.assertIn("primary job title", added)
-        first, last, location, primary, others, skills, history = save.call_args.args
+        first, last, location, primary, others, skills, history, schools = save.call_args.args
         self.assertEqual((first, last, location, primary, others), ("Jane", "Doe", "Springfield, MD", "web designer", ["Visual Designer"]))
+        self.assertIn("1 school", added)
+        self.assertEqual([s["school"] for s in schools], ["State University"])
         self.assertIn("HTML", skills)
         self.assertEqual(len(history), 2)
 
@@ -564,7 +567,7 @@ class ProfileImportTests(unittest.TestCase):
                 "primary_job_title": "UX Designer", "job_titles": ["UX Designer"], "skills": ["HTML", "Figma"],
                 "work_history": [{"role": "Web Designer", "company": "Example Co", "dates": "2025", "description": "mine"}]}
         added, save = self.fill(full)
-        first, last, location, primary, others, skills, history = save.call_args.args
+        first, last, location, primary, others, skills, history, schools = save.call_args.args
         self.assertEqual((first, last, location, primary), ("Janet", "Doe-Smith", "Bel Air, MD", "UX Designer"))
         self.assertEqual(skills[:2], ["HTML", "Figma"])
         self.assertEqual([h["company"] for h in history], ["Example Co", "Sample Corp"])
@@ -575,7 +578,7 @@ class ProfileImportTests(unittest.TestCase):
         found = profile_import.extract(SAMPLE_RESUME_TEXT)
         same = {"first_name": "Jane", "last_name": "Doe", "home_location": "Springfield, MD", "state": "MD",
                 "primary_job_title": "Web Designer", "job_titles": ["Web Designer"], "skills": found["skills"],
-                "work_history": found["work_history"]}
+                "work_history": found["work_history"], "education": found["education"]}
         added, save = self.fill(same)
         self.assertEqual(added, [])
         save.assert_not_called()

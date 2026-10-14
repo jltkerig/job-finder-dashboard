@@ -164,16 +164,12 @@
   function render(picks) {
     savePicks(picks);
     list.replaceChildren();
-    picks.forEach((pick, index) => {
+    picks.forEach((pick) => {
       const { row, reasons, gaps } = pick;
       const hard = gaps.some((gap) => gap.hard);
       const item = document.createElement("li");
       item.className = "top-pick" + (hard ? " not-a-fit" : "");
       item.dataset.score = Math.round(pick.score);
-      const rankNumber = document.createElement("span");
-      rankNumber.className = "top-pick-rank";
-      rankNumber.textContent = "•";  // a black bullet; the order of the list is the ranking
-      rankNumber.setAttribute("aria-label", `Pick ${index + 1}`);
       const box = document.createElement("input");
       box.type = "checkbox";
       box.checked = !hard;
@@ -218,7 +214,7 @@
         });
         body.append(warnings);
       }
-      item.append(rankNumber, box, body);
+      item.append(box, body);  // the order of the list is the ranking
       const actions = document.createElement("div");
       actions.className = "top-pick-actions";
       const link = row.querySelector("a.inline-action-link[href^='http']");
@@ -285,7 +281,11 @@
       reject.className = "bordered-button destructive-action";
       setLabel(reject, "Reject");
       reject.title = "Reject this listing and take it off the Search page.";
-      reject.addEventListener("click", () => rejectListing(pick, reject, "other", "Rejected."));
+      reject.addEventListener("click", async () => {
+        // "If rejecting, why?": the same reasons as the picker on a result's Details tab.
+        const reason = window.askRejectReason ? await window.askRejectReason(row.dataset.job) : "other";
+        if (reason) rejectListing(pick, reject, reason, "Rejected.");
+      });
       const closed = document.createElement("button");
       closed.type = "button";
       closed.className = "bordered-button destructive-action";

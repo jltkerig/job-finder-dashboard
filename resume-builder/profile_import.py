@@ -69,7 +69,8 @@ def extract(text):
         jobs.append({"role": role[:150], "company": company[:150], "dates": lines[dates_row][:100],
                      "description": "\n".join(f"• {b}" for b in bullets if b)[:3000]})
     better = _jobfinder_jobs(text)
-    return {"name": name, "location": location, "skills": _detect_skills(" ".join(lines)), "work_history": better or jobs}
+    return {"name": name, "location": location, "skills": _detect_skills(" ".join(lines)), "work_history": better or jobs,
+            "education": _jobfinder_education(text)}
 
 
 def _jobfinder_jobs(text):
@@ -81,6 +82,30 @@ def _jobfinder_jobs(text):
     except ImportError:
         return []
     return parse_work_history(text)
+
+
+def _jobfinder_education(text):
+    """The schools under the resume's education heading, as Job Finder's own reader finds them; [] if unavailable."""
+    if str(config.JOB_FINDER_DIR) not in sys.path:
+        sys.path.append(str(config.JOB_FINDER_DIR))
+    try:
+        from jobfinder.profiles.education_parse import parse_education
+    except ImportError:
+        return []
+    return parse_education(text)
+
+
+def _has_school(saved, school):
+    """True when the profile already lists this school (and this degree, when both name one)."""
+    name = school["school"].strip().casefold()
+    return any(e.get("school", "").strip().casefold() == name
+               and (not e.get("degree") or not school.get("degree") or e["degree"] == school["degree"]) for e in saved)
+
+
+def new_schools(text, profile):
+    """Schools the resume lists that the profile's education doesn't have yet."""
+    saved = profile.get("education") or []
+    return [school for school in extract(text)["education"] if not _has_school(saved, school)]
 
 
 def new_jobs(text, profile):
@@ -120,6 +145,10 @@ def fill_profile(text):
     new_jobs = [j for j in found["work_history"] if (j["role"].casefold(), j["company"].casefold()) not in known]
     if new_jobs:
         added.append(f"{len(new_jobs)} job{'s' if len(new_jobs) != 1 else ''}")
+    saved_schools = profile.get("education") or []
+    new_education = [school for school in found["education"] if not _has_school(saved_schools, school)]
+    if new_education:
+        added.append(f"{len(new_education)} school{'s' if len(new_education) != 1 else ''}")
     primary = profile["primary_job_title"]
     others = [t for t in profile["job_titles"] if t != primary]
     # Most recent job title becomes the primary only if it's one of the titles already searched for.
@@ -133,6 +162,8 @@ def fill_profile(text):
         return []
     if not (first and last):
         return []  # Job Finder's form requires a full name; nothing saved without one
-    jobfinder_db.save_profile(first, last, location, primary, others, profile["skills"] + new_skills,
-                              profile["work_history"] + new_jobs)
+    arguments = [first, last, location, primary, others, profile["skills"] + new_skills, profile["work_history"] + new_jobs]
+    if new_education:  # without it, education is left as it is
+        arguments.append(saved_schools + new_education)
+    jobfinder_db.save_profile(*arguments)
     return added

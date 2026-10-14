@@ -121,6 +121,11 @@ def is_aggregator(domain):
     return any(domain == item or domain.endswith("." + item) for item in AGGREGATORS)
 
 
+def is_ats_host(domain):
+    """An applicant system's own address (jobs.ashbyhq.com): many employers share it, so it names no one employer."""
+    return any(domain == item or domain.endswith("." + item) for item in ATS_HOSTS)
+
+
 def judge(listing, url, html):
     """Score one page against the listing: {score, match, reasons}. A closed job, a different title or a different
     employer is never a match, whatever else agrees."""

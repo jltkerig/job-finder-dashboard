@@ -22,7 +22,7 @@ from jobfinder import paths
 from jobfinder.sources.job_listings import ANY_TITLE, extract_jobs, matching_title
 from jobfinder.sources.remote_states import is_remote_place, place_states
 
-from jobfinder.sources.employer_boards import Ashby, BambooHR, Greenhouse, Lever, Recruitee, Teamtailor
+from jobfinder.sources.employer_boards import Ashby, BambooHR, Greenhouse, Lever, Recruitee, Rippling, Teamtailor
 from jobfinder.sources.employer_common import HTML, USER_AGENT, Http, _arrangement, _opening, _plain, _schedule  # noqa: F401
 from jobfinder.sources.employer_enterprise import ICIMS, Oracle, SuccessFactors, UltiPro, Workday
 from jobfinder.sources.employer_more import ADP, NeoGov, Paylocity, SmartRecruiters, Workable
@@ -108,7 +108,13 @@ DEFAULT_EMPLOYERS = [
 ADAPTERS = {"workday": Workday, "oracle": Oracle, "icims": ICIMS, "successfactors": SuccessFactors, "ultipro": UltiPro,
             "greenhouse": Greenhouse, "lever": Lever, "ashby": Ashby, "bamboohr": BambooHR, "smartrecruiters": SmartRecruiters,
             "adp": ADP, "paylocity": Paylocity, "workable": Workable, "neogov": NeoGov,
-            "recruitee": Recruitee, "teamtailor": Teamtailor}
+            "recruitee": Recruitee, "teamtailor": Teamtailor, "rippling": Rippling}
+
+
+def posting_domain(domain, url):
+    """The domain to save a posting under: the company's own when the board names it, else the host the posting is on
+    (jobs.ashbyhq.com), which is where its link really goes."""
+    return domain or (urlparse(str(url or "")).hostname or "").removeprefix("www.")
 
 
 class Employer:
@@ -116,11 +122,15 @@ class Employer:
         self.config = config
         self.name, self.system = config["name"], config["system"]
         self.discovered = bool(config.get("discovered"))
-        self.domain = config.get("domain") or urlparse("//" + (config.get("host") or "boards.example")).hostname
+        # Boards set up by a slug alone (Ashby, Greenhouse, Lever) have no company website here: see domain_for.
+        self.domain = config.get("domain") or urlparse("//" + (config.get("host") or "")).hostname or ""
         self.extra_titles = list(config.get("extra_titles") or [])
         self.title_keywords = [word.casefold() for word in config.get("title_keywords") or []]
         self.exclude_locations = [place.casefold() for place in config.get("exclude_locations") or []]
         self.adapter = ADAPTERS[self.system](config)
+
+    def domain_for(self, url):
+        return posting_domain(self.domain, url)
 
     def allows_location(self, place):
         place = str(place or "").casefold()

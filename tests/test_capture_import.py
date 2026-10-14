@@ -231,9 +231,11 @@ class ImportFilter(unittest.TestCase):
         """(result, assess mock, _set_details mock) for one captured job; nothing touches a database.
         self.applied_ids collects the rows marked Saved + Applied."""
         self.applied_ids = []
+        self.queued_ids = []  # rows put on the Apply Queue because the job was saved on LinkedIn
         with patch.object(judging, "assess_opening", return_value=outcome or passing()) as assess, \
                 patch.object(run, "_saved_row", return_value=saved_row), \
                 patch.object(run, "_set_details") as set_details, patch.object(run, "_mark_closed"), \
+                patch.object(run, "_queue_saved", side_effect=self.queued_ids.append), \
                 patch.object(run, "_mark_applied", side_effect=self.applied_ids.append):
             result = run.import_job("linkedin", captured)
         return result, assess, set_details
@@ -349,6 +351,47 @@ class ImportFilter(unittest.TestCase):
         result, _, _ = self.import_one(import_run([existing]), job(applied=True))
         self.assertEqual(result[0], "linked")
         self.assertEqual(self.applied_ids, [7])
+
+    def test_a_job_saved_on_linkedin_is_added_and_queued_even_outside_your_titles(self):
+        saved_row = {"id": 51, "name": "Globex", "career_job_title": "Webinar & Email Marketing Associate",
+                     "work_arrangement": None, "city": None, "state": None,
+                     "source_url": "https://www.linkedin.com/jobs/view/4012345678", "source_type": "LinkedIn",
+                     "listing_details": "{}", "is_kept": 0}
+        result, _, _ = self.import_one(import_run(), job(title="Webinar & Email Marketing Associate", company="Globex",
+                                                         saved=True, page_kind="tracker"), saved_row=saved_row)
+        self.assertEqual(result[0], "added")
+        self.assertIn("Apply Queue", result[1])
+        self.assertEqual(self.queued_ids, [51])
+        self.assertEqual(self.applied_ids, [])
+        self.assertIn("you saved it", self.saved[0][1]["listing_details"]["evidence"])
+
+    def test_saving_a_job_already_in_your_list_queues_that_row(self):
+        existing = {"id": 7, "name": "Acme", "career_job_title": "Web Designer", "work_arrangement": "On-site",
+                    "city": "Austin", "state": "TX", "source_url": "https://careers.acme.com/jobs/12",
+                    "source_type": "Employer careers", "listing_details": json.dumps({"location": "Austin, TX"}), "is_kept": 0}
+        result, _, _ = self.import_one(import_run([existing]), job(saved=True))
+        self.assertEqual(result[0], "linked")
+        self.assertEqual(self.queued_ids, [7])
+
+    def test_a_saved_job_you_already_applied_to_is_marked_applied_not_queued(self):
+        existing = {"id": 7, "name": "Acme", "career_job_title": "Web Designer", "work_arrangement": "On-site",
+                    "city": "Austin", "state": "TX", "source_url": "https://careers.acme.com/jobs/12",
+                    "source_type": "Employer careers", "listing_details": json.dumps({"location": "Austin, TX"}), "is_kept": 0}
+        self.import_one(import_run([existing]), job(saved=True, applied=True))
+        self.assertEqual(self.applied_ids, [7])
+        self.assertEqual(self.queued_ids, [])
+
+    def test_a_saved_job_that_is_closed_or_rejected_is_not_queued(self):
+        existing = {"id": 7, "name": "Acme", "career_job_title": "Web Designer", "work_arrangement": "On-site",
+                    "city": "Austin", "state": "TX", "source_url": "https://careers.acme.com/jobs/12",
+                    "source_type": "Employer careers", "listing_details": json.dumps({"location": "Austin, TX"}), "is_kept": 0}
+        self.import_one(import_run([existing]), job(saved=True, closed=True))
+        self.assertEqual(self.queued_ids, [])
+        run = import_run()
+        run.rejected = {"https://www.linkedin.com/jobs/view/4012345678"}
+        result, _, _ = self.import_one(run, job(saved=True))
+        self.assertEqual(result, ("skipped", "Previously rejected"))
+        self.assertEqual(self.queued_ids, [])
 
     def test_the_companys_own_website_is_looked_up_once(self):
         self.employer = {"domain": "acme.com", "careers_url": "https://acme.com/careers", "method": "domain guess",

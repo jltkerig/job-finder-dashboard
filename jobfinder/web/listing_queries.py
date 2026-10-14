@@ -10,13 +10,28 @@ from jobfinder import db
 from jobfinder.profiles.profile_tools import fit_score
 from jobfinder.profiles.travel import describe as describe_trip
 from jobfinder.records.capture_import import CAPTURE_SOURCES
-from jobfinder.records.job_retention import SAVED_STATUSES
-from jobfinder.search.company_check import is_aggregator
+from jobfinder.search.company_check import is_aggregator, is_ats_host
 from jobfinder.sources.job_feeds import FEED_NAMES
 from jobfinder.sources.job_listings import NON_JOB_PATH
 from jobfinder.sources.job_sites import JOB_SITE_NAMES
 from jobfinder.web import blocklists
 from jobfinder.web import schema
+
+
+PLACEHOLDER_DOMAIN = "boards.example"  # older searches saved this for boards set up by a slug (Ashby, Greenhouse, Lever)
+
+
+def fix_placeholder_domains(rows):
+    """Rows saved with the placeholder domain show the host their posting is on instead (jobs.ashbyhq.com); the next
+    search that finds the job saves it that way too. Rows on a job site's or a hiring system's address are flagged
+    domain_is_job_site, so the page offers no Block Domain for them (it would block everyone on that address)."""
+    for row in rows:
+        if str(row.get("domain") or "").lower() == PLACEHOLDER_DOMAIN:
+            url = row.get("career_url") or row.get("source_url") or ""
+            row["domain"] = (urlparse(url).hostname or "").removeprefix("www.") or None
+        host = str(row.get("domain") or "").lower()
+        row["domain_is_job_site"] = bool(host) and (is_aggregator(host) or is_ats_host(host))
+    return rows
 
 
 def get_dashboard_counts():
@@ -123,7 +138,7 @@ def get_kept_companies(status_filter="", state_filter="", title_filter="", sort_
             ORDER BY {order_by}
         """
         cursor.execute(sql, params)
-        return cursor.fetchall()
+        return fix_placeholder_domains(cursor.fetchall())
     except Error as error:
         print()
         print("Could not read kept companies from the database.")
@@ -205,12 +220,10 @@ def get_companies():
             ORDER BY date_found DESC
         """)
 
-        rows = cursor.fetchall()
+        rows = fix_placeholder_domains(cursor.fetchall())
         blocked_domains = set(blocklists.get_blocked_domains())
         blocked_names = {name.casefold() for name in blocklists.get_blocked_companies()}
-        # A job found to be closed disappears from the results (and is deleted after CLOSED_KEEP_DAYS); saved ones stay.
-        rows = [row for row in rows if not (row.get("job_open_status") == "Closed" and not row.get("is_kept")
-                                           and row.get("application_status") not in SAVED_STATUSES)]
+        rows = hide_closed(rows)
         visible_rows = [row for row in rows if (row.get("name") or "").casefold() not in blocked_names
                 and (row.get("is_kept") or not any(
                     NON_JOB_PATH.search(urlparse(row.get(key) or "").path)
@@ -238,7 +251,7 @@ def get_companies():
             # A job site's own address (linkedin.com) is never blocked as a domain: its company is.
             domain = row.get("domain") or ""
             site = urlparse(domain if "://" in domain else "//" + domain).hostname or ""
-            row["domain_is_job_site"] = bool(site) and is_aggregator(site)
+            row["domain_is_job_site"] = bool(site) and (is_aggregator(site) or is_ats_host(site))
         return visible_rows
 
     except Error as error:
@@ -301,6 +314,23 @@ def _duplicate_key(company):
 
 
 APPLIED_STATUSES = ("Applied", "Talking With Recruiter", "Interview")
+
+
+def hide_closed(rows):
+    """A job found to be closed leaves the Search results, saved or not (a saved one stays on the Dashboard, marked
+    Closed; an unsaved one is deleted after CLOSED_KEEP_DAYS). Refresh checks each listing again and a reopened one
+    comes back."""
+    return [row for row in rows if row.get("job_open_status") != "Closed"]
+
+
+def hide_applied(companies, everything):
+    """The Search page's results without the jobs you have applied to, or their copies on other boards: those live on
+    the Dashboard. everything is the list before merge_duplicates, so an applied copy that was merged away still counts."""
+    applied_keys = {_duplicate_key(company) for company in everything
+                    if company.get("application_status") in APPLIED_STATUSES} - {None}
+    return [company for company in companies
+            if company.get("application_status") not in APPLIED_STATUSES
+            and _duplicate_key(company) not in applied_keys]
 
 
 def merge_duplicates(companies):

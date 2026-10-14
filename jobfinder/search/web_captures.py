@@ -54,6 +54,8 @@ from jobfinder.sources.job_listings import canonical_url, matching_title as matc
 
 # Statuses that mean you applied: such a job is protected from being added again as a repost.
 MINE_STATUSES = ("Applied", "Talking With Recruiter", "Interview")
+# Statuses that take a job off the Apply Queue (the same list as jobfinder.web.auto_apply.QUEUE_DONE).
+QUEUE_DONE = ("Applied", "Talking With Recruiter", "Interview", "Rejected", "Closed")
 
 
 def load_profile_filters(database):
@@ -158,13 +160,39 @@ class CaptureImport:
         self.database.commit()
 
     def _mark_applied(self, row_id):
-        """Saved, with status Applied. A status further along (Interview) is kept; a rejected row comes back."""
-        with self.database.cursor() as cursor:
+        """Saved, with status Applied. A status further along (Interview) is kept; a rejected row comes back.
+        A job this import turns into Applied gets today's date as "applied_on" (the Dashboard's Applied By Month) when
+        it has none; the site shows only "Applied 3 days ago", so the day it was first seen applied is the best date."""
+        with self.database.cursor(dictionary=True) as cursor:
+            cursor.execute("SELECT application_status, listing_details FROM companies WHERE id = %s", (row_id,))
+            before = cursor.fetchone() or {}
             cursor.execute("""UPDATE companies
                               SET is_kept = 1, is_rejected = 0, rejection_reason = NULL, rejected_at = NULL,
                                   application_status = CASE WHEN application_status IN ('None', 'Saved', 'Rejected')
                                                             THEN 'Applied' ELSE application_status END
                               WHERE id = %s""", (row_id,))
+            details = _row_details(before)
+            if before and before.get("application_status") in ("None", "Saved", "Rejected") and not details.get("applied_on"):
+                details["applied_on"] = datetime.now().date().isoformat()
+                cursor.execute("UPDATE companies SET listing_details = %s WHERE id = %s", (json.dumps(details), row_id))
+        self.database.commit()
+
+    def _queue_saved(self, row_id):
+        """A job you saved on LinkedIn: kept, and added to the Apply Queue (the same listing_details mark Apply sets).
+        A job already applied to, closed or rejected is left as it is, and a job that is already queued keeps its date."""
+        with self.database.cursor(dictionary=True) as cursor:
+            cursor.execute("SELECT application_status, is_rejected, listing_details FROM companies WHERE id = %s", (row_id,))
+            row = cursor.fetchone() or {}
+            if not row or row.get("is_rejected") or row.get("application_status") in QUEUE_DONE:
+                return
+            details = _row_details(row)
+            if not details.get("apply_queued"):
+                details["apply_queued"] = True
+                details["apply_queued_at"] = datetime.now().isoformat(timespec="seconds")
+            cursor.execute("""UPDATE companies
+                              SET is_kept = 1, listing_details = %s,
+                                  application_status = CASE WHEN application_status = 'None' THEN 'Saved' ELSE application_status END
+                              WHERE id = %s""", (json.dumps(details), row_id))
         self.database.commit()
 
     def company_site(self, company, title, url, location, details, site_domain):
@@ -227,11 +255,13 @@ class CaptureImport:
         """Filter and save one captured job. Returns (result, reason) where result is added, updated, linked,
         rejected or skipped.
 
-        A job you already applied to skips the filters: it is always saved, with status Applied."""
+        A job you already applied to skips the filters: it is always saved, with status Applied. A job you saved on
+        LinkedIn (starred) skips the title and place filters too, and is put on the Apply Queue."""
         source_type, domain = CAPTURE_SITES[site]
         url, title = job["url"], job["title"]
         company = tidy_company_name(job.get("company"), job.get("title")) or None
         applied = bool(job.get("applied"))
+        starred = bool(job.get("saved")) and not applied
         row = self.by_url.get(url)
         closed = bool(job.get("closed"))
         if closed and row:
@@ -242,9 +272,9 @@ class CaptureImport:
                 return "skipped", "Previously rejected"
             if company and company.casefold() in BLOCKED_COMPANIES:
                 return "skipped", "Blocked company"
-            if not self.wanted or not matching_job_title(title, self.wanted):
+            if not starred and (not self.wanted or not matching_job_title(title, self.wanted)):
                 return "skipped", "Title matches none of your profile's job titles"
-            if is_internship(title):
+            if not starred and is_internship(title):
                 return "skipped", "Internship"
         location = str(job.get("location") or "").strip()
         description = str(job.get("description") or "")
@@ -255,7 +285,7 @@ class CaptureImport:
         arrangement = (job.get("work_arrangement") or detect_work_arrangement(title, location)
                        or arrangement_from_description(description) or None)
         outcome = self.assess(job, arrangement, location)
-        if outcome["skip"] and not applied:
+        if outcome["skip"] and not applied and not starred:
             details = _row_details(row) if row else {}
             # A job imported earlier as "Location unknown" is filtered again now that its location is known.
             if row and details.get("location_unknown") and not row.get("is_kept"):
@@ -275,8 +305,10 @@ class CaptureImport:
                     same_job["listing_details"] = json.dumps(details)
                 if applied:
                     self._mark_applied(same_job["id"])
+                elif starred and not closed:
+                    self._queue_saved(same_job["id"])
                 return "linked", (f"same job as #{same_job['id']} ({same_job.get('source_type') or 'saved'})"
-                                  + ("; marked Applied" if applied else ""))
+                                  + ("; marked Applied" if applied else "; added to the Apply Queue" if starred and not closed else ""))
             if closed and not applied:
                 return "skipped", "No longer accepting applications"
 
@@ -287,7 +319,7 @@ class CaptureImport:
             "location": location, "salary": job.get("salary") or "", "posted": job.get("posted") or "",
             "description": str(job.get("description") or "")[:20000], "closes": str(job.get("closes") or "")[:10], "matched_title": matched_title,
             "location_unknown": not location, "location_from_description": bool(described_place), "remote_limited_to": sorted(outcome["remote_limited_to"]),
-            "evidence": [f"Seen on {source_type}", "you applied" if applied else "matching title"]
+            "evidence": [f"Seen on {source_type}", "you applied" if applied else "you saved it" if starred else "matching title"]
                         + (["place read from the description"] if described_place else []),
         }
         details = merge_details(_row_details(row) if row else {}, new_details)
@@ -306,7 +338,11 @@ class CaptureImport:
                 self._mark_closed(saved["id"])
             if applied:
                 self._mark_applied(saved["id"])
-        notes = [note for note, on in (("you applied: saved as Applied", applied), ("closed on the site", closed)) if on]
+            elif starred and not closed:
+                self._queue_saved(saved["id"])
+        notes = [note for note, on in (("you applied: saved as Applied", applied),
+                                       ("you saved it on LinkedIn: added to the Apply Queue", starred and not closed),
+                                       ("closed on the site", closed)) if on]
         return ("added" if inserted else "updated"), "; ".join(notes)
 
 

@@ -50,7 +50,7 @@ SEEN_JOBS_FILE = ".imported-jobs.json"  # link -> fingerprint of each job as it 
 KEEP_FOLDER_DAYS = 30
 QUIET_SECONDS = 600  # a capture file is offered for import once the extension has not rewritten it for 10 minutes
 CSV_FIELDS = ["site", "job_id", "title", "company", "location", "work_arrangement", "salary", "posted", "level",
-              "applied", "closed", "page_kind", "url", "first_seen", "last_seen"]
+              "applied", "saved", "closed", "page_kind", "url", "first_seen", "last_seen"]
 _LEVELS = {"seen": 0, "opened": 1}
 _COMPANY_SUFFIX = re.compile(r"\b(?:inc|incorporated|llc|l\.l\.c|ltd|limited|corp|corporation|co|company|plc|lp|llp)\b\.?", re.I)
 _ARRANGEMENT_NOTE = re.compile(r"\((?:remote|hybrid|on-?site)\)", re.I)

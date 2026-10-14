@@ -126,6 +126,27 @@ Each entry: what went wrong, why, the fix, and the check that would have caught 
 - **First pick scored 99 with no readable posting** (2026-10-06): see "Reading postings".
 - **Picks reloaded on every page refresh** (2026-10-06). Fix: the last Top 10 is kept in the browser for a day.
 
+## Dashboard and results (2026-10-14)
+
+- **A placeholder domain was saved as real data**: boards set up by a slug (Ashby, Greenhouse, Lever) have no company
+  website, and `Employer.domain` fell back to `boards.example`, so those rows linked to nothing and Block Domain
+  blocked the placeholder. Fix: `posting_domain()` saves the host the posting is on; rows saved earlier show the
+  real host (`fix_placeholder_domains`). Check: `SELECT domain, COUNT(*) FROM companies GROUP BY domain` has no
+  `.example` names.
+- **A shared hiring-system address could be blocked as a "domain"**: with the real host saved (jobs.ashbyhq.com), Block
+  Domain would hide every employer on that system. Fix: ATS hosts count as job sites (`is_ats_host`): no Block Domain
+  button, and the route refuses. Check: any new domain shown on a result is the employer's own or has no Block Domain.
+- **New CSS met old cached markup**: Job Finder keeps its HTML templates until restarted while CSS and JS are read at
+  once, so a markup + CSS change stretched the name card to the page's height. Fix: rules use child combinators and
+  work for both. Check: screenshot the live page before restarting, then again after.
+- **Applied by LinkedIn had no applied date**: the import saved status Applied but not `applied_on`, so the job was
+  counted under "No Date Saved". Fix: `_mark_applied` saves the day it was first seen applied.
+- **Education was never filled from the résumé** (work history was): the section stayed empty. Fix:
+  `profiles/education_parse.py`. Check: parse the uploaded résumé and compare with its education section.
+- **A rejected job stayed in the Apply Queue on the same page**: the queue is drawn once. Fix: Reject and Closed call
+  `ApplyQueueDrop`. Check: reject a queued job on the Dashboard and watch the queue and its count.
+- **Closed jobs that were saved stayed in the Search results**; they now leave it and stay on the Dashboard.
+
 ## Earlier bugs (before 2026-10-06)
 
 ### Data safety

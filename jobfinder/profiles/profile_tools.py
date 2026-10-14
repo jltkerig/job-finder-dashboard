@@ -332,9 +332,11 @@ def resume_suggestions(text):
                 history.append({"role": preceding[-2], "company": preceding[-1], "dates": line[:100]})
         if len(history) >= 12:
             break
+    from jobfinder.profiles.education_parse import parse_education  # here: that module imports this one
     parts = name.split()
     return {"first_name": parts[0] if parts else "", "last_name": " ".join(parts[1:]) if parts else "",
-            "home_location": location, "skills": detect_skills(text), "work_history": history}
+            "home_location": location, "skills": detect_skills(text), "work_history": history,
+            "education": parse_education(text)}
 
 
 # Skills that usually go together. A small curated list; the jobs Job Finder has found add to it (see related_skills).

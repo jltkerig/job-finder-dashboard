@@ -134,10 +134,13 @@ def block_domain(company_id):
             return api_error("E3212", "This is the feed domain, not the employer domain. Block the company instead.", 400)
         if not row or not row.get("domain"):
             return api_error("E3210", "No domain was available to block.", 404)
-        from jobfinder.search.company_check import is_aggregator
+        from jobfinder.search.company_check import is_aggregator, is_ats_host
         host = urlparse(row["domain"] if "://" in row["domain"] else "//" + row["domain"]).hostname or ""
         if is_aggregator(host):
             return api_error("E3213", "That is a job site (like LinkedIn), not the employer. Block the company instead.", 400)
+        if is_ats_host(host) or host == "boards.example":
+            return api_error("E3213", "That is a hiring system many employers share (like Greenhouse or Ashby), not "
+                                      "this employer's own website. Block the company instead.", 400)
         add_domain_to_blocklist(row["domain"])
         return jsonify({"status": "blocked", "domain": row["domain"]})
     except Error as error:

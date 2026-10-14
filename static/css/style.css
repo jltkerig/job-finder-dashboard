@@ -1046,7 +1046,7 @@ header, .site-footer { background:#1f2937; color:#f5f7fa; border-color:#394657; 
 .footer-social svg { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; flex:none; }
 .footer-tech { margin-top:12px; padding-top:12px; border-top:1px solid #435164; color:#cbd5e1; text-align:left; line-height:1.5; }
 .profile-layout { grid-template-columns:minmax(180px,1fr) minmax(0,3fr); }
-.profile-layout .profile-summary-card { order:1; }
+.profile-layout > .profile-summary-card, .profile-layout > .profile-side { order:1; }
 .profile-layout .profile-panel { order:2; }
 .saved-job-grid { display:grid; }
 .saved-job-card { min-width:0; }
@@ -1074,7 +1074,7 @@ header, .site-footer { background:#1f2937; color:#f5f7fa; border-color:#394657; 
   .site-footer { padding:20px 16px; }
   .footer-main { align-items:flex-start; flex-direction:column; }
   .profile-layout { grid-template-columns:1fr; }
-  .profile-layout .profile-summary-card { order:0; }
+  .profile-layout > .profile-summary-card, .profile-layout > .profile-side { order:0; }
   .profile-layout .profile-panel { order:1; }
   .credibility-legend { display:flex; }
   .saved-job-card .compact-editor > button { width:100%; }
@@ -1322,6 +1322,7 @@ body[data-page="rejected"] .rejected-card .card-actions > button { flex:1 1 180p
 .skill-chip-list { display:flex; flex-wrap:wrap; gap:7px; margin:12px 0; }
 .skill-chip { display:inline-flex; align-items:center; gap:6px; padding:5px 8px; border:1px solid #bdcad8; border-radius:20px; background:#fff; color:#263748; font-size:.84rem; }
 .skill-chip button { border:0; background:transparent; color:#23364b; cursor:pointer; font-size:1.2rem; line-height:1; }
+.skill-chip-found { border-color:#3d6fb4; background:#e8f0fb; box-shadow:0 0 0 3px rgba(61,111,180,.25); }
 .profile-avatar { padding:0; overflow:hidden; cursor:pointer; }
 .profile-avatar img { width:100%; height:100%; object-fit:cover; }
 .profile-summary-card strong,.profile-summary-card span { overflow-wrap:anywhere; }
@@ -1430,10 +1431,22 @@ body[data-page="dashboard"] .saved-job-card { display: block; padding: 0; }
 
 /* Profile: even 18px spacing between the grey boxes, and a name card sized to its contents. */
 .profile-form .profile-subsection { margin: 0; }
-.profile-layout .profile-summary-card { align-self: start; justify-content: flex-start; min-height: 0; }
+.profile-layout .profile-summary-card { justify-content: flex-start; min-height: 0; }
+.profile-layout > .profile-summary-card { align-self: start; }
+/* The name card and the Job Apply Stats box stack in one column that stays in view while the form scrolls. */
+.profile-side { display: flex; flex-direction: column; gap: 18px; align-self: start; min-width: 0; }
 @media (min-width: 761px) {
-	.profile-layout .profile-summary-card { position: sticky; top: 84px; }
+	.profile-layout > .profile-summary-card, .profile-side { position: sticky; top: 84px; }
 }
+.profile-stats-card { background: #fff; border: 1px solid #ddd; border-radius: 10px; padding: 16px; }
+.profile-stats-card h2 { margin: 0 0 8px; font-size: 1rem; text-align: center; }
+.details-all-field .bordered-button { min-width: 158px; white-space: nowrap; }
+.profile-stats-card h3 { margin: 16px 0 6px; font-size: .9rem; text-align: center; }
+.profile-stats-card dl { margin: 0; }
+.profile-stats-card dl > div { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 7px 0; border-top: 1px solid #e3e6ea; font-size: .9rem; }
+.profile-stats-card dt { color: #1f2937; }
+.profile-stats-card dd { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; color: #111827; }
+.profile-stats-card .stat-total { font-size: 1rem; font-weight: 700; }
 .profile-subsection h3 label { font: inherit; color: inherit; cursor: text; }
 /* The city row moved out of .form-field into a grey box: give it the same input look. */
 .profile-subsection .city-add-row input, .profile-subsection .city-add-row select { width: 100%; padding: 11px 12px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #111827; font: inherit; }
@@ -1972,9 +1985,8 @@ body[data-page="search"] #results-table .details-blocks .bordered-button { min-h
 .top-picks-head { display:flex; justify-content:space-between; align-items:center; gap:12px; }
 .top-picks-head h2 { margin:0; font-size:1.15rem; }
 .top-picks-list { list-style:none; margin:14px 0; padding:0; display:grid; gap:8px; }
-.top-pick { display:grid; grid-template-columns:28px 20px 1fr auto; gap:10px; align-items:start; padding:12px 14px; border:1px solid #e3e6ea; border-radius:8px; background:#fafbfc; }
+.top-pick { display:grid; grid-template-columns:20px 1fr auto; gap:10px; align-items:start; padding:12px 14px; border:1px solid #e3e6ea; border-radius:8px; background:#fafbfc; }
 .top-pick.not-a-fit { opacity:.6; }
-.top-pick-rank { width:26px; height:26px; border-radius:50%; background:#e8eef7; color:#2a4a7a; font-weight:700; font-size:.85rem; display:flex; align-items:center; justify-content:center; }
 .top-pick input { margin-top:5px; }
 .top-pick-title { display:block; font-weight:600; cursor:pointer; line-height:1.3; }
 .top-pick-company { display:block; color:#646c77; font-size:.9rem; }
@@ -1993,7 +2005,7 @@ body[data-page="search"] #results-table .details-blocks .bordered-button { min-h
 .top-pick-buttons { display:flex; gap:6px; }
 .top-pick-buttons .bordered-button { padding:6px 12px; font-size:.82rem; min-height:0; }
 .top-pick-buttons .bordered-button:disabled { opacity:.5; cursor:default; }
-@media (max-width: 640px) { .top-pick { grid-template-columns:26px 20px 1fr; } .top-pick-actions { grid-column:3; flex-direction:row; align-items:center; } }
+@media (max-width: 640px) { .top-pick { grid-template-columns:20px 1fr; } .top-pick-actions { grid-column:2; flex-direction:row; align-items:center; } }
 .top-picks-actions .loading::before { content:""; display:inline-block; width:14px; height:14px; margin-right:8px; vertical-align:-2px; border:2px solid #c9ced6; border-top-color:#2a4a7a; border-radius:50%; animation:top-picks-spin .8s linear infinite; }
 @keyframes top-picks-spin { to { transform:rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .top-picks-actions .loading::before { animation-duration:2.4s; } }
@@ -2073,7 +2085,7 @@ body[data-page="search"] #results-table tr.result-row td.row-actions .row-action
   font-size:.82rem !important; line-height:1.2; display:inline-flex; align-items:center; justify-content:center; }
 .top-pick-buttons .bordered-button { box-sizing:border-box; min-width:76px; height:30px; padding:4px 10px;
   display:inline-flex; align-items:center; justify-content:center; font-size:.82rem; }
-.apply-queue-files { display:flex; gap:12px; margin-top:4px; font-size:.85rem; }
+.apply-queue-files { display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; margin-top:6px; font-size:.85rem; }
 .apply-queue-job { display:flex; flex-direction:column; }
 .apply-queue-needs { margin-top:4px; font-size:.85rem; color:#b45309; font-weight:600; }
 /* Dashboard: select saved jobs and delete them together (static/js/bulk-delete.js) */
@@ -2096,9 +2108,6 @@ body[data-page="dashboard"] .queued-note { padding:6px 12px; border-radius:6px; 
   body[data-page="dashboard"] .saved-job-summary { flex-wrap:wrap; }
   body[data-page="dashboard"] .summary-actions { order:3; width:100%; padding-left:34px; }
 }
-
-/* Apply Queue: Combine puts the résumé and cover letter into one PDF (static/js/apply-queue.js) */
-.apply-queue-combine { margin-left:6px; padding:3px 10px; min-height:0; font-size:.82rem; position:relative; top:-5px; }
 
 /* Search results: the red/green/grey Open / Closed / Unknown dot under each job title */
 #results-table small.job-open-state { display:flex; align-items:center; gap:6px; margin:4px 0 0; font-size:.83rem; font-weight:600; }
@@ -2150,6 +2159,5 @@ body[data-page="search"] #results-table td[data-label="Listing"] .inline-action-
 .top-pick-chips { margin-top:10px; }
 .top-pick-refreshed { margin:8px 0 0; font-size:.82rem; font-weight:600; color:#1a7f37; }
 .top-pick-buttons .top-pick-block { grid-column:1 / -1; }
-.top-pick-rank { width:auto; height:auto; border-radius:0; background:none; color:#000; font-size:1.5rem; line-height:1; margin-top:2px; }
 /* Re-sorting the Apply Queue moves its rows: they must not be scroll anchors, or the page follows a row that moved */
 #apply-queue .apply-queue-list { overflow-anchor:none; }

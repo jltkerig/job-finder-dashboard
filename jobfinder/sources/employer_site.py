@@ -249,7 +249,7 @@ HIRING_HOSTS = ("icims.com", "myworkdayjobs.com", "greenhouse.io", "lever.co", "
                 "successfactors.eu", "ultipro.com", "paylocity.com", "dayforcehcm.com", "paycomonline.net", "recruitingbypaycor.com",
                 "teamtailor.com", "breezy.hr", "phenompeople.com", "avature.net", "darwinbox.in", "darwinbox.com", "fountain.com",
                 "paradox.ai", "recruiterbox.com", "trakstar.com", "bullhornstaffing.com", "recruitcrm.io", "beamery.com",
-                "oraclecloud.com", "adp.com", "governmentjobs.com")
+                "oraclecloud.com", "adp.com", "governmentjobs.com", "ats.rippling.com")
 
 
 def hiring_system_link(links, company):

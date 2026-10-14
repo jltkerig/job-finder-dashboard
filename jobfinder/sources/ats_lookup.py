@@ -12,7 +12,8 @@ from jobfinder.sources.job_listings import canonical_url
 
 # Systems whose board address is just the company's name, tried in this order.
 SYSTEMS = (("ashby", "slug"), ("greenhouse", "slug"), ("lever", "slug"), ("workable", "slug"),
-           ("smartrecruiters", "company"), ("bamboohr", "slug"), ("recruitee", "slug"), ("teamtailor", "slug"))
+           ("smartrecruiters", "company"), ("bamboohr", "slug"), ("recruitee", "slug"), ("teamtailor", "slug"),
+           ("rippling", "slug"))
 MAX_SLUGS = 3
 _cache = {}
 

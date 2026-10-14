@@ -1,4 +1,5 @@
-"""Recognise job-board pages (UltiPro, Workday, Oracle, iCIMS, Greenhouse, Lever, Ashby, BambooHR, SmartRecruiters).
+"""Recognise job-board pages (UltiPro, Workday, Oracle, iCIMS, Greenhouse, Lever, Ashby, BambooHR, SmartRecruiters,
+Rippling).
 
 identify(url) turns a page address into the settings employer_jobs needs to search that employer's whole
 board, or None when the address is not one of these systems.
@@ -47,6 +48,11 @@ def identify(url):
 
     if host == "jobs.ashbyhq.com":
         return {"system": "ashby", "slug": parts[0]} if parts and parts[0].casefold() not in _NOT_A_BOARD else None
+
+    if host == "ats.rippling.com":
+        # ats.rippling.com/<company>/jobs[/<id>], sometimes with a language first (/en-GB/<company>/jobs)
+        rest = parts[1:] if parts and _LOCALE.match(parts[0]) and len(parts) > 1 else parts
+        return {"system": "rippling", "slug": rest[0]} if rest and rest[0].casefold() not in _NOT_A_BOARD | {"jobs"} else None
 
     match = re.fullmatch(r"([a-z0-9-]+)\.bamboohr\.com", host)
     if match and match.group(1) not in _NOT_A_BOARD:

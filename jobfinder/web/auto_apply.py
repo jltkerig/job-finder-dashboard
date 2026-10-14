@@ -195,6 +195,9 @@ def mark_queue_applied(company_id):
         cursor = connection.cursor()
         cursor.execute("UPDATE companies SET is_kept = 1, application_status = 'Applied' WHERE id = %s", (company_id,))
         applied_dates.save(cursor, company_id, "Applied")
+        cursor.execute("SELECT listing_details FROM companies WHERE id = %s", (company_id,))
+        row = cursor.fetchone()
+        applied_on = applied_dates.add_to([{"listing_details": row[0] if row else ""}])[0]["applied_on"]
         connection.commit()
     except Error as error:
         return api_error("E3243", f"Could not mark it applied: {error}", 500)
@@ -203,4 +206,5 @@ def mark_queue_applied(company_id):
             cursor.close()
         if connection:
             connection.close()
-    return jsonify({"status": "applied", "company_id": company_id})
+    # The date it was saved under (the Dashboard's Applied By Month counts the job in that month).
+    return jsonify({"status": "applied", "company_id": company_id, "applied_on": applied_on})

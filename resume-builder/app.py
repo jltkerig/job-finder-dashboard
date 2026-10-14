@@ -14,6 +14,7 @@ import design
 import document_import
 import documents
 import jobfinder_db
+import paging
 import profile_import
 import references
 import resume_file
@@ -92,12 +93,13 @@ def index():
     past_jobs = [" at ".join(p for p in (w["role"], w["company"]) if p) for w in (profile or {}).get("work_history", [])]
     past_jobs += [r["user_job"] for r in references.load() if r["user_job"]]
     # Jobs the uploaded résumé lists that the Profile doesn't have yet: offered, never added without a click.
-    resume_jobs = []
+    resume_jobs, resume_schools = [], []
     if profile and resume_file.current_info():
         try:
             resume_jobs = profile_import.new_jobs(resume_file.current_text(), profile)
+            resume_schools = profile_import.new_schools(resume_file.current_text(), profile)
         except Exception:  # an unreadable résumé just means no offer
-            resume_jobs = []
+            resume_jobs, resume_schools = [], []
     # The same for the reference documents, plus skills they name: offered with tick boxes, added only on request.
     document_finds = {"jobs": [], "skills": [], "details": [], "people": []}
     if profile:
@@ -107,12 +109,17 @@ def index():
                               "people": document_import.reference_suggestions(profile, references.load())}
         except Exception:  # an unreadable document just means no suggestions
             pass
+    all_builds = builds.list_builds()
+    saved, saved_page, saved_pages = paging.paginate(all_builds, request.args.get("page", 1, type=int))
     return render_template("index.html", profile=profile, profile_error=profile_error, resume_jobs=resume_jobs,
+                           resume_schools=resume_schools,
                            document_finds=document_finds, education_degrees=jobfinder_db.EDUCATION_DEGREES,
                            reference_jobs={r['id']: document_import.job_index_for(r, profile) for r in references.load()} if profile else {},
                            profile_version=jobfinder_db.profile_version(profile) if profile else "", detail_labels=document_import.DETAIL_LABELS,
                            **_design_context(),
-                           resume=resume_file.current_info(), builds=builds.list_builds(),
+                           resume=resume_file.current_info(), builds=saved, builds_page=saved_page,
+                           builds_pages=saved_pages, builds_per_page=paging.PER_PAGE,
+                           builds_links=paging.page_links(saved_page, saved_pages), builds_total=len(all_builds),
                            connector=connector.status(), output_dir=config.OUTPUT_DIR,
                            references=references.load(), relationships=RELATIONSHIPS,
                            past_jobs=list(dict.fromkeys(j for j in past_jobs if j)), documents=documents.load(),

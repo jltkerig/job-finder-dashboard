@@ -234,6 +234,8 @@
       {% if resume_jobs %}<dt></dt><dd><p class="status status-warn">Your résumé lists {{ resume_jobs|length }} job{{ 's' if resume_jobs|length != 1 }} that {{ 'are' if resume_jobs|length != 1 else 'is' }} not in your Profile yet: {% for j in resume_jobs %}{{ j.role }}{% if j.company %} at {{ j.company }}{% endif %}{{ '; ' if not loop.last }}{% endfor %}.</p>
         <form method="post" action="{{ url_for('fill_profile_from_resume') }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}" /><button class="bordered-button" type="submit">Add them to my Profile</button></form></dd>{% endif %}
       <dt>Education</dt><dd>{% for e in profile.education or [] %}<div>{{ e.degree or 'School' }}{% if e.major %} in {{ e.major }}{% endif %}{% if e.minor %} (minor: {{ e.minor }}){% endif %}, {{ e.school }}{% if e.start_date or e.end_date %} <span class="field-help">({{ e.start_date or '?' }} – {{ e.end_date or '?' }})</span>{% endif %}{% if e.gpa %} <span class="field-help">GPA {{ e.gpa }}</span>{% endif %}</div>{% else %}—{% endfor %}</dd>
+      {% if resume_schools %}<dt></dt><dd><p class="status status-warn">Your résumé lists {{ resume_schools|length }} school{{ 's' if resume_schools|length != 1 }} that {{ 'are' if resume_schools|length != 1 else 'is' }} not in your Profile yet: {% for s in resume_schools %}{{ s.degree or 'School' }}{% if s.major %} in {{ s.major }}{% endif %}, {{ s.school }}{{ '; ' if not loop.last }}{% endfor %}.</p>
+        <form method="post" action="{{ url_for('fill_profile_from_resume') }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}" /><button class="bordered-button" type="submit">Add them to my Profile</button></form></dd>{% endif %}
       <dt>Skills</dt><dd>{% for s in profile.skills %}<span class="chip">{{ s }}</span>{% else %}—{% endfor %}</dd>
     </dl>
     {% if document_finds.jobs or document_finds.skills or document_finds.details %}
@@ -485,7 +487,7 @@
 </details>
 </section>
 
-<section class="card wide">
+<section class="card wide" id="saved-builds">
   <h2>Saved Résumés and Cover Letters</h2>
   <p class="field-help">Saved in <code>{{ output_dir }}</code></p>
   {% if builds %}
@@ -506,6 +508,18 @@
     {% endfor %}
     </tbody>
   </table></div>
+  {% if builds_pages > 1 %}
+  <nav class="pager" aria-label="Pages of saved résumés and cover letters">
+    <span class="pager-count">Showing {{ (builds_page - 1) * builds_per_page + 1 }}–{{ (builds_page - 1) * builds_per_page + builds|length }} of {{ builds_total }}</span>
+    {% if builds_page > 1 %}<a class="bordered-button" href="{{ url_for('index', page=builds_page - 1) }}#saved-builds" rel="prev">Previous</a>{% endif %}
+    {% for number in builds_links %}
+      {% if number is none %}<span class="pager-gap" aria-hidden="true">…</span>
+      {% elif number == builds_page %}<span class="bordered-button pager-current" aria-current="page">{{ number }}</span>
+      {% else %}<a class="bordered-button" href="{{ url_for('index', page=number) }}#saved-builds">{{ number }}</a>{% endif %}
+    {% endfor %}
+    {% if builds_page < builds_pages %}<a class="bordered-button" href="{{ url_for('index', page=builds_page + 1) }}#saved-builds" rel="next">Next</a>{% endif %}
+  </nav>
+  {% endif %}
   {% else %}
     <p>Nothing yet. Ask Claude Desktop to write one.</p>
   {% endif %}

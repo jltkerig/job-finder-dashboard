@@ -87,6 +87,7 @@
             </h3>
             <p class="field-help">Schools you attended. GPA and minor are optional.
             </p>
+            <p class="field-help" id="education-note" data-source="{{ resume_source or '' }}" data-schools='{{ (resume_education or [])|tojson }}' hidden></p>
             <div id="education-list" data-degrees='{{ (education_degrees or [])|tojson }}'>
             </div><button class="bordered-button secondary-action" id="add-education" type="button">Add School</button>
           </section>
@@ -131,8 +132,28 @@
           </div>
         </form>
       </section>
+      <div class="profile-side">
       <aside class="profile-summary-card"><button class="profile-avatar" id="change-avatar" type="button" aria-label="Upload or change profile photo">{% if profile.avatar_data %}<img src="{{ profile.avatar_data }}" alt="" />{% elif profile.first_name %}{{ profile.first_name[0]|upper }}{% else %}U{% endif %}</button><input id="avatar-file" type="file" accept="image/png,image/jpeg,image/webp" hidden /><small>Click photo to change</small><strong>{{ (profile.first_name ~ ' ' ~ profile.last_name)|trim if profile.first_name or profile.last_name else 'Username' }}</strong><span>{{ profile.primary_job_title or 'Add a primary job title' }}</span><span>{{ profile.home_location or 'Add your location' }}</span>
       </aside>
+      <aside class="profile-stats-card" aria-labelledby="apply-stats-heading">
+        {% set stage = {'applied': counts.applied or 0, 'recruiter': counts.recruiter or 0, 'interview': counts.interview or 0} %}
+        {% set by_month = applied_months or {} %}
+        <h2 id="apply-stats-heading">Job Apply Stats</h2>
+        <dl>
+          <div><dt>In Apply Queue</dt><dd data-stat="queue">{{ apply_queue|length }}</dd></div>
+          <div class="stat-total"><dt>Applied In Total</dt><dd data-stat="total">{{ stage.applied + stage.recruiter + stage.interview }}</dd></div>
+          <div><dt>Applied</dt><dd data-stat="applied">{{ stage.applied }}</dd></div>
+          <div><dt>Talking With Recruiter</dt><dd>{{ stage.recruiter }}</dd></div>
+          <div><dt>Interview</dt><dd>{{ stage.interview }}</dd></div>
+        </dl>
+        <h3>Applied By Month</h3>
+        <dl>
+          {% for month in by_month.months %}<div><dt>{{ month.label }}</dt><dd data-stat="month-{{ month.key }}">{{ month.count }}</dd></div>
+          {% endfor %}{% if by_month.earlier %}<div><dt>Earlier</dt><dd>{{ by_month.earlier }}</dd></div>{% endif %}
+          {% if by_month.undated %}<div><dt>No Date Saved</dt><dd>{{ by_month.undated }}</dd></div>{% endif %}
+        </dl>
+      </aside>
+      </div>
     </div>
 
 {% if apply_queue %}
@@ -222,7 +243,7 @@
                 </form>
               </section>
             </div>
-            <div class="card-footer-actions" aria-label="Remove or block">{% if company.source_type not in feed_names %}<button class="text-action block-action destructive-action" type="button" data-company-id="{{ company.id }}" data-domain="{{ company.domain or '' }}" title="Hide this website and all future jobs from it.">Block Domain</button>{% endif %}<button class="text-action block-company-action destructive-action" type="button" data-company-id="{{ company.id }}" data-company-name="{{ company.name or '' }}" title="Exclude this company name from future searches.">Block Company</button><button class="text-action reject-action destructive-action" type="button" data-company-id="{{ company.id }}" data-company-name="{{ company.name or 'this listing' }}" title="Hide this job, but allow other jobs from this company.">Reject</button>
+            <div class="card-footer-actions" aria-label="Remove or block">{% if company.source_type not in feed_names and not company.domain_is_job_site %}<button class="text-action block-action destructive-action" type="button" data-company-id="{{ company.id }}" data-domain="{{ company.domain or '' }}" title="Hide this website and all future jobs from it.">Block Domain</button>{% endif %}<button class="text-action block-company-action destructive-action" type="button" data-company-id="{{ company.id }}" data-company-name="{{ company.name or '' }}" title="Exclude this company name from future searches.">Block Company</button><button class="text-action reject-action destructive-action" type="button" data-company-id="{{ company.id }}" data-company-name="{{ company.name or 'this listing' }}" title="Hide this job, but allow other jobs from this company.">Reject</button>
               <form action="/delete-kept/{{ company.id }}" method="post" class="delete-result-form" onsubmit="return confirm('Permanently delete this saved job? This cannot be undone.');"><input type="hidden" name="csrf_token" value="{{ csrf_token }}" /><button class="text-action danger-action destructive-action" type="submit">Delete</button></form>
             </div>
           </div>
@@ -287,5 +308,5 @@
     </div>
   </div>
 </footer>
-<script src="/static/js/charts.js?v={{ asset_version }}"></script><script src="/static/js/avoid-terms.js?v={{ asset_version }}"></script>  <script src="/static/js/apply-queue.js?v={{ asset_version }}"></script><script src="/static/js/bulk-delete.js?v={{ asset_version }}"></script><script src="/static/js/applied-date.js?v={{ asset_version }}"></script><script src="/static/js/saved-apply.js?v={{ asset_version }}"></script>
+<script src="/static/js/reject-reason.js?v={{ asset_version }}"></script><script src="/static/js/charts.js?v={{ asset_version }}"></script><script src="/static/js/avoid-terms.js?v={{ asset_version }}"></script>  <script src="/static/js/apply-queue.js?v={{ asset_version }}"></script><script src="/static/js/bulk-delete.js?v={{ asset_version }}"></script><script src="/static/js/applied-date.js?v={{ asset_version }}"></script><script src="/static/js/saved-apply.js?v={{ asset_version }}"></script>
 </body></html>

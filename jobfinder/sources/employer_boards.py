@@ -1,4 +1,5 @@
-"""Adapters for boards that publish every opening at once: Greenhouse, Lever, Ashby, BambooHR, Recruitee, Teamtailor."""
+"""Adapters for boards that publish every opening at once: Greenhouse, Lever, Ashby, BambooHR, Recruitee, Teamtailor,
+Rippling."""
 
 import html as html_lib
 import json
@@ -63,6 +64,10 @@ class Lever(_WholeBoard):
         match = re.search(r"/([0-9a-f]{8}-[0-9a-f-]{27})", url)
         return match.group(1) if match else None
 
+    def workplace(self, job):
+        """Remote, Hybrid or Onsite as Lever lists the job, or None."""
+        return _arrangement(job.get("workplaceType"))
+
     def detail(self, listing, http, employer):
         job = listing["raw"]
         categories = job.get("categories") or {}
@@ -90,6 +95,11 @@ class Ashby(_WholeBoard):
     def _id_from(self, url):
         match = re.search(r"/([0-9a-f]{8}-[0-9a-f-]{27})", url)
         return match.group(1) if match else None
+
+    def workplace(self, job):
+        """Remote, Hybrid or Onsite as Ashby lists the job, or None. Ashby's page data says TELECOMMUTE for hybrid jobs
+        too (isRemote is true for them), so workplaceType is the one to trust."""
+        return _arrangement(job.get("workplaceType"))
 
     def detail(self, listing, http, employer):
         job = listing["raw"]
@@ -212,3 +222,46 @@ class Teamtailor(_WholeBoard):
         arrangement = "Remote" if remote == "fully" else "Hybrid" if remote == "hybrid" else None
         return _opening(employer, title=job.get("title", ""), url=job.get("link", ""), locations=job.get("places") or [],
                         html=job.get("description") or "", arrangement=arrangement)
+
+
+class Rippling(_WholeBoard):
+    """Rippling job boards (ats.rippling.com/<company>/jobs): the board's public list has every opening (name, place,
+    department); each opening's own record has the text, the work type and the date."""
+
+    def __init__(self, config):
+        super().__init__(config)
+        self.slug = config["slug"]
+        self.base = f"https://api.rippling.com/platform/api/ats/v1/board/{self.slug}/jobs"
+
+    def _fetch(self, http):
+        jobs = _get_json(http, self.base)
+        return [dict(job, id=str(job.get("uuid") or "").lower(), title=str(job.get("name") or "").strip())
+                for job in jobs if isinstance(job, dict) and job.get("uuid")] if isinstance(jobs, list) else []
+
+    def _first_place(self, job):
+        return str((job.get("workLocation") or {}).get("label") or "")
+
+    def _id_from(self, url):
+        match = re.search(r"/jobs/([0-9a-f]{8}-[0-9a-f-]{27})", url, re.I)
+        return match.group(1).lower() if match else None
+
+    def detail(self, listing, http, employer):
+        job = listing["raw"]
+        info = {}
+        try:
+            info = _get_json(http, f"{self.base}/{job['id']}")
+        except (requests.RequestException, ValueError):
+            pass  # the list alone still gives a title, a place and a link
+        if not isinstance(info, dict):
+            info = {}
+        places = [str(place) for place in info.get("workLocations") or [] if place] or [self._first_place(job)]
+        words = info.get("description") or {}
+        employment = str((info.get("employmentType") or {}).get("label") or "").upper()
+        opening = _opening(
+            employer, title=job["title"], url=job.get("url") or f"https://ats.rippling.com/{self.slug}/jobs/{job['id']}",
+            locations=places, html=(words.get("role") or "") + (words.get("company") or ""),
+            posted=str(info.get("createdOn") or "")[:10],
+            schedule="FULL_TIME" if employment.endswith("_FT") else "PART_TIME" if employment.endswith("_PT") else "",
+            arrangement="Hybrid" if any("hybrid" in place.casefold() for place in places) else None)
+        opening["company"] = info.get("companyName") or employer.name
+        return opening

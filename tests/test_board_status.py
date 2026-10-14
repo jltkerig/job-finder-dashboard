@@ -47,5 +47,39 @@ class BoardStatusTests(unittest.TestCase):
         self.assertEqual(http.get.call_count, 1)
 
 
+class BoardWorkplaceTests(unittest.TestCase):
+    def setUp(self):
+        module.clear_cache()
+
+    def test_the_board_says_how_the_job_is_worked(self):
+        job = {"id": JOB, "title": "Graphic Designer", "workplaceType": "Hybrid", "isRemote": True}
+        self.assertEqual(module.board_workplace(URL, http_with([job])), "Hybrid")
+        module.clear_cache()
+        self.assertEqual(module.board_workplace(URL, http_with([dict(job, workplaceType="OnSite")])), "Onsite")
+        module.clear_cache()
+        self.assertEqual(module.board_workplace(URL, http_with([dict(job, workplaceType="Remote")])), "Remote")
+
+    def test_no_answer_when_the_board_is_silent_or_the_job_is_gone(self):
+        self.assertIsNone(module.board_workplace(URL, http_with([{"id": JOB, "title": "X"}])))
+        module.clear_cache()
+        self.assertIsNone(module.board_workplace(URL, http_with([{"id": "other", "workplaceType": "Hybrid"}])))
+        module.clear_cache()
+        self.assertIsNone(module.board_workplace("https://acme.com/jobs/1", http_with([])))
+
+    def test_a_page_that_says_telecommute_is_overruled_by_the_board(self):
+        from unittest.mock import patch
+        from jobfinder.sources.job_listings import extract_jobs
+        html = ('<script type="application/ld+json">{"@type": "JobPosting", "title": "Graphic Designer", '
+                '"jobLocationType": "TELECOMMUTE", "description": "<p>Design things.</p>", "url": "%s", '
+                '"jobLocation": {"@type": "Place", "address": {"addressLocality": "New York City", "addressRegion": "NY"}}}'
+                '</script>' % URL)
+        with patch.object(module, "board_workplace", return_value="Hybrid"):
+            (job,) = extract_jobs(URL, html, ["Graphic Designer"])
+        self.assertEqual(job["type"], "Hybrid")
+        with patch.object(module, "board_workplace", return_value=None):
+            (job,) = extract_jobs(URL, html, ["Graphic Designer"])
+        self.assertEqual(job["type"], "Remote")  # no answer from the board: the page's data stands
+
+
 if __name__ == "__main__":
     unittest.main()

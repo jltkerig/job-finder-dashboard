@@ -85,6 +85,7 @@ from jobfinder.sources.employer_jobs import (
     Employer,
     config_key,
     load_employers,
+    posting_domain,
     record_board_result,
     save_discovered,
 )
@@ -365,8 +366,9 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
                        "evidence": opening["evidence"], "location": opening["location"], "matched_title": matched_title,
                        "remote_limited_to": sorted(outcome["remote_limited_to"]),
                        "verification": "Company's own careers site",
-                       "source": employer.adapter.base if hasattr(employer.adapter, "base") else employer.domain}
-            inserted = storage.save_company(database, employer.name, opening["title"], outcome["detail_score"], employer.domain,
+                       "source": employer.adapter.base if hasattr(employer.adapter, "base") else posting_domain(employer.domain, job_url)}
+            inserted = storage.save_company(database, employer.name, opening["title"], outcome["detail_score"],
+                                    posting_domain(employer.domain, job_url),
                                     job_url, job_url, outcome["country"],
                                     str(outcome["state_name"] or "")[:100] or None, outcome["location"]["score"],
                                     city=outcome["city"], latitude=outcome["lat"], longitude=outcome["lon"],

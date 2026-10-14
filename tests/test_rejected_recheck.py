@@ -171,10 +171,13 @@ class ClosedJobs(unittest.TestCase):
         self.assertEqual(job_retention.CLOSED_KEEP_DAYS, 7)
         self.assertIn("Applied", job_retention.SAVED_STATUSES)
 
-    def test_closed_unsaved_jobs_are_hidden_from_the_results(self):
-        source = web_source()
-        self.assertIn('row.get("job_open_status") == "Closed" and not row.get("is_kept")', source)
-        self.assertIn('row.get("application_status") not in SAVED_STATUSES', source)
+    def test_closed_jobs_are_hidden_from_the_results_saved_or_not(self):
+        from jobfinder.web.listing_queries import hide_closed
+        rows = [{"id": 1, "job_open_status": "Open"}, {"id": 2, "job_open_status": "Closed"},
+                {"id": 3, "job_open_status": "Closed", "is_kept": 1, "application_status": "Saved"},
+                {"id": 4, "job_open_status": "Unknown"}, {"id": 5}]
+        self.assertEqual([row["id"] for row in hide_closed(rows)], [1, 4, 5])
+        self.assertIn("rows = hide_closed(rows)", web_source())  # get_companies uses it
 
     def test_every_search_and_refresh_starts_by_re_checking_and_closing(self):
         source = search_source()

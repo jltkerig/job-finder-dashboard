@@ -7,10 +7,11 @@ from zoneinfo import ZoneInfo
 
 from flask import render_template, request
 
+from jobfinder.profiles.education_parse import parse_education
 from jobfinder.profiles.profile_tools import resume_skill_suggestions, parse_work_history, uploaded_resume
 from jobfinder.records.search_skips import TTL_HOURS, latest_decisions
 from jobfinder.sources.job_listings import is_pdf_url
-from jobfinder.web import applied_dates, auto_apply, blocklists, queue_documents
+from jobfinder.web import apply_stats, applied_dates, auto_apply, blocklists, queue_documents
 from jobfinder.web.application_files import RESUME_BUILDER_URL, add_application_files
 from jobfinder.web import listing_queries
 from jobfinder.web import profile_store
@@ -26,6 +27,7 @@ from jobfinder.web.listing_queries import (
     get_companies,
     get_dashboard_counts,
     get_kept_companies,
+    hide_applied,
 )
 from jobfinder.web.profile_store import listing_skill_demand, profile_skill_suggestions
 from jobfinder.web.schema import ensure_keep_column
@@ -45,7 +47,13 @@ def home():
 
     ensure_keep_column()
     schema.ensure_job_tracking_columns()
-    companies = merge_duplicates(get_companies())
+    everything = get_companies()
+    merged = merge_duplicates(everything)
+    # Top 10 learns from the titles you applied to, so they are read before applied jobs leave the results.
+    applied_titles = [company.get("career_job_title") for company in merged
+                      if company.get("application_status") in {"Applied", "Talking With Recruiter", "Interview"}
+                      and company.get("career_job_title")]
+    companies = hide_applied(merged, everything)
 
     running, mode = scraper_status()
     profile = profile_store.get_user_profile()
@@ -77,9 +85,7 @@ def home():
         profile_state=profile.get("state", ""),
         profile_work_preferences=profile.get("work_preferences", []),
         profile_avoid_terms=profile.get("avoid_terms", []),
-        applied_titles=[company.get("career_job_title") for company in companies
-                        if company.get("application_status") in {"Applied", "Talking With Recruiter", "Interview"}
-                        and company.get("career_job_title")],
+        applied_titles=applied_titles,
         auto_queue=auto_apply.auto_queue_pending(auto_apply.read_tuning_settings()),
     )
 
@@ -103,6 +109,7 @@ def user_dashboard():
     resume_skills = resume_skill_suggestions(RESUME_FOLDER, profile.get("skills", []))
     # With no work history saved yet, the form is filled in from the uploaded résumé (nothing is saved until Save Profile).
     resume_history = [] if profile.get("work_history") else parse_work_history(uploaded_resume(RESUME_FOLDER)[1])
+    resume_education = [] if profile.get("education") else parse_education(uploaded_resume(RESUME_FOLDER)[1])
     demanded_skills = [{"skill": skill, "count": count} for skill, count in listing_skill_demand(profile.get("skills", []))]
     apply_queue = add_application_files(auto_apply.get_apply_queue())
     add_job_fit(apply_queue, profile.get("skills", []))  # for sorting the queue by Job Fit
@@ -117,11 +124,13 @@ def user_dashboard():
         profile_changed=request.args.get("profile_changed", type=int),
         education_degrees=schema.EDUCATION_DEGREES,
         counts=get_dashboard_counts(),
+        applied_months=apply_stats.get_applied_by_month(),
         search_history=get_search_history(),
         skill_suggestions=profile_skill_suggestions(profile),
         resume_source=resume_skills[0], resume_skills=resume_skills[1],
         demanded_skills=demanded_skills,
         resume_history=resume_history,
+        resume_education=resume_education,
         fit_updated=request.args.get("fit_updated", type=int),
         filters={"status": status_filter, "state": state_filter, "title": title_filter, "sort": sort_by},
     )

@@ -48,6 +48,18 @@ span.status-warn { border: 0; background: none; padding: 0; }
 .table-wrapper { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: 10px; border-bottom: 1px solid #eee; vertical-align: middle; }
+/* Saved Résumés and Cover Letters: the file names are long, so the list is set in smaller type. */
+.table-wrapper table { font-size: .85rem; }
+.table-wrapper th, .table-wrapper td { padding: 7px 10px; }
+.table-wrapper .bordered-button { min-height: 32px; padding: 4px 12px; font-size: .82rem; white-space: nowrap; }
+.table-wrapper td:nth-child(2), .table-wrapper td:nth-child(4) { white-space: nowrap; }
+.table-wrapper td:first-child { overflow-wrap: anywhere; }
+#saved-builds { scroll-margin-top: 76px; }
+.pager { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 14px 0 0; }
+.pager-count { margin-right: auto; color: #555; font-size: .88rem; }
+.pager .bordered-button { min-width: 36px; min-height: 32px; padding: 4px 10px; font-size: .85rem; }
+.pager-current { background: #1f2937; border-color: #1f2937; color: #fff; }
+.pager-gap { padding: 0 4px; color: #777; }
 td.actions { display: flex; gap: 8px; justify-content: flex-end; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 
