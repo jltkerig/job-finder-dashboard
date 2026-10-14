@@ -322,6 +322,8 @@ class CaptureImport:
             "evidence": [f"Seen on {source_type}", "you applied" if applied else "you saved it" if starred else "matching title"]
                         + (["place read from the description"] if described_place else []),
         }
+        if job.get("easy_apply"):  # LinkedIn's own Easy Apply button; only written when true, so it is never lost
+            new_details["easy_apply"] = True
         details = merge_details(_row_details(row) if row else {}, new_details)
         domain, career_url = self.company_site(company, title, url, location, details, domain)
         details["verification"] = verification_label(details, source_type, company, url)

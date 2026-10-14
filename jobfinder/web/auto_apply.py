@@ -125,6 +125,7 @@ def get_apply_queue():
         if details.get("apply_queued") and row.get("application_status") not in QUEUE_DONE:
             row["url"] = row.get("career_url") or row.get("source_url") or ""
             row["queued_at"] = str(details.get("apply_queued_at") or "")  # when it was added; blank for older ones
+            row["easy_apply"] = bool(details.get("easy_apply"))  # LinkedIn's Easy Apply button was on it
             queue.append(row)
     return queue
 

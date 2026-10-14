@@ -393,6 +393,12 @@ class ImportFilter(unittest.TestCase):
         self.assertEqual(result, ("skipped", "Previously rejected"))
         self.assertEqual(self.queued_ids, [])
 
+    def test_linkedins_easy_apply_button_is_kept_with_the_job(self):
+        self.import_one(import_run(), job(easy_apply=True))
+        self.assertIs(self.saved[0][1]["listing_details"]["easy_apply"], True)
+        self.import_one(import_run(), job())
+        self.assertNotIn("easy_apply", self.saved[1][1]["listing_details"])
+
     def test_the_companys_own_website_is_looked_up_once(self):
         self.employer = {"domain": "acme.com", "careers_url": "https://acme.com/careers", "method": "domain guess",
                          "posting_url": "https://acme.com/careers/web-designer", "evidence": ["employer site: acme.com"]}

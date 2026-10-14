@@ -68,6 +68,9 @@
       const age = found.querySelector(".found-age")?.textContent.replace(/\s+/g, " ").replace(/^on results\s*/i, "").trim();
       if (date) wrap.append(pill("Found", span("stat-plain", age ? `${date} · ${age}` : date)));
     }
+    // LinkedIn's Easy Apply mark, the same one the results table shows beside the job's title.
+    const easy = row.querySelector('td[data-label="Job"] .easy-apply-badge');
+    if (easy) wrap.append(easy.cloneNode(true));
     return wrap;
   }
 
