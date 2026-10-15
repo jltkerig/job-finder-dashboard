@@ -1951,3 +1951,38 @@ body[data-page="search"] .results-toolbar .toolbar-title { padding-right: 140px;
 .companies-filter-box .companies-website-only:hover { border-color: #1f2937; }
 .companies-filter-box .companies-website-only:has(input:checked) { background: #1f2937; border-color: #1f2937; color: #fff; }
 .companies-filter-box .companies-website-only:has(input:focus-visible) { outline: 3px solid #93c5fd; outline-offset: 2px; }
+
+/* Saved Jobs spacing: no extra gap above the heading, and the Filters arrow stays beside the word "Filters". */
+.saved-jobs-panel > summary.saved-jobs-summary { margin-top: 0; margin-bottom: 16px; }
+.saved-jobs-panel:not([open]) > summary.saved-jobs-summary { margin-bottom: 0; }
+.dashboard-filter-panel .filter-heading .filters-chevron { position: static; margin: 0 0 0 6px; }
+.dashboard-filter-panel.filters-collapsed { grid-template-columns: 1fr; }
+.apply-queue-sort { margin-top: 12px; }
+
+/* Saved Jobs card: less padding above and below. */
+.saved-jobs-panel { margin: 16px 0 16px; padding: 12px 18px 14px; }
+.saved-jobs-panel > summary.saved-jobs-summary { margin-bottom: 10px; }
+.saved-jobs-panel .dashboard-filter-panel { margin-bottom: 12px; }
+.saved-jobs-panel .bulk-bar { margin-top: 0; }
+
+/* Saved Jobs filters: "Filters" heading on its own line, then the four boxes and the buttons lined up along the bottom edge. */
+@media (min-width: 900px) {
+  .saved-jobs-panel .dashboard-filter-panel { grid-template-columns: repeat(4, minmax(130px, 1fr)) auto; gap: 10px 12px; align-items: end; }
+  .saved-jobs-panel .dashboard-filter-panel .filter-heading { grid-column: 1 / -1; align-self: start; padding-bottom: 2px; }
+  .saved-jobs-panel .dashboard-filter-panel .filter-actions { grid-column: auto; display: flex; flex-wrap: nowrap; gap: 8px; align-items: flex-end; }
+  .saved-jobs-panel .dashboard-filter-panel .filter-actions > * { flex: 0 0 auto; white-space: nowrap; }
+}
+.saved-jobs-panel .dashboard-filter-panel .form-field { margin: 0; min-width: 0; }
+.saved-jobs-panel .dashboard-filter-panel .form-field > label { display: block; margin: 0 0 4px; }
+.saved-jobs-panel .dashboard-filter-panel input, .saved-jobs-panel .dashboard-filter-panel select { width: 100%; box-sizing: border-box; height: 40px; min-height: 40px; }
+.saved-jobs-panel .dashboard-filter-panel .filter-actions .bordered-button { height: 40px; min-height: 40px; padding-top: 0; padding-bottom: 0; display: inline-flex; align-items: center; }
+.saved-jobs-panel .dashboard-filter-panel.filters-collapsed { grid-template-columns: 1fr; }
+
+/* The Saved Jobs Filters sit in a gray box, like the Search page's. */
+.saved-jobs-panel .dashboard-filter-panel { position: relative; padding: 14px 16px 16px; background: #eef1f4; border: 1px solid #cfd4da; border-radius: 10px; margin-bottom: 14px; }
+.saved-jobs-panel .dashboard-filter-panel.filters-collapsed { padding-bottom: 12px; }
+
+/* Expand all / Collapse all sit at the right end of the bar above the saved jobs; the heading row keeps just the arrow. */
+.saved-jobs-panel > summary .summary-chevron { margin-left: auto; }
+.bulk-bar .collapse-all-actions { margin-left: auto; display: flex; gap: 8px; }
+.bulk-bar { align-items: center; }

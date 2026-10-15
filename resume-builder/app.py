@@ -1,5 +1,6 @@
 """Resume Builder web app: upload the current resume, review and edit what Claude saved, download PDFs."""
 import re
+from datetime import datetime
 import secrets
 import sys
 from io import BytesIO
@@ -18,6 +19,8 @@ import paging
 import profile_import
 import skill_suggest
 import address_suggest
+import backup
+import job_link
 import reference_people
 import references
 import resume_file
@@ -117,6 +120,12 @@ def index():
     found_people = [p for p in document_finds["people"] if not p["is_reference"]]
     reference_sources = {p["name"].casefold(): p["source"] for p in document_finds["people"] if p["is_reference"]}
     all_builds = builds.list_builds()
+    build_search = (request.args.get("q") or "").strip()[:100]  # words typed in the Saved Résumés search box; every word must match
+    if build_search:
+        words = build_search.casefold().split()
+        def _haystack(b):
+            return " ".join(str(b.get(k) or "") for k in ("pdf", "job_title", "company", "updated")).casefold() + (" résumé resume" if b.get("kind") == "resume" else " cover letter")
+        all_builds = [b for b in all_builds if all(word in _haystack(b) for word in words)]
     saved, saved_page, saved_pages = paging.paginate(all_builds, request.args.get("page", 1, type=int))
     return render_template("index.html", profile=profile, profile_error=profile_error, resume_jobs=resume_jobs,
                            resume_schools=resume_schools, resume_links=resume_links, found_people=found_people, reference_sources=reference_sources,
@@ -127,7 +136,7 @@ def index():
                            **_design_context(),
                            resume=resume_file.current_info(), builds=saved, builds_page=saved_page,
                            builds_pages=saved_pages, builds_per_page=paging.PER_PAGE,
-                           builds_links=paging.page_links(saved_page, saved_pages), builds_total=len(all_builds),
+                           builds_links=paging.page_links(saved_page, saved_pages), builds_total=len(all_builds), build_search=build_search,
                            connector=connector.status(), output_dir=config.OUTPUT_DIR,
                            references=references.load(), relationships=RELATIONSHIPS,
                            past_jobs=list(dict.fromkeys(j for j in past_jobs if j)), documents=documents.load(),
@@ -297,6 +306,7 @@ def rename_document(doc_id):
 
 @app.post("/documents/<doc_id>/delete")
 def delete_document(doc_id):
+    backup.safely("before-delete-document")  # a copy of everything first, so a delete or replace can be undone
     try:
         documents.delete(doc_id)
     except KeyError:
@@ -346,6 +356,7 @@ def update_reference(ref_id):
 
 @app.post("/references/<ref_id>/delete")
 def delete_reference(ref_id):
+    backup.safely("before-delete-person")  # a copy of everything first, so a delete or replace can be undone
     try:
         references.delete(ref_id)
     except KeyError:
@@ -539,6 +550,43 @@ def job_title_matches():
     return jsonify({"matches": onet.title_matches((request.args.get("q") or "")[:100]) if onet else []})
 
 
+@app.template_filter("nice_date")
+def nice_date(value):
+    """2026-10-15T10:51:36 -> Oct 15, 2026 at 10:51 AM"""
+    try:
+        when = datetime.fromisoformat(str(value))
+    except ValueError:
+        return str(value).replace("T", " ")
+    return when.strftime("%b %d, %Y at %I:%M %p").replace(" 0", " ").replace("at 0", "at ")
+
+
+@app.post("/job-link/read")
+def job_link_read():
+    """Read the posting at a pasted link (nothing is saved); the page then offers the request for Claude Desktop."""
+    return jsonify(job_link.read(request.form.get("url", "")))
+
+
+@app.post("/job-link/request")
+def job_link_request():
+    url = job_link.clean_url(request.form.get("url", ""))
+    if not url:
+        return jsonify({"request": ""}), 400
+    return jsonify({"request": job_link.request_text(url, request.form.get("title", "").strip()[:150],
+                                                     request.form.get("company", "").strip()[:150],
+                                                     request.form.get("text", "")[:job_link.MAX_TEXT]),
+                    "started": datetime.now().isoformat(timespec="seconds")})
+
+
+@app.get("/job-link/files")
+def job_link_files():
+    """The résumés and cover letters saved since a time (the page asks every few seconds after the request is sent)."""
+    since = request.args.get("since", "")
+    found = [b for b in builds.list_builds() if b.get("updated", "") >= since and b.get("pdf_exists") and not b.get("restored")]
+    found.sort(key=lambda b: (b.get("kind") != "resume", b.get("updated", "")))
+    return jsonify({"files": [{"pdf": b["pdf"], "kind": b.get("kind", ""), "job_title": b.get("job_title", ""), "company": b.get("company", ""),
+                               "url": url_for("download", filename=b["pdf"], download=1)} for b in found]})
+
+
 @app.get("/address-suggest")
 def address_suggestions():
     try:
@@ -656,6 +704,7 @@ def save_profile():
 
 @app.post("/upload")
 def upload():
+    backup.safely("before-upload")  # a copy of everything first, so a delete or replace can be undone
     file = request.files.get("resume")
     if not file or not file.filename:
         flash("Choose a PDF or Word file first.", "error")
@@ -742,6 +791,9 @@ def edit_build(filename):
         draft = builds.load_draft(filename)
     except (ValueError, FileNotFoundError):
         abort(404)
+    if draft.get("restored"):  # a PDF put back from a copy: its editable text was lost, so it can be downloaded but not edited
+        flash("This file was restored from a saved copy, so it has no text to edit. You can download it.", "error")
+        return redirect(url_for("index") + "#saved-builds")
     if request.method == "POST":
         content = _resume_from_form() if draft["kind"] == "resume" else _letter_from_form()
         try:
@@ -764,6 +816,7 @@ def edit_build(filename):
 
 @app.post("/build/<path:filename>/delete")
 def delete_build(filename):
+    backup.safely("before-delete-file")  # a copy of everything first, so a delete or replace can be undone
     try:
         draft = builds.load_draft(filename)
     except (ValueError, FileNotFoundError):
@@ -774,4 +827,6 @@ def delete_build(filename):
 
 
 if __name__ == "__main__":
+    backup.safely("start")
+    backup.start_hourly()
     app.run(host="127.0.0.1", port=config.PORT, debug=False)

@@ -24,6 +24,7 @@ DATA_DIR = Path(os.getenv("RESUME_DATA_DIR", APP_DIR / "data")).resolve()
 UPLOAD_DIR = DATA_DIR / "current-resume"
 DRAFTS_DIR = DATA_DIR / "drafts"
 FONT_DIR = DATA_DIR / "fonts"  # Google Fonts downloaded when a design uses them
+BACKUP_DIR = Path(os.getenv("RESUME_BACKUP_DIR", JOB_FINDER_DIR.parent / "resume-builder-backups")).resolve()  # snapshots of everything above
 
 PORT = int(os.getenv("RESUME_BUILDER_PORT") or 5001)
 JOB_FINDER_URL = os.getenv("JOB_FINDER_URL", "http://127.0.0.1:5000")

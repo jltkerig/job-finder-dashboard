@@ -160,9 +160,7 @@
     <details class="saved-jobs-panel history-collapse" id="saved-jobs-panel" open>
     <summary class="section-heading-row saved-jobs-summary">
       <h2>Saved Jobs
-      </h2>{% if companies %}
-      <div class="collapse-all-actions"><button class="bordered-button secondary-action" id="expand-all-jobs" type="button">Expand all</button><button class="bordered-button secondary-action" id="collapse-all-jobs" type="button">Collapse all</button>
-      </div>{% endif %}<span class="summary-chevron" aria-hidden="true"></span>
+      </h2><span class="summary-chevron" aria-hidden="true"></span>
     </summary>
     <form class="filter-panel dashboard-filter-panel" method="get" action="/dashboard">
       <div class="filter-heading"><span class="filter-icon" aria-hidden="true">⌕</span><strong>Filters</strong>
@@ -182,7 +180,8 @@
     </p>
 
 {% if companies %}
-    <div class="bulk-bar" id="bulk-bar"><label class="bulk-all"><input type="checkbox" id="bulk-all" /> Select all {{ companies|length }} shown</label><span id="bulk-count" class="field-help" role="status">None selected</span><button id="bulk-delete" class="bordered-button destructive-action" type="button" disabled>Delete Selected</button></div>
+    <div class="bulk-bar" id="bulk-bar"><label class="bulk-all"><input type="checkbox" id="bulk-all" /> Select all {{ companies|length }} shown</label><span id="bulk-count" class="field-help" role="status">None selected</span><button id="bulk-delete" class="bordered-button destructive-action" type="button" disabled>Delete Selected</button><div class="collapse-all-actions"><button class="bordered-button secondary-action" id="expand-all-jobs" type="button">Expand all</button><button class="bordered-button secondary-action" id="collapse-all-jobs" type="button">Collapse all</button>
+      </div></div>
     <div class="saved-job-grid">{% for company in companies %}{% set listing_status = (company.job_open_status or 'Unknown')|lower %}{% set domain_url = company.domain if company.domain and '://' in company.domain else ('https://' ~ company.domain ~ '/' if company.domain else '') %}
       <article class="saved-job-card" id="job-{{ company.id }}" data-company-id="{{ company.id }}">
         <details class="saved-job-collapse">

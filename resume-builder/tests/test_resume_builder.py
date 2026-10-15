@@ -5,19 +5,30 @@ import re
 import shutil
 import sys
 import tempfile
+import time
 import unittest
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 TEMP = Path(tempfile.mkdtemp(prefix="resume-builder-test-"))
 os.environ["RESUME_OUTPUT_DIR"] = str(TEMP / "user-builds")
 os.environ["RESUME_DATA_DIR"] = str(TEMP / "data")
+os.environ["RESUME_BACKUP_DIR"] = str(TEMP / "backups")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+import backup  # noqa: E402
 import builds  # noqa: E402
 import config  # noqa: E402
+
+# Safety: the tests delete these folders. If another test module imported config first (with the real folders), stop at once
+# instead of wiping the user's saved résumés and data (this happened on 2026-10-15).
+assert str(config.OUTPUT_DIR).startswith(str(TEMP.resolve())) and str(config.DATA_DIR).startswith(str(TEMP.resolve())), \
+    'tests are pointed at real folders: refusing to run'
+
 import documents  # noqa: E402
+import job_link  # noqa: E402
 import jobfinder_db  # noqa: E402
 import profile_import  # noqa: E402
 import references  # noqa: E402
@@ -291,6 +302,17 @@ class WebAppTests(unittest.TestCase):
         with mock.patch.object(jobfinder_db, "save_profile") as save:
             self.client.post("/profile", data=form, follow_redirects=True)
         self.assertEqual([row["role"] for row in save.call_args.args[6]], ["Second Job", "Third Job", "First Job", ""])
+
+    def test_saved_builds_can_be_searched_by_job_company_file_or_type(self):
+        saved = [{"pdf": "a-resume.pdf", "kind": "resume", "job_title": "Web Designer", "company": "Acme", "updated": "2026-10-02T10:00:00", "pdf_exists": True},
+                 {"pdf": "b-cover.pdf", "kind": "cover_letter", "job_title": "Email Designer", "company": "Homestead Studio", "updated": "2026-10-01T10:00:00", "pdf_exists": True}]
+        with mock.patch.object(jobfinder_db, "get_profile", return_value=None), mock.patch.object(builds, "list_builds", return_value=saved):
+            page = self.client.get("/?q=homestead").get_data(as_text=True)
+            self.assertIn("b-cover.pdf", page)
+            self.assertNotIn("a-resume.pdf", page)
+            self.assertIn("a-resume.pdf", self.client.get("/?q=web+acme").get_data(as_text=True))
+            self.assertIn("a-resume.pdf", self.client.get("/?q=r%C3%A9sum%C3%A9").get_data(as_text=True))
+            self.assertIn('Nothing saved matches "zzz"', self.client.get("/?q=zzz").get_data(as_text=True))
 
     def test_work_history_has_labelled_markers_and_move_buttons(self):
         profile = dict(PROFILE, work_history=[
@@ -1203,6 +1225,141 @@ class ForeignHostTests(unittest.TestCase):
 
 def tearDownModule():
     shutil.rmtree(TEMP, ignore_errors=True)
+
+
+JOB_LINK_PAGE = ('<html><head><title>Web Designer | Acme Studio</title><meta property="og:site_name" content="Acme Studio">'
+        '</head><body><h1>Web Designer</h1><p>' + "Design responsive pages in HTML and CSS. " * 40 + '</p></body></html>')
+
+
+class JobLinkTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        job_link._job_finder()  # puts Job Finder on the path so its reader can be replaced
+    def test_links_get_https_and_junk_is_refused(self):
+        self.assertEqual(job_link.clean_url("acme.com/jobs/1"), "https://acme.com/jobs/1")
+        self.assertEqual(job_link.clean_url("  https://acme.com/jobs/1 "), "https://acme.com/jobs/1")
+        self.assertEqual(job_link.clean_url("not a link"), "")
+        self.assertEqual(job_link.clean_url("javascript:alert(1)"), "")
+
+    def test_the_title_company_and_text_are_read_from_the_page(self):
+        with mock.patch("jobfinder.search.relevance.fetch_text", return_value=SimpleNamespace(url="x", text=JOB_LINK_PAGE)), \
+             mock.patch("jobfinder.sources.posting_text.posting_text", return_value=""):
+            found = job_link.read("https://acme.com/jobs/1")
+        self.assertEqual((found["title"], found["company"]), ("Web Designer", "Acme Studio"))
+        self.assertIn("responsive pages", found["text"])
+        self.assertEqual(found["note"], "")
+
+    def test_a_page_that_gives_no_text_still_makes_a_request_with_the_link(self):
+        with mock.patch("jobfinder.search.relevance.fetch_text", return_value=None), \
+             mock.patch("jobfinder.sources.posting_text.posting_text", return_value=""):
+            found = job_link.read("https://acme.com/jobs/1")
+        self.assertTrue(found["note"])
+        request = job_link.request_text(found["url"], "Web Designer", "Acme", found["text"])
+        self.assertIn("https://acme.com/jobs/1", request)
+        self.assertIn("Web Designer at Acme", request)
+        self.assertNotIn("Posting text", request)
+
+    def test_files_saved_after_the_request_show_up_with_download_links_and_in_the_saved_list(self):
+        import app as web
+        for folder in (config.OUTPUT_DIR, config.DATA_DIR):
+            shutil.rmtree(folder, ignore_errors=True)
+        config.ensure_dirs()
+        client = web.app.test_client()
+        old = builds.save_build("resume", SAMPLE, job_title="Old Job", company="Old Co", profile=PROFILE)
+        time.sleep(1.1)
+        started = datetime.now().isoformat(timespec="seconds")
+        resume = builds.save_build("resume", SAMPLE, job_title="Web Designer", company="Acme", profile=PROFILE)
+        letter = builds.save_build("cover_letter", LETTER, job_title="Web Designer", company="Acme", profile=PROFILE)
+        found = client.get("/job-link/files?since=" + started).get_json()["files"]
+        self.assertEqual([f["pdf"] for f in found], [resume["pdf"], letter["pdf"]])  # the résumé first; the old one is left out
+        self.assertNotIn(old["pdf"], [f["pdf"] for f in found])
+        self.assertIn("/files/", found[0]["url"])
+        self.assertEqual(client.get(found[0]["url"]).status_code, 200)
+        listed = [b["pdf"] for b in builds.list_builds()]  # the same drafts are what the Saved list shows
+        self.assertTrue({resume["pdf"], letter["pdf"], old["pdf"]} <= set(listed))
+
+    def test_the_routes_read_a_link_and_build_the_request(self):
+        import app as web
+        client = web.app.test_client()
+        client.get("/")
+        with client.session_transaction() as session:
+            token = session["csrf"]
+        with mock.patch.object(job_link, "read", return_value={"url": "https://acme.com/j", "title": "T", "company": "C", "text": "body", "note": ""}):
+            self.assertEqual(client.post("/job-link/read", data={"url": "acme.com/j", "csrf": token}).get_json()["title"], "T")
+        reply = client.post("/job-link/request", data={"url": "acme.com/j", "title": "Web Designer", "company": "Acme", "text": "the posting", "csrf": token}).get_json()
+        self.assertIn("Job link: https://acme.com/j", reply["request"])
+        self.assertIn("the posting", reply["request"])
+        self.assertEqual(client.post("/job-link/request", data={"url": "nonsense", "csrf": token}).status_code, 400)
+        self.assertEqual(client.post("/job-link/read", data={"url": "acme.com/j"}).status_code, 400)  # no token
+
+
+
+class BackupTests(unittest.TestCase):
+    def setUp(self):
+        for folder in (config.OUTPUT_DIR, config.DATA_DIR, config.BACKUP_DIR):
+            shutil.rmtree(folder, ignore_errors=True)
+        config.ensure_dirs()
+        self.assertTrue(str(config.BACKUP_DIR).startswith(str(TEMP.resolve())))
+
+    def fill(self, n):
+        for i in range(n):
+            (config.OUTPUT_DIR / f"file{i}.pdf").write_bytes(b"%PDF-" + bytes([i]) * 10)
+        (config.DRAFTS_DIR / "d.json").write_text('{"kind": "resume", "pdf": "file0.pdf", "updated": "2026-10-01T10:00:00", "job_title": "", "company": ""}', encoding="utf-8")
+
+    def test_a_snapshot_holds_the_builds_and_data_but_not_fonts_or_the_key(self):
+        self.fill(3)
+        (config.DATA_DIR / "fonts").mkdir(exist_ok=True)
+        (config.DATA_DIR / "fonts" / "big.ttf").write_bytes(b"x")
+        (config.DATA_DIR / ".secret_key").write_text("k", encoding="utf-8")
+        import zipfile
+        names = zipfile.ZipFile(backup.snapshot("test")).namelist()
+        self.assertIn("user-builds/file0.pdf", names)
+        self.assertIn("data/drafts/d.json", names)
+        self.assertFalse([n for n in names if "fonts" in n or "secret" in n])
+
+    def test_nothing_new_means_no_new_snapshot(self):
+        self.fill(2)
+        self.assertIsNotNone(backup.snapshot("one"))
+        self.assertIsNone(backup.snapshot("two"))
+
+    def test_only_the_newest_five_are_kept(self):
+        for i in range(8):
+            self.fill(1)
+            (config.OUTPUT_DIR / f"more{i}.pdf").write_bytes(b"%PDF-" + bytes([i]))
+            backup.snapshot(f"s{i}")
+            time.sleep(1.05)
+        self.assertEqual(len(backup.list_snapshots()), 5)
+
+    def test_a_wipe_does_not_replace_the_good_snapshots(self):
+        self.fill(10)
+        good = backup.snapshot("good")
+        for path in config.OUTPUT_DIR.glob("*.pdf"):
+            path.unlink()
+        (config.DRAFTS_DIR / "d.json").unlink()
+        (config.DATA_DIR / "left.txt").write_text("x", encoding="utf-8")
+        self.assertIsNone(backup.snapshot("after-the-wipe"))
+        self.assertEqual(backup.list_snapshots(), [good])
+        self.assertTrue((config.BACKUP_DIR / "WARNING.txt").exists())
+
+    def test_restore_puts_files_back_and_deletes_nothing(self):
+        self.fill(3)
+        saved = backup.snapshot("t")
+        (config.OUTPUT_DIR / "file1.pdf").unlink()
+        (config.OUTPUT_DIR / "new.pdf").write_bytes(b"%PDF-new")
+        self.assertEqual(backup.restore(saved), 4)
+        self.assertTrue((config.OUTPUT_DIR / "file1.pdf").exists())
+        self.assertTrue((config.OUTPUT_DIR / "new.pdf").exists())
+
+    def test_deleting_a_file_in_the_app_takes_a_snapshot_first(self):
+        import app as web
+        web.app.config["TESTING"] = True
+        self.fill(2)
+        client = web.app.test_client()
+        page = client.get("/").get_data(as_text=True)
+        token = re.search(r'name="csrf" value="([^"]+)"', page).group(1)
+        with mock.patch.object(jobfinder_db, "get_profile", return_value=PROFILE):
+            client.post("/documents/nothere/delete", data={"csrf": token})
+        self.assertEqual(len(backup.list_snapshots()), 1)
 
 
 if __name__ == "__main__":

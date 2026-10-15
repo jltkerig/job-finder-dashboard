@@ -379,3 +379,58 @@ input:not([type]), input[type="text"], input[type="search"], input[type="number"
 .section-marker { background: #1f2937; color: #f3f4f6; }
 /* Move up / Move down are arrow icons. */
 .job-order .bordered-button { display: inline-flex; align-items: center; justify-content: center; padding: 4px 10px; }
+
+/* Search box above the saved résumés and cover letters. */
+.builds-search { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
+.builds-search input[type="search"] { flex: 1 1 260px; min-width: 0; padding: 9px 12px; border: 1px solid #c4c8ce; border-radius: 8px; font: inherit; }
+
+/* Make them from a job link. */
+.job-link-form { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 12px; }
+.job-link-form input[type="url"] { flex: 1 1 340px; min-width: 0; padding: 10px 12px; border: 1px solid #c4c8ce; border-radius: 8px; font: inherit; }
+.job-link-found { margin-top: 6px; }
+.job-link-text { margin: 8px 0 14px; }
+.job-link-text textarea { display: block; width: 100%; margin-top: 8px; padding: 8px 10px; border: 1px solid #c4c8ce; border-radius: 6px; font: inherit; }
+
+/* Add a Document is a dark box with light text, so it reads as its own form. Its boxes stay light. */
+#documents form.reference-new { background: #1f2937; border-color: #111827; color: #f3f4f6; border-radius: 10px; padding: 16px 18px 18px; }
+#documents form.reference-new h3, #documents form.reference-new label { color: #f3f4f6; }
+#documents form.reference-new .field-help { color: #cbd5e1; }
+#documents form.reference-new input[type="text"], #documents form.reference-new input:not([type]) { background: #fff; color: #111827; }
+#documents form.reference-new input[type="file"] { color: #f3f4f6; }
+#documents form.reference-new .bordered-button.primary { background: #fff; color: #1f2937; border-color: #fff; }
+
+/* Your Current Résumé: a file tile, neat page previews and a dashed upload box. */
+.current-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.current-head h2 { margin: 0; }
+.status-pill { padding: 3px 12px; border-radius: 999px; background: #e6f4ea; color: #176b3a; font-size: .8rem; font-weight: 700; }
+.file-tile { display: flex; align-items: center; gap: 14px; margin: 14px 0 6px; padding: 12px 14px; border: 1px solid #d9dee5; border-radius: 10px; background: #f6f8fa; }
+.file-icon { flex: none; }
+.file-info { display: flex; flex-direction: column; min-width: 0; }
+.file-name { font-size: 1.05rem; overflow-wrap: anywhere; }
+.file-meta { color: #4b5563; font-size: .9rem; }
+.current-resume .pages { gap: 16px; margin: 14px 0 6px; padding: 4px 2px 8px; }
+.page-card { margin: 0; flex: none; text-align: center; }
+.page-card img { display: block; width: 210px; border: 1px solid #d0d5dc; border-radius: 4px; box-shadow: 0 2px 8px rgba(31,41,55,.15); background: #fff; }
+.page-card figcaption { margin-top: 6px; color: #4b5563; font-size: .82rem; font-weight: 600; }
+.empty-note { margin: 14px 0; padding: 14px; border: 1px dashed #c4c8ce; border-radius: 10px; color: #4b5563; background: #fafbfc; }
+.upload.dropzone { display: block; margin-top: 16px; padding: 14px 16px 16px; border: 2px dashed #b9c1cc; border-radius: 12px; background: #fafbfc; }
+.upload.dropzone label { display: block; width: auto; margin: 0 0 2px; font-size: 1rem; }
+.upload.dropzone .field-help { display: block; margin: 0 0 10px; }
+.upload-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.upload-row input[type="file"] { flex: 1 1 220px; min-width: 0; padding: 7px; border: 1px solid #c4c8ce; border-radius: 8px; background: #fff; font: inherit; }
+
+/* Uploads: one collapsible box holding Your Current Résumé and Reference Documents side by side. */
+.uploads-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 20px; align-items: start; margin-top: 8px; }
+.sub-card { background: #fafbfc; border: 1px solid #e1e5ea; border-radius: 10px; padding: 18px 20px; min-width: 0; }
+.sub-card h2 { margin-top: 0; font-size: 1.1rem; }
+
+.job-link-results { margin-top: 14px; padding: 14px 16px; border: 1px solid #d4d8dd; border-radius: 10px; background: #f6f8fa; }
+.job-link-results h3 { margin: 0 0 8px; font-size: 1.05rem; }
+.job-link-files { list-style: none; margin: 0 0 10px; padding: 0; }
+.job-link-files li { display: flex; align-items: center; gap: 12px; padding: 6px 0; }
+.job-link-files .bordered-button { text-decoration: none; }
+
+/* Pager buttons (1, 2, Next): the same height, centered text, whether a link or the current page. */
+.pager .bordered-button, .pager .pager-current { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; height: 36px; min-width: 36px; padding: 0 12px; line-height: 1; text-decoration: none; vertical-align: middle; margin: 0; }
+.pager { gap: 8px; }
+.pager .pager-gap { display: inline-flex; align-items: center; height: 36px; }

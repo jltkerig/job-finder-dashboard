@@ -43,28 +43,44 @@
   {% endif %}
 </section>
 
-<section class="card">
-  <h2>Your Current Résumé</h2>
+<section class="card wide" id="uploads">
+<details class="section-collapse" id="uploads-panel" open>
+  <summary><h2>Uploads</h2><span class="summary-chevron" aria-hidden="true"></span></summary>
+  <div class="uploads-grid">
+<section class="sub-card current-resume">
+  <div class="current-head">
+    <h2>Your Current Résumé</h2>
+    {% if resume %}<span class="status-pill">On file</span>{% endif %}
+  </div>
   {% if resume %}
-    <p><strong>{{ resume.original_name }}</strong> &middot; uploaded {{ resume.uploaded_at.replace('T', ' ') }}{% if resume.pages %} &middot; {{ resume.pages }} page{{ 's' if resume.pages != 1 }}{% endif %}</p>
+    <div class="file-tile">
+      <svg class="file-icon" viewBox="0 0 24 24" width="40" height="40" aria-hidden="true"><path d="M6 2h8l5 5v15H6z" fill="#fff" stroke="#1f2937" stroke-width="1.5" stroke-linejoin="round"/><path d="M14 2v5h5" fill="none" stroke="#1f2937" stroke-width="1.5" stroke-linejoin="round"/><text x="12.5" y="18" font-size="5.5" font-weight="700" text-anchor="middle" fill="#1f2937">{{ 'PDF' if resume.file.endswith('.pdf') else 'DOC' }}</text></svg>
+      <div class="file-info">
+        <strong class="file-name">{{ resume.original_name }}</strong>
+        <span class="file-meta">Uploaded {{ resume.uploaded_at|nice_date }}{% if resume.pages %} &middot; {{ resume.pages }} page{{ 's' if resume.pages != 1 }}{% endif %}</span>
+      </div>
+    </div>
     {% for note in resume.notes %}<p class="field-help">{{ note }}</p>{% endfor %}
     {% if resume.preview_pdf %}
       <div class="pages">
-        {% for n in range([resume.pages or 1, 2]|min) %}<img src="{{ url_for('resume_page', number=n) }}" alt="Page {{ n + 1 }} of your current résumé" />{% endfor %}
+        {% for n in range([resume.pages or 1, 2]|min) %}<figure class="page-card"><img src="{{ url_for('resume_page', number=n) }}" alt="Page {{ n + 1 }} of your current résumé" /><figcaption>Page {{ n + 1 }}</figcaption></figure>{% endfor %}
       </div>
     {% endif %}
   {% else %}
-    <p>No résumé uploaded yet.</p>
+    <p class="empty-note">No résumé uploaded yet. Upload one below and its layout, fonts and sections are copied into everything Claude writes.</p>
   {% endif %}
-  <form method="post" action="{{ url_for('upload') }}" enctype="multipart/form-data" class="upload">
+  <form method="post" action="{{ url_for('upload') }}" enctype="multipart/form-data" class="upload dropzone">
     <input type="hidden" name="csrf" value="{{ csrf_token() }}" />
-    <label for="resume">{{ 'Replace with' if resume else 'Upload' }} a PDF or Word (.docx) file</label>
-    <input id="resume" name="resume" type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" required />
-    <button class="bordered-button primary" type="submit">Upload</button>
+    <label for="resume">{{ 'Replace this résumé' if resume else 'Upload your résumé' }}</label>
+    <span class="field-help">PDF or Word (.docx), up to 10 MB</span>
+    <div class="upload-row">
+      <input id="resume" name="resume" type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" required />
+      <button class="bordered-button primary" type="submit">Upload</button>
+    </div>
   </form>
 </section>
 
-<section class="card" id="documents">
+<section class="sub-card" id="documents">
   <h2>Reference Documents</h2>
   <p class="field-help">Anything that helps Claude write about you: past cover letters, performance reviews, award letters, certificates, a list of projects. Claude Desktop can read these in every chat and uses only what is actually in them. Kept only on this computer.</p>
   {% if documents %}
@@ -101,12 +117,43 @@
     <h3>Add a Document</h3>
     <input type="hidden" name="csrf" value="{{ csrf_token() }}" />
     <div class="ref-grid">
-      <label>Label <input name="label" maxlength="120" placeholder="e.g. 2024 performance review" /></label>
       <label>File <span class="field-help">PDF, Word .docx, .txt or .md, up to 10 MB</span>
         <input name="document" type="file" accept=".pdf,.docx,.txt,.md" required /></label>
     </div>
     <button class="bordered-button primary" type="submit">Add document</button>
   </form>
+</section>
+  </div>
+</details>
+</section>
+
+<section class="card wide" id="job-link">
+<details class="section-collapse" id="job-link-panel" open>
+  <summary><h2>Job Link Résumé Creation</h2><span class="summary-chevron" aria-hidden="true"></span></summary>
+  <p class="field-help">Paste a link to a job. Résumé Builder reads the posting, then copies a ready request for Claude Desktop, which tailors your résumé and writes the cover letter.</p>
+  <form id="job-link-form" class="job-link-form" autocomplete="off">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}" />
+    <label class="visually-hidden" for="job-link-url">Link to the job</label>
+    <input id="job-link-url" name="url" type="url" inputmode="url" placeholder="Paste the job link, for example https://company.com/careers/web-designer" required />
+    <button class="bordered-button primary" type="submit" id="job-link-read">Read the Job</button>
+  </form>
+  <div id="job-link-found" class="job-link-found" hidden>
+    <div class="ref-grid">
+      <label>Job title <input id="job-link-title" maxlength="150" /></label>
+      <label>Company <input id="job-link-company" maxlength="150" /></label>
+    </div>
+    <p id="job-link-note" class="field-help"></p>
+    <details class="job-link-text"><summary>Posting text that will go with the request <span class="field-help" id="job-link-size"></span></summary>
+      <textarea id="job-link-text" rows="8" maxlength="12000" data-autogrow></textarea></details>
+    <button class="bordered-button primary" type="button" id="job-link-copy">Copy Request and Open Claude Desktop</button>
+  </div>
+  <p id="job-link-status" class="field-help" role="status"></p>
+  <div id="job-link-results" class="job-link-results" hidden>
+    <h3>Your Files</h3>
+    <ul id="job-link-files" class="job-link-files"></ul>
+    <button class="bordered-button" type="button" id="job-link-check">Check Again</button>
+  </div>
+</details>
 </section>
 
 {% if design_on %}
@@ -513,18 +560,24 @@
 <details class="section-collapse" id="saved-builds-panel" open>
   <summary><h2>Saved Résumés and Cover Letters</h2><span class="summary-chevron" aria-hidden="true"></span></summary>
   <p class="field-help">Saved in <code>{{ output_dir }}</code></p>
+  <form class="builds-search" method="get" action="{{ url_for('index') }}#saved-builds" role="search">
+    <label class="visually-hidden" for="builds-search-box">Search saved résumés and cover letters</label>
+    <input id="builds-search-box" type="search" name="q" value="{{ build_search }}" maxlength="100" placeholder="Search by job, company, file name or type" />
+    <button class="bordered-button" type="submit">Search</button>
+    {% if build_search %}<a class="bordered-button" href="{{ url_for('index') }}#saved-builds">Clear</a>{% endif %}
+  </form>
   {% if builds %}
   <div class="table-wrapper"><table>
-    <thead><tr><th>File</th><th>Type</th><th>Job</th><th>Updated</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
+    <thead><tr><th>Job</th><th>Type</th><th>File</th><th>Updated</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
     <tbody>
     {% for b in builds %}
       <tr>
-        <td data-label="File">{{ b.pdf }}{% if not b.pdf_exists %} <span class="status-warn">(PDF missing)</span>{% endif %}</td>
-        <td data-label="Type">{{ 'Résumé' if b.kind == 'resume' else 'Cover letter' }}</td>
         <td data-label="Job">{{ b.job_title }}{% if b.company %} at {{ b.company }}{% endif %}</td>
+        <td data-label="Type">{{ 'Résumé' if b.kind == 'resume' else 'Cover letter' }}</td>
+        <td data-label="File">{{ b.pdf }}{% if not b.pdf_exists %} <span class="status-warn">(PDF missing)</span>{% endif %}</td>
         <td data-label="Updated">{{ b.updated.replace('T', ' ') }}</td>
         <td class="actions">
-          <a class="bordered-button" href="{{ url_for('edit_build', filename=b.pdf) }}">Review &amp; edit</a>
+          {% if not b.restored %}<a class="bordered-button" href="{{ url_for('edit_build', filename=b.pdf) }}">Review &amp; edit</a>{% endif %}
           <a class="bordered-button" href="{{ url_for('download', filename=b.pdf, download=1) }}">Download</a>
         </td>
       </tr>
@@ -534,17 +587,17 @@
   {% if builds_pages > 1 %}
   <nav class="pager" aria-label="Pages of saved résumés and cover letters">
     <span class="pager-count">Showing {{ (builds_page - 1) * builds_per_page + 1 }}–{{ (builds_page - 1) * builds_per_page + builds|length }} of {{ builds_total }}</span>
-    {% if builds_page > 1 %}<a class="bordered-button" href="{{ url_for('index', page=builds_page - 1) }}#saved-builds" rel="prev">Previous</a>{% endif %}
+    {% if builds_page > 1 %}<a class="bordered-button" href="{{ url_for('index', page=builds_page - 1, q=build_search or None) }}#saved-builds" rel="prev">Previous</a>{% endif %}
     {% for number in builds_links %}
       {% if number is none %}<span class="pager-gap" aria-hidden="true">…</span>
       {% elif number == builds_page %}<span class="bordered-button pager-current" aria-current="page">{{ number }}</span>
-      {% else %}<a class="bordered-button" href="{{ url_for('index', page=number) }}#saved-builds">{{ number }}</a>{% endif %}
+      {% else %}<a class="bordered-button" href="{{ url_for('index', page=number, q=build_search or None) }}#saved-builds">{{ number }}</a>{% endif %}
     {% endfor %}
-    {% if builds_page < builds_pages %}<a class="bordered-button" href="{{ url_for('index', page=builds_page + 1) }}#saved-builds" rel="next">Next</a>{% endif %}
+    {% if builds_page < builds_pages %}<a class="bordered-button" href="{{ url_for('index', page=builds_page + 1, q=build_search or None) }}#saved-builds" rel="next">Next</a>{% endif %}
   </nav>
   {% endif %}
   {% else %}
-    <p>Nothing yet. Ask Claude Desktop to write one.</p>
+    <p>{% if build_search %}Nothing saved matches "{{ build_search }}".{% else %}Nothing yet. Ask Claude Desktop to write one.{% endif %}</p>
   {% endif %}
 </details>
 </section>
@@ -555,7 +608,7 @@
   // opens when the link points at it (adding or editing a reference, saving a design, "Match My Portfolio", or a page link of the saved files).
   (function () {
     [["references-panel", "resumeBuilder.referencesOpen", "#references"], ["design-panel", "resumeBuilder.designOpen", "#design"],
-     ["profile-panel", "resumeBuilder.profileOpen", "#profile", true], ["saved-builds-panel", "resumeBuilder.savedBuildsOpen", "#saved-builds", true]]
+     ["uploads-panel", "resumeBuilder.uploadsOpen", "#uploads", true], ["job-link-panel", "resumeBuilder.jobLinkOpen", "#job-link", true], ["profile-panel", "resumeBuilder.profileOpen", "#profile", true], ["saved-builds-panel", "resumeBuilder.savedBuildsOpen", "#saved-builds", true]]
       .forEach(function (item) {
         var panel = document.getElementById(item[0]);
         if (!panel) return;

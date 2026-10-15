@@ -244,6 +244,10 @@ def save_upload(filename, data):
     (staging / "text.txt").write_text(text, encoding="utf-8")
     (staging / INFO_FILE).write_text(json.dumps(info, indent=2), encoding="utf-8")
     shutil.rmtree(config.UPLOAD_DIR, ignore_errors=True)
+    if config.UPLOAD_DIR.exists():  # Windows keeps a folder another program has open: move it aside rather than fail
+        aside = config.UPLOAD_DIR.with_name(f"current-resume.old-{datetime.now():%H%M%S}")
+        config.UPLOAD_DIR.rename(aside)
+        shutil.rmtree(aside, ignore_errors=True)
     staging.rename(config.UPLOAD_DIR)
     return info
 
