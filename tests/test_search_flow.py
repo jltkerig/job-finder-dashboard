@@ -22,7 +22,7 @@ class Database:
 
 
 def run_search(pages, search_url, job_title, *, cities_json='[]', max_new=2, location=None,
-               city_targets=(), distance=None, extra=None, records=None, debug_out=None):
+               city_targets=(), distance=None, extra=None, records=None, debug_out=None, health=None):
     """Run main() against in-memory pages and return the saved source URLs.
 
     records collects each save_company call's positional arguments; debug_out collects the debug file.
@@ -53,6 +53,8 @@ def run_search(pages, search_url, job_title, *, cities_json='[]', max_new=2, loc
     patches.update(extra or {})
     with ExitStack() as stack:
         debug_file = Path(stack.enter_context(tempfile.TemporaryDirectory())) / 'search_debug.json'
+        if health is not None:  # what the last search noted about each board (board_health.json)
+            debug_file.with_name('board_health.json').write_text(json.dumps(health), encoding='utf-8')
         stack.enter_context(patch.object(shared, 'SEARCH_DEBUG_FILE', debug_file))
         stack.enter_context(patch.object(runner, 'BOARD_HEALTH_FILE', debug_file.with_name('board_health.json')))
         for name, function in patches.items():
