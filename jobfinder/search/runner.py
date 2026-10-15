@@ -406,10 +406,22 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
         return employer_saved
 
     known_employers = load_employers()
+    _last_matches = {}
+    try:
+        with open(BOARD_HEALTH_FILE, encoding="utf-8") as health_file:
+            boards = json.load(health_file).get("boards") or []
+        for board in (boards.values() if isinstance(boards, dict) else boards):
+            _last_matches[str(board.get("name"))] = int(board.get("matches") or 0)
+    except (OSError, ValueError, AttributeError, TypeError):
+        pass
     if known_employers:
         # Start at a different board each hour so a full quota does not always come from the first few in the list.
         turn = int(time.time() // 3600) % len(known_employers)
         known_employers = known_employers[turn:] + known_employers[:turn]
+        if shared.MAX_SEARCH_RESULTS == 1:
+            # A replacement for one Top 10 pick: the boards that had matching openings last time are tried first, so the
+            # one job it needs is found without reading the boards that never match.
+            known_employers.sort(key=lambda employer: -_last_matches.get(employer.name, 0))
     known_boards = {config_key(employer.config) for employer in known_employers}
     unreadable_boards = set()
     boards_discovered = 0
@@ -624,7 +636,9 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
         nonlocal read_ahead
         # Boards are read a few at a time ("Pages downloaded at once" on the Tuning page); each board's openings are still
         # checked and saved one board at a time, in the same order.
-        workers = min(shared.PREFETCH_WORKERS, len(known_employers))
+        # A replacement for one pick needs a single job and wants it soon: more boards are read at once.
+        workers = min(max(shared.PREFETCH_WORKERS, 10) if shared.MAX_SEARCH_RESULTS == 1 else shared.PREFETCH_WORKERS,
+                      len(known_employers))
         if workers > 1:
             read_ahead = BoardReadAhead(known_employers, job_titles, workers)
         try:

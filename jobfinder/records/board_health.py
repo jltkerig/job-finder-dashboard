@@ -53,6 +53,10 @@ class BoardHealth:
         boards = self.boards()
         if not boards:
             return
+        if run == "replacement":  # a replacement reads only a few boards: the others keep what the last search found
+            seen = {board.get("name") for board in boards}
+            earlier = read_health(path) or {}
+            boards = boards + [board for board in earlier.get("boards", []) if board.get("name") not in seen]
         payload = {"updated": datetime.now(timezone.utc).isoformat(timespec="seconds"), "run": run, "boards": boards}
         temporary = Path(str(path) + ".tmp")
         try:

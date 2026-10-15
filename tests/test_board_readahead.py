@@ -141,5 +141,36 @@ class InTheSearch(unittest.TestCase):
         self.assertEqual(parallel, serial)
 
 
+class ReplacementSearch(unittest.TestCase):
+    """A replacement for one Top 10 pick tries the boards that matched last time first."""
+    CITIES = json.dumps([{"city": "Baltimore, MD", "radius": 20}])
+
+    def test_boards_that_matched_before_are_read_first(self):
+        import tempfile
+        from jobfinder.search import runner
+        order = []
+
+        class Quiet(FakeEmployer):
+            def find_openings(self, titles, http):
+                order.append(self.name)
+                return []
+
+        boards = []
+        for number in (1, 2, 3):
+            board = Quiet()
+            board.name = f"Board {number}"
+            board.config = dict(FakeEmployer.config, tenant=f"b{number}")
+            boards.append(board)
+        health = {"boards": [{"name": "Board 3", "matches": 4}, {"name": "Board 1", "matches": 0}]}
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "board_health.json"
+            path.write_text(json.dumps(health), encoding="utf-8")
+            with patch.object(runner, "BOARD_HEALTH_FILE", path), patch.object(shared, "PREFETCH_WORKERS", 1),                     patch("jobfinder.search.runner.time.time", return_value=0.0):
+                run_search({}, "https://example.com/none", "Web Designer", max_new=1, cities_json=self.CITIES,
+                           city_targets=[{"city": "Baltimore, MD", "radius": 20}],
+                           extra={"load_employers": lambda: boards})
+        self.assertEqual(order[0], "Board 3")
+
+
 if __name__ == "__main__":
     unittest.main()
