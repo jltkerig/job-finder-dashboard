@@ -2,7 +2,8 @@
 
 A job counts once it is Applied, Talking With Recruiter or Interview (the same jobs as "Applied In Total"). Its month
 comes from the "applied_on" date saved with it (applied_dates.py); jobs applied to before dates existed have none and
-are counted apart, so the rows always add up to the total.
+are counted apart, so the rows always add up to the total. Applications made outside Job Finder
+(applied_elsewhere.py) are counted in their months and in the total.
 """
 
 from datetime import date, datetime
@@ -10,7 +11,7 @@ from datetime import date, datetime
 from mysql.connector import Error
 
 from jobfinder import db
-from jobfinder.web import applied_dates, schema, webfiles
+from jobfinder.web import applied_dates, applied_elsewhere, schema, webfiles
 
 MONTHS_SHOWN = 6
 APPLIED_STATUSES = ("Applied", "Talking With Recruiter", "Interview")
@@ -29,8 +30,9 @@ def recent_months(count=MONTHS_SHOWN, today=None):
     return months
 
 
-def by_month(rows, today=None):
-    """rows: applied jobs, each with a listing_details text.
+def by_month(rows, today=None, elsewhere_dates=()):
+    """rows: applied jobs, each with a listing_details text. elsewhere_dates: the dates of applications made outside
+    Job Finder (applied_elsewhere.py), counted in their months too.
 
     Returns {"months": [{"key", "label", "count"}, ...] newest first, "earlier": jobs before the oldest month shown,
     "undated": jobs with no applied date}.
@@ -39,8 +41,7 @@ def by_month(rows, today=None):
     shown = recent_months(today=today)
     oldest = shown[-1][0]
     counts, earlier, undated = {}, 0, 0
-    for row in rows:
-        month = row["applied_on"][:7]
+    for month in [row["applied_on"][:7] for row in rows] + [str(day)[:7] for day in elsewhere_dates]:
         if not month:
             undated += 1
         elif month < oldest:
@@ -53,7 +54,8 @@ def by_month(rows, today=None):
 
 def get_applied_by_month():
     schema.ensure_job_tracking_columns()
-    empty = by_month([])
+    elsewhere = [entry["applied_on"] for entry in applied_elsewhere.load()]
+    empty = by_month([], elsewhere_dates=elsewhere)
     connection = cursor = None
     try:
         connection = db.connect()
@@ -61,7 +63,7 @@ def get_applied_by_month():
         marks = ", ".join(["%s"] * len(APPLIED_STATUSES))
         cursor.execute(f"SELECT listing_details FROM companies WHERE is_kept = 1 AND is_rejected = 0 "
                        f"AND application_status IN ({marks})", APPLIED_STATUSES)
-        return by_month(cursor.fetchall())
+        return by_month(cursor.fetchall(), elsewhere_dates=elsewhere)
     except Error as error:
         print("Could not read the jobs applied to by month.")
         print(error)

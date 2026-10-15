@@ -42,6 +42,7 @@ DISCOVERED_EMPLOYERS_FILE = USER_DIR / "discovered_employers.json"
 BOARD_HEALTH_FILE = USER_DIR / "board_health.json"
 MY_COMPANIES_FILE = USER_DIR / "my_companies.json"  # the companies you entered on the Companies page
 MY_COMPANIES_REMOVED_FILE = USER_DIR / "my_companies_removed.json"  # résumé employers you deleted: not added again
+APPLIED_ELSEWHERE_FILE = USER_DIR / "applied_elsewhere.json"  # applications made outside Job Finder (counted in Job Apply Stats)
 SEARCH_SKIPS_FILE = USER_DIR / "search_skips.jsonl"
 SEARCH_DEBUG_FILE = USER_DIR / "search_debug.json"
 SEARCH_SCOPE_FILE = USER_DIR / "search_scope.json"

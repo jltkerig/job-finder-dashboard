@@ -11,7 +11,7 @@ from jobfinder.profiles.education_parse import parse_education
 from jobfinder.profiles.profile_tools import resume_skill_suggestions, parse_work_history, uploaded_resume
 from jobfinder.records.search_skips import TTL_HOURS, latest_decisions
 from jobfinder.sources.job_listings import is_pdf_url
-from jobfinder.web import apply_stats, applied_dates, auto_apply, blocklists, easy_apply, queue_documents
+from jobfinder.web import apply_stats, applied_dates, applied_elsewhere, auto_apply, blocklists, easy_apply, queue_documents
 from jobfinder.web.application_files import RESUME_BUILDER_URL, add_application_files
 from jobfinder.web import listing_queries
 from jobfinder.web import profile_store
@@ -130,6 +130,7 @@ def user_dashboard():
         education_degrees=schema.EDUCATION_DEGREES,
         counts=get_dashboard_counts(),
         applied_months=apply_stats.get_applied_by_month(),
+        applied_elsewhere_count=len(applied_elsewhere.load()),
         search_history=get_search_history(),
         skill_suggestions=profile_skill_suggestions(profile),
         resume_source=resume_skills[0], resume_skills=resume_skills[1],

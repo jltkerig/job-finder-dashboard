@@ -136,7 +136,7 @@
       <aside class="profile-summary-card"><button class="profile-avatar" id="change-avatar" type="button" aria-label="Upload or change profile photo">{% if profile.avatar_data %}<img src="{{ profile.avatar_data }}" alt="" />{% elif profile.first_name %}{{ profile.first_name[0]|upper }}{% else %}U{% endif %}</button><input id="avatar-file" type="file" accept="image/png,image/jpeg,image/webp" hidden /><small>Click photo to change</small><strong>{{ (profile.first_name ~ ' ' ~ profile.last_name)|trim if profile.first_name or profile.last_name else 'Username' }}</strong><span>{{ profile.primary_job_title or 'Add a primary job title' }}</span><span>{{ profile.home_location or 'Add your location' }}</span>
       </aside>
       <aside class="profile-stats-card" aria-labelledby="apply-stats-heading">
-        {% set stage = {'applied': counts.applied or 0, 'recruiter': counts.recruiter or 0, 'interview': counts.interview or 0} %}
+        {% set stage = {'applied': (counts.applied or 0) + (applied_elsewhere_count or 0), 'recruiter': counts.recruiter or 0, 'interview': counts.interview or 0} %}
         {% set by_month = applied_months or {} %}
         <h2 id="apply-stats-heading">Job Apply Stats</h2>
         <dl>
