@@ -33,6 +33,8 @@ EXCLUDE = [
     "watched_employers.before-*.json", "user-builds/*", "user-data/*", "logs/*", "feed_cache/*", "*.pyc",
     # Not shipped yet: the updater replaces whole folders, which would wipe resume-builder/data.
     "resume-builder/*",
+    # Screenshots of the program are for looking at, not for installing.
+    "screenshots/*",
 ]
 DASHBOARD_URL = "http://127.0.0.1:5000"
 
