@@ -29,6 +29,7 @@ def delete_expired_closed(cursor, days=CLOSED_KEEP_DAYS):
         WHERE job_open_status = 'Closed'
           AND closed_at IS NOT NULL
           AND closed_at < CURRENT_TIMESTAMP - INTERVAL %s DAY
+          AND is_rejected = 0  -- a rejected job stays: that is how it is recognised if it turns up again
           AND is_kept = 0
           AND application_status NOT IN ({placeholders})
         """,

@@ -181,7 +181,10 @@ class ICIMS:
                         html=job["description"], posted=job["posted"], schedule=job["schedule"], arrangement=job["type"])
 
     def status(self, url, http):
-        response = http.get(url, accept=HTML)
+        # The job itself sits in a frame: the plain address answers with an empty shell (no JobPosting record), which
+        # used to read as a closed job. Ask for the framed page, as search() and the job reader do.
+        framed = urlparse(url)._replace(query="in_iframe=1", fragment="").geturl()
+        response = http.get(framed, accept=HTML)
         if response.status_code in (404, 410):
             return "Closed"
         if response.status_code != 200:

@@ -195,9 +195,9 @@ class ICIMSSearch(unittest.TestCase):
 
     def test_a_job_page_without_a_job_record_means_closed(self):
         employer = Employer(ALLEGIS)
-        self.assertEqual(employer.status(self.URL, FakeHttp(pages={self.URL: icims_page()})), 'Open')
-        self.assertEqual(employer.status(self.URL, FakeHttp(pages={self.URL: '<p>This job is no longer available.</p>'})), 'Closed')
-        self.assertEqual(employer.status(self.URL, FakeHttp(pages={self.URL: Response(status=404)})), 'Closed')
+        self.assertEqual(employer.status(self.URL, FakeHttp(pages={self.URL + '?in_iframe=1': icims_page()})), 'Open')
+        self.assertEqual(employer.status(self.URL, FakeHttp(pages={self.URL + '?in_iframe=1': '<p>This job is no longer available.</p>'})), 'Closed')
+        self.assertEqual(employer.status(self.URL, FakeHttp(pages={self.URL + '?in_iframe=1': Response(status=404)})), 'Closed')
 
 
 SF_LIST = ('<a class="jobTitle-link" href="/job/Baltimore-Lead-Digital-Designer/1001/">Lead, Digital Designer</a>'

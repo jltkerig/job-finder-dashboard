@@ -121,8 +121,8 @@ class WeWorkRemotely(unittest.TestCase):
 
 
 class Registry(unittest.TestCase):
-    def test_three_feeds_are_registered(self):
-        self.assertEqual(FEED_NAMES, {'Remote OK', 'Remotive', 'We Work Remotely'})
+    def test_the_feeds_are_registered(self):
+        self.assertEqual(FEED_NAMES, {'Remote OK', 'Remotive', 'We Work Remotely', 'Hacker News'})
 
     def test_index_maps_listing_urls_to_listings(self):
         feed = Feed('X', 'x.com', lambda: [], {'x.com'})

@@ -104,3 +104,28 @@ class CompanyNameGuards(unittest.TestCase):
         for notice in ("application was viewed", "Your application was viewed", "Your resume was downloaded", "Application was sent"):
             self.assertEqual(tidy_company_name(notice), "")
         self.assertEqual(tidy_company_name("Acme Health"), "Acme Health")
+
+
+class ICIMSStatus(unittest.TestCase):
+    def test_an_icims_job_is_read_from_its_framed_page_so_an_open_job_is_not_called_closed(self):
+        from jobfinder.sources.employer_enterprise import ICIMS
+        asked = []
+
+        class Http:
+            def get(self, url, accept=None):
+                asked.append(url)
+                framed = "in_iframe=1" in url
+                return SimpleNamespace(status_code=200, text='{"@type": "JobPosting"}' if framed else "<html>Privacy Policy</html>")
+
+        board = ICIMS({"host": "careers.example.com"})
+        self.assertEqual(board.status("https://careers.example.com/jobs/12/web-developer/job", Http()), "Open")
+        self.assertIn("in_iframe=1", asked[0])
+
+    def test_a_missing_icims_job_is_closed(self):
+        from jobfinder.sources.employer_enterprise import ICIMS
+
+        class Http:
+            def get(self, url, accept=None):
+                return SimpleNamespace(status_code=404, text="")
+
+        self.assertEqual(ICIMS({"host": "careers.example.com"}).status("https://careers.example.com/jobs/9/x/job", Http()), "Closed")

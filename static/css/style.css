@@ -2016,3 +2016,8 @@ body[data-page="search"] .results-toolbar .display-options > summary { width: 10
 .queue-link-row input { flex: 1 1 auto; min-width: 0; height: 40px; box-sizing: border-box; padding: 0 12px; border: 1px solid #c4c8ce; border-radius: 8px; font: inherit; }
 .queue-link-row .bordered-button { height: 40px; box-sizing: border-box; padding: 0 16px; }
 #queue-link-status { margin: 0 0 12px; min-height: 1.2em; }
+
+/* Every bulleted list on every page uses solid black round bullets (nested lists too, not hollow circles or squares).
+   The selectors have no weight of their own, so lists that deliberately show no bullets (menus, chips) stay as they are. */
+:where(ul) { list-style-type: disc; }
+:where(li)::marker { color: #000; }

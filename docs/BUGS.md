@@ -19,6 +19,13 @@ Each entry: what went wrong, why, the fix, and the check that would have caught 
 
 ## Reading postings
 
+- **Open iCIMS jobs were marked Closed** (2026-10-15). The status check for an iCIMS posting (`ICIMS.status` in
+  `employer_enterprise.py`) read the plain job address, which is an empty shell without the JobPosting record, so every open
+  job read as closed (three Aptive Resources jobs). The job sits in a frame: ask for `?in_iframe=1`, as the search and the job
+  reader already do. Check: an open job on each hiring system returns Open from `board_status`, and a made-up id returns
+  Closed. Related: the expiry delete of closed jobs now spares rejected jobs (`delete_expired_closed`), since a rejected job
+  must stay so it is recognised if it turns up again.
+
 - **LinkedIn's own notice was saved as a company; a place was saved as a company** (2026-10-15). On a LinkedIn job card you
   applied to, "Your application was viewed" sits between the title and the company, and the Web Job Scraper's card
   reader (`cards()` in `linkedin-parse.js`) took the second line as the company (job #57, "application was viewed"). The

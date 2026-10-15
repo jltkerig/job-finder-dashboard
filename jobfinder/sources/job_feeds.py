@@ -1,4 +1,4 @@
-"""Public remote-job feeds (Remote OK, Remotive, We Work Remotely) in one shape.
+"""Public remote-job feeds (Remote OK, Remotive, We Work Remotely, Hacker News "Who is hiring?") in one shape.
 
 Each provider's own listing URL stays the link and the provider is named on the listing, as their
 terms ask. Remotive asks for at most about 4 requests a day, so its data is kept on disk for 24 hours.
@@ -16,7 +16,7 @@ import requests
 from bs4 import BeautifulSoup
 
 from jobfinder import paths
-from jobfinder.sources import remote_ok
+from jobfinder.sources import hacker_news, remote_ok
 from jobfinder.sources.job_listings import matching_title
 
 USER_AGENT = "PersonalJobFinder/1.1 (local job search)"
@@ -197,5 +197,7 @@ FEEDS = (
     Feed("Remotive", "remotive.com", fetch_remotive, {"remotive.com", "www.remotive.com"}),
     Feed("We Work Remotely", "weworkremotely.com", fetch_we_work_remotely,
          {"weworkremotely.com", "www.weworkremotely.com"}),
+    Feed("Hacker News", "news.ycombinator.com", hacker_news.fetch_jobs, {"news.ycombinator.com"},
+         matcher=hacker_news.matching_jobs),
 )
 FEED_NAMES = frozenset(feed.name for feed in FEEDS)

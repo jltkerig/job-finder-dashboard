@@ -566,3 +566,7 @@ tr.is-picked td { background: #eef3fb; }
 #builds-form td[data-label="File"] { white-space: normal; overflow-wrap: anywhere; word-break: break-word; min-width: 220px; }
 #builds-form td[data-label="Type"], #builds-form td[data-label="Updated"] { white-space: nowrap; }
 #builds-form td.pick-col, #builds-form th.pick-col { width: 40px; min-width: 40px; padding-left: 6px; padding-right: 6px; }
+
+/* Every bulleted list uses solid black round bullets (nested lists too); lists that deliberately show none stay as they are. */
+:where(ul) { list-style-type: disc; }
+:where(li)::marker { color: #000; }

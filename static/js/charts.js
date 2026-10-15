@@ -224,13 +224,13 @@ document.addEventListener("DOMContentLoaded", () => {
     const upper=raw.toUpperCase();
     return STATE_NAMES[upper]?upper:STATE_CODES[raw.toLowerCase()]||upper;
   }
-  const resultFilter = $("#result-filter"), resultStateFilter = $("#result-state-filter"), resultArrangementFilter = $("#result-arrangement-filter"), resultStatusFilter = $("#result-status-filter"), resultSort = $("#result-sort"), resultMinCredibility = $("#result-min-credibility"), resultScheduleFilter = $("#result-schedule-filter"), resultNewFilter = $("#result-new-filter"), resultsCount = $("#results-count"), resultsTableBody = $("#results-table tbody");
+  const resultFilter = $("#result-filter"), resultStateFilter = $("#result-state-filter"), resultArrangementFilter = $("#result-arrangement-filter"), resultStatusFilter = $("#result-status-filter"), resultSort = $("#result-sort"), resultMinCredibility = $("#result-min-credibility"), resultScheduleFilter = $("#result-schedule-filter"), resultSourceFilter = $("#result-source-filter"), resultNewFilter = $("#result-new-filter"), resultsCount = $("#results-count"), resultsTableBody = $("#results-table tbody");
   function updateClientResults() {
     if (!resultsTableBody) return;
     const query=(resultFilter?.value||"").trim().toLowerCase(),status=resultStatusFilter?.value||"all";
     const selectedState=resultStateFilter?.value||"all";
     const selectedArrangement=resultArrangementFilter?.value||"all";
-    const minScore=Number(resultMinCredibility?.value||0), selectedSchedule=resultScheduleFilter?.value||"all";
+    const minScore=Number(resultMinCredibility?.value||0), selectedSchedule=resultScheduleFilter?.value||"all"; const selectedSource=resultSourceFilter?.value||"all";
     const queryState=STATE_NAMES[query.toUpperCase()]?query.toUpperCase():STATE_CODES[query]||null;
     let rows=$$(".result-row",resultsTableBody);
     rows.forEach((row)=>{
@@ -244,6 +244,7 @@ document.addEventListener("DOMContentLoaded", () => {
         &&(status==="all"||row.dataset.status===status)
         &&(minScore===-1||score>=Math.max(3,minScore))
         &&(selectedSchedule==="all"||(selectedSchedule==="unknown"?!schedule:(selectedSchedule==="freelance"?/freelanc|gig|project.based|independent contractor/.test(schedule):schedule.includes(selectedSchedule))))
+        &&(selectedSource==="all"||(row.dataset.source||"")===selectedSource)
         &&(resultNewFilter?.value!=="new"||row.dataset.new==="true");
       row.hidden=!matches;
       const details=row.nextElementSibling;
@@ -263,8 +264,8 @@ document.addEventListener("DOMContentLoaded", () => {
     codes.forEach(code=>{const option=document.createElement("option");option.value=code;option.textContent=code;if(STATE_NAMES[code])option.title=STATE_NAMES[code];resultStateFilter.appendChild(option);});
     if(resultStateFilter.options[0])resultStateFilter.options[0].textContent="All";
   }
-  [resultFilter,resultStateFilter,resultArrangementFilter,resultStatusFilter,resultSort,resultMinCredibility,resultScheduleFilter,resultNewFilter].forEach(control=>control?.addEventListener("input",updateClientResults));
-  [resultStateFilter,resultArrangementFilter,resultStatusFilter,resultSort,resultMinCredibility,resultScheduleFilter,resultNewFilter].forEach(control=>control?.addEventListener("change",updateClientResults));
+  [resultFilter,resultStateFilter,resultArrangementFilter,resultStatusFilter,resultSort,resultMinCredibility,resultScheduleFilter,resultSourceFilter,resultNewFilter].forEach(control=>control?.addEventListener("input",updateClientResults));
+  [resultStateFilter,resultArrangementFilter,resultStatusFilter,resultSort,resultMinCredibility,resultScheduleFilter,resultSourceFilter,resultNewFilter].forEach(control=>control?.addEventListener("change",updateClientResults));
   updateClientResults();
 
   function normalizeJobTitles(value) {

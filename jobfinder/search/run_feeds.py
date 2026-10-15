@@ -1,4 +1,4 @@
-"""Public remote-job feeds (Remote OK, Remotive, We Work Remotely).
+"""Public remote-job feeds (Remote OK, Remotive, We Work Remotely, Hacker News "Who is hiring?").
 """
 
 
