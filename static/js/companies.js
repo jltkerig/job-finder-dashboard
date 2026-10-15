@@ -10,7 +10,8 @@
   const results = document.getElementById("companies-results");
   const body = document.getElementById("companies-body");
   const count = document.getElementById("companies-count");
-  const filter = document.getElementById("companies-filter");
+  // The text box that used to filter results is gone: the kind tags filter them. An older cached page's box is removed.
+  document.getElementById("companies-filter")?.closest("label")?.remove();
   const websiteOnly = document.getElementById("companies-website-only");
   const showHidden = document.getElementById("companies-show-hidden");
   const searchButton = document.getElementById("companies-search");
@@ -29,7 +30,7 @@
     if (!form.querySelector(".companies-filters")) {
       const bar = document.createElement("div");
       bar.className = "companies-filters";
-      for (const node of [filter, websiteOnly, showHidden]) bar.append(node.closest("label") || node);
+      for (const node of [websiteOnly, showHidden]) bar.append(node.closest("label") || node);
       (kinds || actions).before(bar);
     }
     const tags = document.getElementById("companies-kind-tags");
@@ -303,7 +304,7 @@
   }
 
   // The kinds of place: one tag for each, always listed. After a search each shows how many were found. Picking tags
-  // shows only those kinds, and the next search looks for just those (none picked: the usual kinds).
+  // narrows the results already found to those kinds (none picked: all of them); it does not start a new search.
   function renderKindTags(hidden) {
     if (!kindTags) return;
     const found = new Map(); // kind -> how many
@@ -336,14 +337,12 @@
 
   function render() {
     const hidden = readHidden();
-    const words = filter.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
     const visible = companies.filter((company) => {
       const isHidden = !company.mine && hidden.has(keyOf(company));
       if (isHidden && !revealHidden) return false;
       if (activeKinds.size && !(company.kinds || []).some((kind) => activeKinds.has(kind))) return false;
       if (websiteOnly.checked && !company.website) return false;
-      const haystack = `${company.name} ${company.type} ${company.address} ${company.place || ""} ${company.notes || ""}`.toLowerCase();
-      return words.every((word) => haystack.includes(word));
+      return true;
     });
     body.replaceChildren(...visible.map((company) => row(company, hidden)));
     renderKindTags(hidden);
@@ -357,10 +356,9 @@
   // One kind of place at a time: OpenStreetMap's free service is slow with a big question and refuses quick repeats, so
   // each kind is its own small question. Results appear as they arrive, and one kind failing does not lose the others.
   async function search() {
-    // The picked kind tags are what is searched; with none picked, the usual kinds (the boxes' own defaults).
+    // The usual kinds are searched (the boxes' own defaults); the tags only narrow what comes back.
     const allBoxes = [...form.querySelectorAll('input[name="kinds"]')];
-    if (activeKinds.size) allBoxes.forEach((box) => { box.checked = activeKinds.has(box.value); });
-    else allBoxes.forEach((box) => { box.checked = box.defaultChecked; });
+    allBoxes.forEach((box) => { box.checked = box.defaultChecked; });
     const boxes = allBoxes.filter((box) => box.checked);
     if (!boxes.length) { say("Choose at least one kind of place.", true); return; }
     searchButton.disabled = true;
@@ -426,7 +424,6 @@
   document.getElementById("companies-kinds-all")?.addEventListener("click", () => setKinds(true));
   document.getElementById("companies-kinds-none")?.addEventListener("click", () => setKinds(false));
   form.addEventListener("submit", (event) => { event.preventDefault(); search(); });
-  filter.addEventListener("input", render);
   websiteOnly.addEventListener("change", render);
   showHidden.addEventListener("click", () => { revealHidden = !revealHidden; render(); });
 })();

@@ -25,11 +25,10 @@
         <select id="companies-miles" name="miles">{% for miles in mile_choices %}<option value="{{ miles }}"{% if miles == default_miles %} selected{% endif %}>{{ miles }} miles</option>{% endfor %}</select>
       </div>
       <div class="companies-filters">
-        <label class="companies-filter"><span class="visually-hidden">Filter these results</span><input id="companies-filter" type="search" placeholder="Filter by name, type or street" /></label>
         <label class="companies-website-only"><input id="companies-website-only" type="checkbox" /> Only with a website</label>
         <button class="bordered-button secondary-action" id="companies-show-hidden" type="button" hidden>Show hidden</button>
       </div>
-      <div class="companies-kind-tags" id="companies-kind-tags" role="group" aria-label="Kinds of place: pick some to search and show only those"></div>
+      <div class="companies-kind-tags" id="companies-kind-tags" role="group" aria-label="Kinds of place: pick some to show only those in the results"></div>
       <fieldset class="companies-kinds" hidden>
         {% for key, label in kinds %}<label class="companies-kind"><input type="checkbox" name="kinds" value="{{ key }}"{% if key in default_kinds %} checked{% endif %} /> {{ label }}</label>{% endfor %}
       </fieldset>
