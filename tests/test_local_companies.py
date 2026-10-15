@@ -71,6 +71,32 @@ class Parsing(unittest.TestCase):
         self.assertGreater(top, bottom)
 
 
+class Staffing(unittest.TestCase):
+    def setUp(self):
+        lc.clear_cache()
+
+    def test_recruiters_and_staffing_is_a_kind_you_can_tick_but_not_one_of_the_first_ones(self):
+        label, words = lc.KINDS["staffing"]
+        self.assertEqual(label, "Recruiters and staffing")
+        self.assertIn("staffing", words)
+        self.assertIn("recruiting", words)
+        self.assertNotIn("staffing", lc.DEFAULT_KINDS)
+        self.assertEqual(list(lc.KINDS)[:2], ["offices", "staffing"])  # right after the offices
+
+    def test_a_staffing_agency_is_listed_as_an_employment_agency(self):
+        items = [{"osm_type": "node", "osm_id": 9, "lat": "39.5400", "lon": "-76.3500", "category": "office", "type": "employment_agency",
+                  "name": "Example Staffing Services", "address": {"road": "Main Street", "town": "Springfield", "state": "Maryland"},
+                  "extratags": {"phone": "+1 410 555 0123"}}]
+        (company,) = lc.parse_places(items, CENTER, 10)
+        self.assertEqual((company["name"], company["type"]), ("Example Staffing Services", "Employment agency"))
+
+    def test_the_page_offers_it(self):
+        import dashboard
+        html = dashboard.app.test_client().get("/companies").get_data(as_text=True)
+        self.assertIn('value="staffing"', html)
+        self.assertIn("Recruiters and staffing", html)
+
+
 class Searching(unittest.TestCase):
     def setUp(self):
         lc.clear_cache()

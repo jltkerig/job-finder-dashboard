@@ -68,22 +68,37 @@
 
   const field = (name) => addForm.elements[name];
 
+  // Editing a company opens the form in a row right under it; saving or cancelling closes that row and puts the form
+  // back in "Add a company of your own".
+  function dockForm() {
+    document.querySelectorAll(".companies-edit-row").forEach((editRow) => editRow.remove());
+    if (!addDetails.contains(addForm)) addDetails.insertBefore(addForm, addDetails.querySelector(".companies-add-help"));
+  }
+
   function resetAddForm() {
+    dockForm();
     addForm.reset();
     addId.value = "";
     addSave.textContent = "Add company";
     addCancel.hidden = true;
   }
 
-  function editCompany(company) {
+  function editCompany(company, tr) {
+    dockForm();
     for (const name of FIELDS) field(name).value = company[name] || "";
     addId.value = company.id.replace(/^mine\//, "");
     addSave.textContent = "Save changes";
     addCancel.hidden = false;
     addStatus.textContent = "";
-    addDetails.open = true;
+    const editRow = document.createElement("tr");
+    editRow.className = "companies-edit-row";
+    const editCell = document.createElement("td");
+    editCell.colSpan = tr.children.length;
+    editCell.append(addForm);
+    editRow.append(editCell);
+    tr.after(editRow);
     field("name").focus();
-    addDetails.scrollIntoView({ block: "nearest" });
+    editRow.scrollIntoView({ block: "nearest" });
   }
 
   async function post(url, data) {
@@ -117,10 +132,12 @@
       try {
         const reply = await post(editing ? `/companies/mine/${encodeURIComponent(editing)}` : "/companies/mine", data);
         const synced = reply.jobs_synced || 0;
-        addStatus.textContent = (editing ? `Saved ${reply.company.name}.` : `Added ${reply.company.name}.`)
+        const message = (editing ? `Saved ${reply.company.name}.` : `Added ${reply.company.name}.`)
           + (synced ? ` The job${synced === 1 ? "" : "s"} you had there ${synced === 1 ? "is" : "are"} updated in your Profile too, so the Résumé Builder shows it.` : "")
           + (reply.profile_synced === false ? " (Your Profile couldn't be updated just now.)" : "");
         resetAddForm();
+        // An edit closes its row, taking the form's own message with it, so the message goes where the page shows them.
+        if (editing) say(message); else addStatus.textContent = message;
         await loadMine();
       } catch (error) {
         addStatus.textContent = error.message;
@@ -192,7 +209,7 @@
     const actions = document.createElement("td");
     actions.className = "companies-row-actions";
     if (company.mine) {
-      actions.append(button("Edit", "companies-edit", () => editCompany(company)),
+      actions.append(button("Edit", "companies-edit", () => editCompany(company, tr)),
         button("Delete", "companies-delete", () => removeCompany(company)));
     } else {
       if (/^(node|way|relation)\//.test(company.id)) {

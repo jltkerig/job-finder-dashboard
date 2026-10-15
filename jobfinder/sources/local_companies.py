@@ -26,6 +26,9 @@ CACHE_SECONDS = 6 * 3600
 # words that brought back real places around a town. Shown in this order on the Companies page.
 KINDS = {
     "offices": ("Offices and companies", ["company", "insurance", "office"]),
+    # Nominatim matches names, so the words are what such places call themselves, plus a few staffing firms that OpenStreetMap
+    # has mapped around Baltimore (they come back as "Employment agency"). Military recruiting offices turn up under "recruiting".
+    "staffing": ("Recruiters and staffing", ["staffing", "recruiting", "Randstad", "Aerotek", "TEKsystems", "Manpower"]),
     "finance": ("Banks", ["bank"]),
     "legal": ("Legal and real estate", ["real estate", "attorney"]),
     "healthcare": ("Healthcare", ["clinic", "doctors", "dentist", "pharmacy", "hospital", "veterinary", "nursing home"]),
