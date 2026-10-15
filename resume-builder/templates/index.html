@@ -228,6 +228,8 @@
       <dt>Name</dt><dd>{{ (profile.first_name ~ ' ' ~ profile.last_name).strip() or '—' }}</dd>
       <dt>Location</dt><dd>{{ profile.home_location or '—' }}</dd>
       <dt>Links</dt><dd>{% if profile.linkedin_url %}<div><a href="{{ profile.linkedin_url }}" target="_blank" rel="noopener">LinkedIn</a></div>{% endif %}{% if profile.portfolio_url %}<div><a href="{{ profile.portfolio_url }}" target="_blank" rel="noopener">{{ profile.portfolio_url.split('://')[-1].rstrip('/') }}</a></div>{% endif %}{% if not (profile.linkedin_url or profile.portfolio_url) %}— <span class="field-help">(add them on Job Finder's Dashboard)</span>{% endif %}</dd>
+      {% if resume_links %}<dt></dt><dd><p class="status status-warn">Your résumé lists {{ resume_links.values()|join(' and ') }}, which {{ 'are' if resume_links|length > 1 else 'is' }} not in your Profile yet.</p>
+        <form method="post" action="{{ url_for('add_links_from_resume') }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}" /><button class="bordered-button" type="submit">Add {{ 'them' if resume_links|length > 1 else 'it' }} to my Profile</button></form></dd>{% endif %}
       <dt>Primary job</dt><dd>{{ profile.primary_job_title or '—' }}</dd>
       <dt>Other titles</dt><dd>{{ others|join(', ') or '—' }}</dd>
       <dt>Work history</dt><dd>{% for w in profile.work_history %}<div>{{ w.role }}{% if w.role and w.company %} at {% endif %}{{ w.company }}{% if w.dates %} <span class="field-help">({{ w.dates }})</span>{% endif %}</div>{% else %}—{% endfor %}</dd>
@@ -284,28 +286,32 @@
           <label>Portfolio or website <input name="portfolio_url" value="{{ profile.portfolio_url or '' }}" maxlength="255" inputmode="url" placeholder="e.g. yourname.com" /></label>
           <label class="ref-notes">Primary job title <input id="pf-primary" name="primary_job_title" value="{{ profile.primary_job_title }}" maxlength="255" placeholder="e.g. Web Designer" data-title-suggest="single" /></label>
           <label class="ref-notes">Other job titles to search for <span class="field-help">separate with commas</span>
-            <textarea id="pf-other-titles" name="other_titles" rows="2" data-title-suggest="list">{{ others|join(', ') }}</textarea></label>
+            <textarea id="pf-other-titles" name="other_titles" rows="2" data-title-suggest="list" data-also-from="pf-primary">{{ others|join(', ') }}</textarea></label>
           <div class="ref-notes title-chips" data-title-chips="pf-other-titles" data-also-from="pf-primary" hidden><span class="field-help">Suggested:</span><div class="chip-row"></div></div>
           <label class="ref-notes">Skills <span class="field-help">separate with commas</span>
-            <textarea name="skills" rows="3">{{ profile.skills|join(', ') }}</textarea></label>
+            <textarea id="pf-skills" name="skills" rows="3">{{ profile.skills|join(', ') }}</textarea></label>
+          <div class="ref-notes title-chips" data-skill-chips="pf-skills" data-title-from="pf-primary" hidden><span class="field-help">Suggested skills:</span><div class="chip-row"></div></div>
         </div>
         {% set history = profile.work_history + [{'role': '', 'company': '', 'dates': '', 'description': ''}] %}
         <input type="hidden" name="wh_count" value="{{ history|length }}" />
         <h3 class="sub-heading">Work History</h3>
-        <p class="field-help">To remove a job, clear its title and company.</p>
+        <p class="field-help">To remove a job, clear its title and company. Use Move up and Move down to change the order; the order you leave them in is what is saved.</p>
         {% for w in history %}{% set k = 'wh' ~ loop.index0 ~ '_' %}
-        <fieldset class="history-row{{ ' history-new' if loop.last }}">
+        {% if not loop.last %}<div class="section-marker" role="separator"><span>Work history</span><span class="marker-count">Job {{ loop.index }} of {{ history|length - 1 }}</span></div>{% endif %}
+        <fieldset class="history-row{{ ' history-new' if loop.last }}"{% if not loop.last %} data-job{% endif %}>
           <legend>{{ 'Add a Job' if loop.last else (w.role or w.company) }}</legend>
+          {% if not loop.last %}<input type="hidden" class="job-pos" name="{{ k }}pos" value="{{ loop.index0 }}" />
+          <div class="job-order"><button type="button" class="bordered-button job-up" title="Move this job up">Move up</button><button type="button" class="bordered-button job-down" title="Move this job down">Move down</button></div>{% endif %}
           <div class="ref-grid">
             <label>Job title <input id="{{ k }}role" name="{{ k }}role" value="{{ w.role }}" maxlength="150" placeholder="e.g. Web Designer" data-title-suggest="single" /></label>
             <label>Company <input name="{{ k }}company" value="{{ w.company }}" maxlength="150" /></label>
             <label class="ref-notes">Dates <input name="{{ k }}dates" value="{{ w.dates }}" maxlength="100" placeholder="{{ form_examples.work_dates or '' }}" /></label>
-            <label class="ref-notes">What you did <textarea name="{{ k }}description" rows="3" maxlength="3000">{{ w.description }}</textarea></label>
+            <label class="ref-notes">What you did <textarea name="{{ k }}description" rows="3" maxlength="3000" data-autogrow>{{ w.description }}</textarea></label>
           </div>
           <details class="history-extra"{% if w.street or w.city or w.phone or w.supervisor_name %} open{% endif %}>
             <summary>Location, Contact and Supervisor <span class="field-help">(optional, for applications that ask)</span></summary>
             <div class="ref-grid history-extra-grid">
-              <label class="ref-notes">Street <input name="{{ k }}street" value="{{ w.street }}" maxlength="200" placeholder="{{ form_examples.work_street or '' }}" /></label>
+              <label class="ref-notes">Street <input name="{{ k }}street" value="{{ w.street }}" maxlength="200" placeholder="{{ form_examples.work_street or '' }}" data-address-suggest="{{ k }}" /></label>
               <label>City <input name="{{ k }}city" value="{{ w.city }}" maxlength="100" placeholder="{{ form_examples.work_city or '' }}" /></label>
               <label>State <input name="{{ k }}state" value="{{ w.state }}" maxlength="50" placeholder="{{ form_examples.work_state or '' }}" /></label>
               <label>ZIP <input name="{{ k }}zip" value="{{ w.zip }}" maxlength="20" placeholder="{{ form_examples.work_zip or '' }}" /></label>
@@ -551,4 +557,5 @@
       });
   })();
 </script>
+<script src="{{ url_for('static', filename='history-order.js') }}"></script>
 {% endblock %}

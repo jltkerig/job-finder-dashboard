@@ -44,7 +44,7 @@ class PrimaryJobTitle(unittest.TestCase):
                                              counts={"saved": 0}, skill_suggestions=[],
                                              filters={"title": "", "state": "", "status": "", "sort": "date_desc"})
         self.assertIn('id="primary-job-title" name="primary_job_title" type="text" data-title-suggest="single" value="Web Designer"', html)
-        self.assertIn('id="job-titles" name="job_titles" type="text" data-title-suggest="list" value="Web Producer"', html)
+        self.assertIn('id="job-titles" name="job_titles" type="text" data-title-suggest="list" data-also-from="primary-job-title" value="Web Producer"', html)
         self.assertLess(html.index('for="primary-job-title"'), html.index('for="job-titles"'))
 
 

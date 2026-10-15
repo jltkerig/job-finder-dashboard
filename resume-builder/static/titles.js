@@ -46,6 +46,8 @@
         .then(function (data) {
           if (term() !== typed) return;
           var earlier = multi ? input.value.split(",").slice(0, -1).map(function (t) { return t.trim().toLowerCase(); }) : [];
+          var main = multi && input.dataset.alsoFrom ? (document.getElementById(input.dataset.alsoFrom) || {}).value : "";
+          if (main) earlier.push(main.trim().toLowerCase());  // the main title isn't offered again among the others
           items = (data.matches || []).filter(function (t) { return t.toLowerCase() !== typed.toLowerCase() && earlier.indexOf(t.toLowerCase()) < 0; });
           active = -1; render();
         })

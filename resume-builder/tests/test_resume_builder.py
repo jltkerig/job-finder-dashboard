@@ -260,6 +260,28 @@ class WebAppTests(unittest.TestCase):
         save.assert_not_called()
         self.assertIn("Enter both a first and last name.", page)
 
+    def test_work_history_saves_in_the_order_the_move_buttons_left_it(self):
+        form = {"csrf": self.csrf(), "first_name": "Jane", "last_name": "Doe", "wh_count": "4",
+                "wh0_role": "First Job", "wh0_company": "A", "wh0_pos": "2",
+                "wh1_role": "Second Job", "wh1_company": "B", "wh1_pos": "0",
+                "wh2_role": "Third Job", "wh2_company": "C", "wh2_pos": "1",
+                "wh3_role": "", "wh3_company": ""}  # the empty "Add a Job" box has no position and stays last
+        with mock.patch.object(jobfinder_db, "save_profile") as save:
+            self.client.post("/profile", data=form, follow_redirects=True)
+        self.assertEqual([row["role"] for row in save.call_args.args[6]], ["Second Job", "Third Job", "First Job", ""])
+
+    def test_work_history_has_labelled_markers_and_move_buttons(self):
+        profile = dict(PROFILE, work_history=[
+            {"role": "Web Developer", "company": "Example Co", "dates": "", "description": ""},
+            {"role": "Designer", "company": "Other Co", "dates": "", "description": ""}])
+        with mock.patch.object(jobfinder_db, "get_profile", return_value=profile):
+            page = self.client.get("/").get_data(as_text=True)
+        self.assertEqual(page.count('class="section-marker"'), 2)  # one above each job, none above "Add a Job"
+        self.assertIn("Job 1 of 2", page)
+        self.assertIn("Job 2 of 2", page)
+        self.assertEqual(page.count("Move up"), 2 + 1)  # a button on each job (+ the help text)
+        self.assertIn('name="wh1_pos" value="1"', page)
+
     def test_save_profile_writes_like_job_finder(self):
         calls = []
 

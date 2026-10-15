@@ -521,6 +521,11 @@ document.addEventListener("DOMContentLoaded", () => {
         fields.append(dateBlock);
         const description = field("What you did", "description", "e.g. Built responsive pages for client websites", true);
         description.label.append(el("small", "field-help", "One point per line."));
+        { // as tall as its text, so nothing needs dragging or scrolling (also sized when its panel opens)
+          const box = description.input, grow = () => { if (!box.offsetParent) return; box.style.height = "auto"; box.style.height = `${box.scrollHeight + box.offsetHeight - box.clientHeight}px`; };
+          box.style.overflowY = "hidden"; box.style.resize = "none"; box.addEventListener("input", grow);
+          let width = 0; new ResizeObserver(() => { if (box.offsetWidth !== width) { width = box.offsetWidth; grow(); } }).observe(box);
+        }
         fields.append(description.label);
         // Optional details some applications ask for.
         const group = (legend, help, rows) => {
@@ -793,8 +798,10 @@ document.addEventListener("DOMContentLoaded", () => {
         const response = await fetch(`/job-title-matches?q=${encodeURIComponent(typed)}`, { cache: "no-store" });
         const data = await response.json();
         if (term() !== typed || document.activeElement !== input) return; // the box was left while this loaded
-        const have = multi ? input.value.split(",").map((t) => t.trim().toLowerCase()) : [];
-        items = (data.matches || []).filter((title) => title.toLowerCase() === typed.toLowerCase() ? false : !have.slice(0, -1).includes(title.toLowerCase()));
+        const have = multi ? input.value.split(",").map((t) => t.trim().toLowerCase()).slice(0, -1) : [];
+        const main = multi && input.dataset.alsoFrom ? (document.getElementById(input.dataset.alsoFrom)?.value || "").trim().toLowerCase() : "";
+        if (main) have.push(main); // the main title isn't offered again among the others
+        items = (data.matches || []).filter((title) => title.toLowerCase() === typed.toLowerCase() ? false : !have.includes(title.toLowerCase()));
         active = -1; render();
       } catch { items = []; render(); }
     }

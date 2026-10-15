@@ -16,6 +16,8 @@ import documents
 import jobfinder_db
 import paging
 import profile_import
+import skill_suggest
+import address_suggest
 import reference_people
 import references
 import resume_file
@@ -94,13 +96,14 @@ def index():
     past_jobs = [" at ".join(p for p in (w["role"], w["company"]) if p) for w in (profile or {}).get("work_history", [])]
     past_jobs += [r["user_job"] for r in references.load() if r["user_job"]]
     # Jobs the uploaded résumé lists that the Profile doesn't have yet: offered, never added without a click.
-    resume_jobs, resume_schools = [], []
+    resume_jobs, resume_schools, resume_links = [], [], {}
     if profile and resume_file.current_info():
         try:
             resume_jobs = profile_import.new_jobs(resume_file.current_text(), profile)
             resume_schools = profile_import.new_schools(resume_file.current_text(), profile)
+            resume_links = profile_import.new_links(resume_file.current_text(), profile)
         except Exception:  # an unreadable résumé just means no offer
-            resume_jobs, resume_schools = [], []
+            resume_jobs, resume_schools, resume_links = [], [], {}
     # The same for the reference documents, plus skills they name: offered with tick boxes, added only on request.
     document_finds = {"jobs": [], "skills": [], "details": [], "people": []}
     if profile:
@@ -116,7 +119,7 @@ def index():
     all_builds = builds.list_builds()
     saved, saved_page, saved_pages = paging.paginate(all_builds, request.args.get("page", 1, type=int))
     return render_template("index.html", profile=profile, profile_error=profile_error, resume_jobs=resume_jobs,
-                           resume_schools=resume_schools, found_people=found_people, reference_sources=reference_sources,
+                           resume_schools=resume_schools, resume_links=resume_links, found_people=found_people, reference_sources=reference_sources,
                            relationship_options=reference_people.relationship_options,
                            document_finds=document_finds, education_degrees=jobfinder_db.EDUCATION_DEGREES,
                            reference_jobs={r['id']: document_import.job_index_for(r, profile) for r in references.load()} if profile else {},
@@ -536,6 +539,21 @@ def job_title_matches():
     return jsonify({"matches": onet.title_matches((request.args.get("q") or "")[:100]) if onet else []})
 
 
+@app.get("/address-suggest")
+def address_suggestions():
+    try:
+        found = address_suggest.suggest((request.args.get("q") or "")[:200], (request.args.get("place") or "")[:100])
+    except ValueError:  # the lookup service can't be reached: no suggestions
+        found = []
+    return jsonify({"suggestions": found})
+
+
+@app.get("/skill-suggestions")
+def skill_suggestions():
+    skills = [s.strip() for s in (request.args.get("skills") or "")[:3000].split(",") if s.strip()]
+    return jsonify({"suggestions": skill_suggest.suggest(skills, (request.args.get("title") or "")[:255].strip())})
+
+
 @app.get("/job-title-suggestions")
 def job_title_suggestions():
     onet = _onet()
@@ -562,6 +580,28 @@ def fill_profile_from_resume():
     return redirect(url_for("index") + "#profile")
 
 
+@app.post("/profile/add-links-from-resume")
+def add_links_from_resume():
+    """Add the LinkedIn and portfolio links the uploaded résumé lists, only where the Profile has none."""
+    try:
+        profile = jobfinder_db.get_profile()
+        links = profile_import.new_links(resume_file.current_text(), profile)
+        if not (profile["first_name"] and profile["last_name"]):
+            flash("Save your first and last name in the Profile first.", "error")
+        elif links:
+            primary = profile["primary_job_title"]
+            contact = {key: profile.get(key, "") for key in ("home_zip", "linkedin_url", "portfolio_url")}
+            jobfinder_db.save_profile(profile["first_name"], profile["last_name"], profile["home_location"], primary,
+                                      [t for t in profile["job_titles"] if t != primary], profile["skills"],
+                                      profile["work_history"], None, {**contact, **links})
+            flash("Added the link" + ("s" if len(links) > 1 else "") + " from your résumé to the Profile.", "ok")
+        else:
+            flash("Nothing new to add: your Profile already has the links your résumé lists.", "ok")
+    except Exception as error:  # no résumé, or Job Finder isn't reachable
+        flash(f"The links weren't added: {error}", "error")
+    return redirect(url_for("index") + "#profile")
+
+
 @app.post("/profile")
 def save_profile():
     sent_version = request.form.get("profile_version", "")
@@ -583,8 +623,14 @@ def save_profile():
     def split(name):
         return [part.strip() for part in request.form.get(name, "").replace("\n", ",").split(",") if part.strip()]
 
+    def position(i):  # where the Move up / Move down buttons left this job; boxes without one keep their place
+        try:
+            return int(request.form.get(f"wh{i}_pos", i))
+        except ValueError:
+            return i
+
     history = [{field: request.form.get(f"wh{i}_{field}", "") for field in ("role", "company", "dates", "description") + jobfinder_db.WORK_DETAILS}
-               for i in range(min(int(request.form.get("wh_count", 0) or 0), 50))]
+               for i in sorted(range(min(int(request.form.get("wh_count", 0) or 0), 50)), key=lambda i: (position(i), i))]
     onet = _onet()
     proper = onet.proper_title if onet and hasattr(onet, "proper_title") else (lambda text: text)  # titles get proper capitalization
     try:

@@ -352,3 +352,10 @@ input:not([type]), input[type="text"], input[type="search"], input[type="number"
 .person-choices .bordered-button { min-height: 34px; padding: 4px 12px; font-size: .85rem; }
 .quiet-button { color: #6b7280; }
 @media (max-width: 640px) { .person-choices { justify-items: start; } }
+/* Profile > Work History: a labelled marker above each job, and buttons to change their order */
+.section-marker { display:flex; justify-content:space-between; align-items:center; gap:10px; margin:22px 0 0; padding:5px 12px; border-radius:6px; background:#eef2f7; color:#33415c; font-size:.82rem; font-weight:700; letter-spacing:.04em; text-transform:uppercase; }
+.section-marker .marker-count { font-weight:600; text-transform:none; letter-spacing:0; }
+.section-marker + .history-row { margin-top:6px; }
+.job-order { display:flex; gap:8px; justify-content:flex-end; margin:4px 0 0; }
+.job-order .bordered-button { padding:3px 12px; font-size:.82rem; }
+.job-order .bordered-button:disabled { opacity:.4; cursor:default; }

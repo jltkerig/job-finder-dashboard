@@ -95,6 +95,31 @@ def _jobfinder_education(text):
     return parse_education(text)
 
 
+LINKEDIN = re.compile(r"(?:https?://)?(?:[a-z]{2,3}\.)?linkedin\.com/in/[\w%.-]+/?", re.I)
+WEB_ADDRESS = re.compile(r"(?<![@\w./-])(?:https?://)?(?:[a-z0-9-]+\.)+[a-z]{2,}(?:/[^\s,;|)]*)?", re.I)
+
+
+def found_links(text):
+    """{"linkedin_url", "portfolio_url"} the resume's header lists (only the ones it has), as typed in the text."""
+    header = " ".join(_header(_clean_lines(text)))
+    links = {}
+    match = LINKEDIN.search(header)
+    if match:
+        links["linkedin_url"] = match.group(0).rstrip("/.")
+    rest = LINKEDIN.sub(" ", header)
+    rest = re.sub(r"[\w.+-]+@[\w.-]+", " ", rest)  # email addresses aren't websites
+    site = next((m.group(0).rstrip(".") for m in WEB_ADDRESS.finditer(rest)), "")
+    if site:
+        links["portfolio_url"] = site
+    return links
+
+
+def new_links(text, profile):
+    """Links the resume lists in a spot the profile has empty, cleaned the way Job Finder stores them."""
+    found = jobfinder_db.clean_contact(found_links(text))
+    return {key: value for key, value in found.items() if key in ("linkedin_url", "portfolio_url") and value and not profile.get(key)}
+
+
 def _has_school(saved, school):
     """True when the profile already lists this school (and this degree, when both name one)."""
     name = school["school"].strip().casefold()
