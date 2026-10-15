@@ -56,7 +56,8 @@ def run_search(pages, search_url, job_title, *, cities_json='[]', max_new=2, loc
         if health is not None:  # what the last search noted about each board (board_health.json)
             debug_file.with_name('board_health.json').write_text(json.dumps(health), encoding='utf-8')
         stack.enter_context(patch.object(shared, 'SEARCH_DEBUG_FILE', debug_file))
-        stack.enter_context(patch.object(runner, 'BOARD_HEALTH_FILE', debug_file.with_name('board_health.json')))
+        for module in holders('BOARD_HEALTH_FILE'):
+            stack.enter_context(patch.object(module, 'BOARD_HEALTH_FILE', debug_file.with_name('board_health.json')))
         for name, function in patches.items():
             for module in holders(name):
                 stack.enter_context(patch.object(module, name, function))

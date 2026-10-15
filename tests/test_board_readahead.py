@@ -127,7 +127,7 @@ class InTheSearch(unittest.TestCase):
         captured = []
         near = lambda db, html, place, state, targets, **kw: (True, "Baltimore", 39.29, -76.61, 0.0)
         # The board list starts at a different board each hour; this pins it to the first.
-        with patch.object(shared, "PREFETCH_WORKERS", workers), patch("jobfinder.search.runner.time.time", return_value=0.0):
+        with patch.object(shared, "PREFETCH_WORKERS", workers), patch("jobfinder.search.run_employers.time.time", return_value=0.0):
             run_search({}, "https://example.com/none", "Web Designer", max_new=10, cities_json=self.CITIES,
                        city_targets=[{"city": "Baltimore, MD", "radius": 20}], distance=near,
                        extra={"load_employers": self.boards,
@@ -160,7 +160,7 @@ class ReplacementSearch(unittest.TestCase):
             board.config = dict(FakeEmployer.config, tenant=f"b{number}")
             boards.append(board)
         health = {"boards": [{"name": "Board 3", "matches": 4}, {"name": "Board 1", "matches": 0}]}
-        with patch.object(shared, "PREFETCH_WORKERS", 1), patch("jobfinder.search.runner.time.time", return_value=0.0):
+        with patch.object(shared, "PREFETCH_WORKERS", 1), patch("jobfinder.search.run_employers.time.time", return_value=0.0):
             run_search({}, "https://example.com/none", "Web Designer", max_new=1, cities_json=self.CITIES,
                        city_targets=[{"city": "Baltimore, MD", "radius": 20}], health=health,
                        extra={"load_employers": lambda: boards})
