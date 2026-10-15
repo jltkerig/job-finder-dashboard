@@ -109,6 +109,8 @@ def company_page_state():
 
 @app.route("/companies/page-state", methods=["POST"])
 def company_page_state_save():
+    if request.content_length and request.content_length > 8_000_000:
+        return api_error("E3531", "That is too much to keep.", 413)
     data = _fields_from_request()
     state = _page_state()
     if isinstance(data.get("results"), dict) and isinstance(data["results"].get("companies"), list):

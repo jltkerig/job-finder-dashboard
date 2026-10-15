@@ -27,6 +27,8 @@ def tidy_company_name(name, title=None):
     cleaned = re.split(r"\s*[│|]\s*", cleaned)[0].strip()
     if title and cleaned.casefold() == str(title).strip().casefold():
         return ""
+    if len(cleaned) > 120 or len(cleaned.split()) > 12:
+        return ""  # a sentence from the page (a fit chart's explanation), not a company name
     return cleaned
 
 

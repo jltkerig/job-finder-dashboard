@@ -19,6 +19,12 @@ Each entry: what went wrong, why, the fix, and the check that would have caught 
 
 ## Reading postings
 
+- **A sentence taken for a company name crashed a capture import** (2026-10-15). The Maryland Workforce Exchange reader
+  put a fit chart's explanation in the company field; the company-site guess turned it into a web address and
+  `requests` raised `LocationParseError`, which stopped the whole import. Fix: `tidy_company_name` drops names over 120
+  characters or 12 words, `can_guess_domain` refuses them, and `_fetch_page` treats a `ValueError` as a failed fetch.
+  Check: feed the import a company that is a long sentence.
+
 - **Pages that build themselves with JavaScript read as menus only** (2026-10-06). National Labor Exchange, Workday and
   Oracle Cloud pages return a shell ("Skip To Main Content…"). Fix: `jobfinder/sources/posting_text.py` gets the text
   from each system's data service. Check: audit shows unread/thin listings grouped by host.

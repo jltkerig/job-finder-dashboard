@@ -26,6 +26,7 @@ class ListingCleanupTests(unittest.TestCase):
     def test_company_names(self):
         self.assertEqual(tidy_company_name("9025 CVS Shared Services"), "CVS Shared Services")
         self.assertEqual(tidy_company_name("84 Lumber"), "84 Lumber")
+        self.assertEqual(tidy_company_name("This chart is used to compare your background against this job to help to determine if you would be a good fit"), "")
         self.assertEqual(tidy_company_name("Coda Search│Staffing"), "Coda Search")
         self.assertEqual(tidy_company_name("Production Designer", "Production Designer"), "")
 
