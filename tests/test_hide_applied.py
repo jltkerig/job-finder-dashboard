@@ -4,7 +4,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import no_database  # noqa: F401  (cuts tests off from the real database)
-from jobfinder.web.listing_queries import hide_applied, hide_queued, merge_duplicates
+from jobfinder.web.listing_queries import hide_applied, hide_queued, hide_saved, merge_duplicates
 
 
 def job(job_id, name, title, status="None", kept=0, source="Web"):
@@ -52,6 +52,16 @@ class HideQueuedTests(unittest.TestCase):
     def test_rows_without_details_are_left_alone(self):
         rows = [job(1, "Acme", "Web Designer"), job(2, "Beta", "UI Designer")]
         self.assertEqual(hide_queued(rows, rows), rows)
+
+
+class HideSavedTests(unittest.TestCase):
+    def test_saved_jobs_and_their_copies_leave_the_search_results(self):
+        saved = job(1, "Acme", "Web Designer", kept=1)
+        copy = job(2, "Acme", "Web Designer", source="Indeed")
+        other = job(3, "Beta", "UI Designer")
+        rows = [saved, copy, other]
+        self.assertEqual([r["id"] for r in hide_saved(rows, rows)], [3])
+        self.assertEqual([r["id"] for r in hide_saved([copy, other], rows)], [3])
 
 
 if __name__ == "__main__":

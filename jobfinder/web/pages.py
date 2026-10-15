@@ -29,6 +29,7 @@ from jobfinder.web.listing_queries import (
     get_kept_companies,
     hide_applied,
     hide_queued,
+    hide_saved,
 )
 from jobfinder.web.profile_store import listing_skill_demand, profile_skill_suggestions
 from jobfinder.web.schema import ensure_keep_column
@@ -54,7 +55,7 @@ def home():
     applied_titles = [company.get("career_job_title") for company in merged
                       if company.get("application_status") in {"Applied", "Talking With Recruiter", "Interview"}
                       and company.get("career_job_title")]
-    companies = hide_queued(hide_applied(merged, everything), everything)
+    companies = hide_saved(hide_queued(hide_applied(merged, everything), everything), everything)
 
     running, mode = scraper_status()
     profile = profile_store.get_user_profile()

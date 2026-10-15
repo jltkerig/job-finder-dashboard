@@ -108,7 +108,9 @@ document.addEventListener("DOMContentLoaded", () => {
       const data = await readJsonResponse(response, "Could not save this result.", "E1201"); if (!response.ok) throw new Error(serverMessage(data, "Could not save this result.", "E1201"));
       button.classList.remove("is-saving"); button.classList.add("is-saved"); button.textContent = "Saved"; button.disabled = false;
       const row = button.closest(".result-row"); if (row) row.dataset.saved = "true";
-      showToast("Added to Dashboard", "success");
+      // A saved job lives on the Dashboard's Saved Jobs, so it fades off the results (and stays off on reload).
+      if (page === "search") window.removeResultRows([companyId]);
+      showToast("Added to Saved Jobs on the Dashboard", "success");
     } catch (error) { button.disabled = false; button.classList.remove("is-saving"); button.textContent = "Keep"; showToast(error.message, "danger"); }
   }
   async function unsaveListing(button) {

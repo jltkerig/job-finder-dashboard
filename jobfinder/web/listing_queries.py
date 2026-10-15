@@ -376,6 +376,14 @@ def hide_queued(companies, everything):
             if not queued(company) and _duplicate_key(company) not in queued_keys]
 
 
+def hide_saved(companies, everything):
+    """The Search page's results without the jobs you have saved (Keep), or their copies on other boards: they live on the
+    Dashboard's Saved Jobs, and Keep makes a result fade off the list. A job you take off Saved Jobs shows here again."""
+    saved_keys = {_duplicate_key(company) for company in everything if company.get("is_kept")} - {None}
+    return [company for company in companies
+            if not company.get("is_kept") and _duplicate_key(company) not in saved_keys]
+
+
 def hide_closed(rows):
     """A job found to be closed leaves the Search results, saved or not (a saved one stays on the Dashboard, marked
     Closed; an unsaved one is deleted after CLOSED_KEEP_DAYS). Refresh checks each listing again and a reopened one

@@ -1817,6 +1817,8 @@ body[data-page="search"] .results-toolbar > .compact-field:first-of-type { flex:
 body[data-page="search"] .results-toolbar .compact-field > label { display:block; margin:0 0 3px; font-size:.74rem; font-weight:700; color:#4b5563; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 body[data-page="search"] .results-toolbar .compact-field input[type="search"],
 body[data-page="search"] .results-toolbar .compact-field select { height:36px !important; min-height:36px !important; padding:6px 10px !important; font-size:.9rem !important; }
+body[data-page="search"] .results-toolbar > .details-all-field { flex:0 0 auto; min-width:0; }
+body[data-page="search"] .results-toolbar > .details-all-field .bordered-button { min-width:0; height:36px; padding:0 14px; }
 body[data-page="search"] .results-toolbar .display-options { flex-basis:100%; }
 body[data-page="search"] .results-toolbar .display-options > summary { cursor:pointer; width:max-content; font-size:.84rem; font-weight:700; color:#374151; }
 body[data-page="search"] .results-toolbar .display-options[open] > summary { margin-bottom:8px; }
