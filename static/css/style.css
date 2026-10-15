@@ -1868,3 +1868,31 @@ body[data-page="dashboard"] .summary-delete-form { margin: 0; }
 .listings-collapse > summary h3 { font-size: 1.4rem; line-height: 1.25; }
 .listings-collapse[open] > summary.listings-summary { margin: 0 0 16px; }
 .listings-collapse > .credibility-legend { margin-top: 0; }
+
+/* Tablet widths: the Search filters wrap onto more lines instead of squeezing into one (and running under Open All Details). */
+@media (min-width: 761px) and (max-width: 1100px) {
+  body[data-page="search"] .results-toolbar > .compact-field, body[data-page="search"] .results-toolbar > .compact-field:first-of-type { flex: 1 1 150px; min-width: 140px; }
+  body[data-page="search"] .results-toolbar > .compact-field:has(#result-filter) { flex: 2 1 240px; }
+  body[data-page="search"] .results-toolbar .compact-field:has(#result-state-filter) { flex: 0 0 110px; min-width: 100px; }
+  body[data-page="search"] .results-toolbar > .details-all-field { flex: 0 0 auto; }
+  body[data-page="search"] .results-toolbar .compact-field > label { white-space: normal; overflow: visible; text-overflow: clip; }
+}
+/* Search for Jobs: fold-away sections (static/js/search-folds.js) */
+.job-search-form > details.search-fold { grid-column:1 / -1; border:1px solid #e3e6ea; border-radius:12px; background:#fafbfc; margin:0 0 12px; }
+.search-fold > summary { list-style:none; cursor:pointer; display:flex; align-items:center; gap:12px; padding:14px 20px; }
+.search-fold > summary::-webkit-details-marker { display:none; }
+.search-fold > summary::after { content:""; margin-left:auto; flex:none; width:10px; height:10px; border-right:2px solid #6b7280; border-bottom:2px solid #6b7280; transform:rotate(45deg); }
+.search-fold[open] > summary::after { transform:rotate(-135deg); }
+.fold-title { font-weight:700; font-size:1.1rem; flex:none; }
+.fold-count { flex:none; min-width:22px; padding:0 8px; border-radius:999px; background:#e8f0fb; color:#1f4f99; font-size:.8rem; font-weight:700; text-align:center; }
+.fold-count:empty { display:none; }
+.fold-glance { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#6b7280; font-size:.9rem; }
+.search-fold[open] > summary .fold-glance { display:none; }
+.fold-inside { padding:0 20px 18px; }
+.fold-inside > label { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+
+/* The Filters fold-up arrow sits at the far right, after the results number. */
+.results-toolbar, .filter-panel { position: relative; }
+.toolbar-title .filters-chevron, .filter-heading .filters-chevron { position: absolute; top: 24px; right: 20px; margin: 0; }
+body[data-page="search"] .results-toolbar .results-count { right: 46px; }
+body[data-page="search"] .results-toolbar .toolbar-title { padding-right: 140px; }
