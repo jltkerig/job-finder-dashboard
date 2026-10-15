@@ -205,6 +205,31 @@
     }
   });
 
+  // Reject: asks why, rejects the job (it goes to Settings like any rejected listing), and takes it off the queue and
+  // out of Saved Jobs.
+  section.addEventListener("click", async (event) => {
+    const button = event.target.closest(".apply-queue-reject");
+    if (!button) return;
+    const item = button.closest(".apply-queue-item");
+    const id = item.dataset.companyId;
+    const name = item.querySelector("strong, .apply-queue-title")?.textContent.trim() || "this job";
+    const reason = window.askRejectReason ? await window.askRejectReason(name) : (confirm(`Reject ${name}?`) ? "other" : null);
+    if (!reason) return;
+    button.disabled = true;
+    try {
+      const response = await fetch(`/reject-listing/${id}`, { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken, Accept: "application/json" }, body: JSON.stringify({ reason }) });
+      if (!response.ok) throw new Error();
+      const data = await response.json().catch(() => ({}));
+      const ids = [id, ...(data.also_rejected || [])].map(String);
+      window.ApplyQueueDrop?.(ids);
+      document.querySelectorAll(".saved-job-card").forEach((card) => { if (ids.includes(card.dataset.companyId)) card.remove(); });
+      status.textContent = "Rejected. It is in Settings if you want it back.";
+    } catch {
+      status.textContent = "Could not reject that. Try again.";
+      button.disabled = false;
+    }
+  });
+
   section.addEventListener("click", async (event) => {
     const button = event.target.closest(".apply-queue-applied, .apply-queue-remove");
     if (!button) return;
