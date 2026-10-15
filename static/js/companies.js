@@ -382,10 +382,11 @@
   // One kind of place at a time: OpenStreetMap's free service is slow with a big question and refuses quick repeats, so
   // each kind is its own small question. Results appear as they arrive, and one kind failing does not lose the others.
   async function search() {
-    // The usual kinds are searched (the boxes' own defaults); the tags only narrow what comes back.
+    // Every kind of place is searched (the tags only narrow what comes back, so a kind that was not searched would
+    // always show none). Each kind's answer is kept 6 hours, so the next search is quick.
     const allBoxes = [...form.querySelectorAll('input[name="kinds"]')];
-    allBoxes.forEach((box) => { box.checked = box.defaultChecked; });
-    const boxes = allBoxes.filter((box) => box.checked);
+    allBoxes.forEach((box) => { box.checked = true; });
+    const boxes = allBoxes;
     if (!boxes.length) { say("Choose at least one kind of place.", true); return; }
     searchButton.disabled = true;
     companies = [];

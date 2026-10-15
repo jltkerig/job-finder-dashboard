@@ -43,6 +43,14 @@ KINDS = {
     "home": ("Home and garden", ["garden centre", "florist", "furniture"]),
     "retail": ("Shops", ["supermarket", "department store", "hardware"]),
     "food": ("Food and lodging", ["restaurant", "hotel", "cafe", "bakery"]),
+    "tech": ("Technology and data", ["technology", "data", "internet"]),
+    "arts": ("Arts and entertainment", ["theater", "museum", "music", "arts"]),
+    "accounting": ("Accounting and tax", ["accounting", "tax", "financial", "investment", "credit union"]),
+    "print": ("Print and signs", ["signs", "graphics", "printing", "copy"]),
+    "engineering": ("Engineering and architecture", ["engineering", "architect", "consulting"]),
+    "marketing": ("Marketing and media", ["marketing", "advertising", "radio", "television", "magazine"]),
+    "nonprofit": ("Churches and nonprofits", ["church", "ministry", "foundation", "charity"]),
+    "transport": ("Transport and shipping", ["railroad", "shipping", "trucking", "transport"]),
 }
 DEFAULT_KINDS = ("offices", "finance", "healthcare", "industry", "education")
 
