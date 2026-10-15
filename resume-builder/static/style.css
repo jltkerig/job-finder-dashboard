@@ -364,3 +364,33 @@ input:not([type]), input[type="text"], input[type="search"], input[type="number"
 .more-links legend { font-weight:600; font-size:.9rem; padding:0 4px; }
 .link-row { display:grid; grid-template-columns:minmax(120px, 180px) 1fr; gap:8px; margin-top:6px; }
 @media (max-width: 640px) { .link-row { grid-template-columns:1fr; } }
+
+/* The Work History heading in the Profile editor: dark bar with light text. */
+#profile h3.dark-heading { background: #1f2937; color: #f3f4f6; padding: 8px 14px; border-radius: 8px; }
+
+/* The Profile's Edit button sits in the top right corner of the panel, just left of the collapse chevron. */
+#profile-panel { position: relative; }
+#profile .name-edit:not([open]) { margin: 0; }
+#profile .name-edit:not([open]) > summary { position: absolute; top: 0; right: 32px; margin: 0; }
+
+/* Suggested titles and skills (the "+ Title" chips and the skills found in documents): dark with light text. */
+.suggest-chip, .find-skill { background: #1f2937; color: #f3f4f6; border-color: #111827; }
+.suggest-chip:hover { background: #374151; border-color: #374151; }
+.find-skill .dismiss-x { color: #cbd5e1; }
+
+/* Saved skills in the Profile: dark chips with light text. */
+#profile .facts .chip { background: #1f2937; color: #f3f4f6; }
+
+/* All skill and suggestion chips share one size and weight, wherever they appear. */
+.chip, .suggest-chip, .find-skill, .chip-button { box-sizing: border-box; border: 1px solid transparent; border-radius: 999px; font: inherit !important; font-size: .85rem !important; font-weight: 400 !important; line-height: 1.3 !important; }
+.chip, .suggest-chip, .chip-button { padding: 5px 12px !important; }
+.find-skill { padding: 0 4px 0 0 !important; }
+.find-skill > label { padding: 5px 4px 5px 12px; font-weight: 400; }
+.chip { margin: 0 8px 8px 0 !important; }
+.ref-name .chip { margin: 0 0 0 6px !important; padding: 3px 10px !important; }
+
+/* The "Work History · Job 1 of 11" markers above each job: dark with light text. */
+.section-marker { background: #1f2937; color: #f3f4f6; }
+
+/* Move up / Move down are arrow icons. */
+.job-order .bordered-button { display: inline-flex; align-items: center; justify-content: center; padding: 4px 10px; }

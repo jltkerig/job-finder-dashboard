@@ -301,7 +301,7 @@ class WebAppTests(unittest.TestCase):
         self.assertEqual(page.count('class="section-marker"'), 2)  # one above each job, none above "Add a Job"
         self.assertIn("Job 1 of 2", page)
         self.assertIn("Job 2 of 2", page)
-        self.assertEqual(page.count("Move up"), 2 + 1)  # a button on each job (+ the help text)
+        self.assertEqual(page.count("Move this job up"), 2 * 2)  # a button on each job (title + label)
         self.assertIn('name="wh1_pos" value="1"', page)
 
     def test_save_profile_writes_like_job_finder(self):
