@@ -2320,3 +2320,6 @@ body[data-page="search"] .results-toolbar > .details-all-field .bordered-button 
 .companies-info { display:grid; grid-template-columns:max-content 1fr; gap:4px 16px; margin:8px 0 0; }
 .companies-info dt { font-weight:600; }
 .companies-info dd { margin:0; overflow-wrap:anywhere; }
+/* Apply Queue: the Easy Apply tag sits to the right of the job title, on its line */
+.apply-queue-heading { display:flex; flex-wrap:wrap; align-items:center; gap:4px 0; }
+.apply-queue-heading .easy-apply-badge { margin-left:8px; }
