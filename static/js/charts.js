@@ -912,3 +912,34 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 });
+
+// Filters (Search results and Saved Jobs) fold up from their "Filters" heading; each choice is remembered.
+document.addEventListener("DOMContentLoaded", () => {
+  document.querySelectorAll(".toolbar-title, .filter-heading").forEach((heading) => {
+    const box = heading.parentElement, page = document.body.dataset.page || "page", key = `jobFinder.${page}.filtersOpen`;
+    const chevron = document.createElement("span"); chevron.className = "summary-chevron filters-chevron"; chevron.setAttribute("aria-hidden", "true");
+    heading.append(chevron);
+    heading.setAttribute("role", "button"); heading.tabIndex = 0;
+    const set = (open) => { box.classList.toggle("filters-collapsed", !open); heading.setAttribute("aria-expanded", String(open)); try { localStorage.setItem(key, open ? "1" : "0"); } catch {} };
+    let open = true; try { open = localStorage.getItem(key) !== "0"; } catch {}
+    box.classList.toggle("filters-collapsed", !open); heading.setAttribute("aria-expanded", String(open));
+    heading.addEventListener("click", () => set(box.classList.contains("filters-collapsed")));
+    heading.addEventListener("keydown", (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); heading.click(); } });
+  });
+});
+
+// The Search page's Results (top picks, filters and the table) open and close from the heading; the choice is remembered.
+document.addEventListener("DOMContentLoaded", () => {
+  const panel = document.getElementById("results-panel");
+  if (!panel) return;
+  try { panel.open = localStorage.getItem("jobFinder.resultsOpen") !== "0"; } catch {}
+  panel.addEventListener("toggle", () => { try { localStorage.setItem("jobFinder.resultsOpen", panel.open ? "1" : "0"); } catch {} });
+});
+
+// The listings (scoring guide and results table) open and close from their heading; the choice is remembered.
+document.addEventListener("DOMContentLoaded", () => {
+  const panel = document.getElementById("listings-panel");
+  if (!panel) return;
+  try { panel.open = localStorage.getItem("jobFinder.listingsOpen") !== "0"; } catch {}
+  panel.addEventListener("toggle", () => { try { localStorage.setItem("jobFinder.listingsOpen", panel.open ? "1" : "0"); } catch {} });
+});

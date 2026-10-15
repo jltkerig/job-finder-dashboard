@@ -415,7 +415,7 @@
       current = restored;
       render(restored);
       panel.hidden = false;
-      status.textContent = "Your last Top 10. Click Top 10 Picks to rank again.";
+      status.textContent = "";
     }
   }
 
@@ -424,7 +424,7 @@
     try { localStorage.removeItem(SAVED_KEY); } catch {}  // closed: don't bring it back on the next refresh
   });
 
-  build.addEventListener("click", async () => {
+  build?.addEventListener("click", async () => {
     const chosen = Array.from(list.querySelectorAll("input:checked"));
     if (!chosen.length) { status.textContent = "Tick at least one job first."; return; }
     build.disabled = true;
@@ -457,4 +457,12 @@
     build.disabled = false;
     window.location.href = "claude://";
   });
+})();
+
+// Top 10 Picks opens and closes from its heading; the choice is remembered.
+(() => {
+  const panel = document.getElementById("top-picks-panel");
+  if (!panel) return;
+  try { panel.open = localStorage.getItem("jobFinder.topPicksOpen") !== "0"; } catch {}
+  panel.addEventListener("toggle", () => { try { localStorage.setItem("jobFinder.topPicksOpen", panel.open ? "1" : "0"); } catch {} });
 })();

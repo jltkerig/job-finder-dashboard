@@ -2364,3 +2364,36 @@ body[data-page="dashboard"] .summary-delete-form { margin: 0; }
 .saved-jobs-panel .filter-panel { padding: 0; border: 0; border-radius: 0; background: transparent; }
 
 .apply-queue-collapse > summary h2 { margin: 0; }
+
+/* Top 10 Picks collapses from its heading row (the Close button still hides the whole panel). */
+.top-picks-collapse > summary.top-picks-head { list-style: none; cursor: pointer; }
+.top-picks-collapse > summary.top-picks-head::-webkit-details-marker { display: none; }
+.top-picks-collapse > summary h2 { margin-right: auto; }
+.top-picks-collapse[open] > summary { margin-bottom: 10px; }
+.top-picks-collapse[open] > summary .summary-chevron { transform: rotate(-135deg); }
+
+/* Filters fold up from their heading. */
+.toolbar-title, .filter-heading { cursor: pointer; display: flex; align-items: center; gap: 8px; }
+.filters-chevron { margin-left: 10px; }
+.filters-collapsed .filters-chevron { transform: rotate(45deg); }
+.toolbar-title[aria-expanded="true"] .filters-chevron, .filter-heading[aria-expanded="true"] .filters-chevron { transform: rotate(-135deg); }
+.filters-collapsed > :not(.toolbar-title):not(.filter-heading) { display: none !important; }
+
+.results-collapse > summary.results-summary h2 { margin: 0; }
+
+.listings-collapse > summary.listings-summary { list-style: none; display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.listings-collapse > summary.listings-summary::-webkit-details-marker { display: none; }
+.listings-collapse > summary h3 { margin: 0; }
+.listings-collapse[open] > summary { margin: 14px 0 10px; }
+.listings-collapse > summary .summary-chevron { margin-left: auto; }
+.listings-collapse[open] > summary .summary-chevron { transform: rotate(-135deg); }
+
+/* Listings sit in a white card, like Recent Searches. */
+.listings-collapse { margin: 16px 0 28px; padding: 18px 20px; background: #fff; border: 1px solid #ddd; border-radius: 12px; }
+.listings-collapse[open] > summary { margin-top: 0; }
+
+/* Listings header: a heading as big as the other section headings, with room before the scoring key. */
+.listings-collapse > summary.listings-summary { padding: 2px 0 4px; }
+.listings-collapse > summary h3 { font-size: 1.4rem; line-height: 1.25; }
+.listings-collapse[open] > summary.listings-summary { margin: 0 0 16px; }
+.listings-collapse > .credibility-legend { margin-top: 0; }
