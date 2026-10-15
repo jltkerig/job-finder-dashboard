@@ -2185,11 +2185,14 @@ body[data-page="search"] #results-table td[data-label="Listing"] .inline-action-
 .companies-kinds-tools .chip-button { margin:0; padding:1px 10px; font-size:.8rem; }
 .companies-add { margin-top:14px; border:1px solid #d4d8dd; border-radius:8px; padding:10px 14px; background:#fafbfc; }
 .companies-add summary { cursor:pointer; font-weight:700; }
-.companies-add-form { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:12px 16px; align-items:start; margin-top:12px; }
-.companies-add-form .form-field { margin:0; min-width:0; }
+.companies-add-form { display:grid; grid-template-columns:repeat(12, minmax(0, 1fr)); gap:12px 16px; align-items:start; margin-top:12px; }
+.companies-add-form .form-field { margin:0; min-width:0; grid-column:span 4; }
 .companies-add-form .form-field input, .companies-add-form .form-field textarea { width:100%; box-sizing:border-box; }
-.companies-add-address { grid-column:span 2; }
-.companies-add-notes { grid-column:span 2; }
+.companies-add-form .companies-add-address { grid-column:span 6; }
+.companies-add-form .form-field:has(#companies-add-city) { grid-column:span 3; }
+.companies-add-form .form-field:has(#companies-add-state) { grid-column:span 1; }
+.companies-add-form .form-field:has(#companies-add-zip) { grid-column:span 2; }
+.companies-add-form .companies-add-notes { grid-column:span 8; }
 .companies-add-actions { grid-column:1 / -1; }
 .companies-add-notes textarea { padding:7px 10px; border:1px solid #c4c8ce; border-radius:6px; font:inherit; resize:vertical; }
 .companies-add-actions { display:flex; flex-wrap:wrap; align-items:center; gap:10px; }
@@ -2202,7 +2205,7 @@ body[data-page="search"] #results-table td[data-label="Listing"] .inline-action-
 .address-suggest small { color:#69717d; }
 @media (max-width: 760px) {
   .companies-add-form { grid-template-columns:1fr; }
-  .companies-add-address { grid-column:auto; }
+  .companies-add-form .form-field { grid-column:auto !important; }
 }
 .companies-mine-badge { display:inline-block; margin-left:8px; padding:1px 8px; border-radius:999px; background:#1f2937; color:#fff; font-size:.72rem; font-weight:700; vertical-align:middle; }
 .companies-notes { display:block; margin-top:2px; color:#59636e; white-space:pre-line; }
