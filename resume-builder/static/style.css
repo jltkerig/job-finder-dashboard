@@ -313,6 +313,11 @@ input:not([type]), input[type="text"], input[type="search"], input[type="number"
 /* Save and Add a Person are the same size */
 .people-actions > .bordered-button, .people-actions > .add-reference-panel > summary { box-sizing: border-box; width: 150px; min-height: 40px; justify-content: center; }
 .can-reference { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+@media (max-width: 640px) {  /* the person cards' dropdowns wrap under their labels instead of running off the screen */
+  .supervisor-row label { flex-wrap: wrap; max-width: 100%; }
+  .supervisor-row select { max-width: 100%; min-width: 0; }
+  .ref-summary { min-width: 0; max-width: 100%; }
+}
 .ref-grid .can-reference { display: flex; margin-top: 12px; }
 .ref-grid .can-reference input { width: 18px; height: 18px; min-height: 0; margin: 0; padding: 0; flex: none; accent-color: #1f2937; }
 /* Make a person a job's supervisor */
