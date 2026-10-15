@@ -2194,6 +2194,12 @@ body[data-page="search"] #results-table td[data-label="Listing"] .inline-action-
 .companies-add-notes textarea { padding:7px 10px; border:1px solid #c4c8ce; border-radius:6px; font:inherit; resize:vertical; }
 .companies-add-actions { display:flex; flex-wrap:wrap; align-items:center; gap:10px; }
 .companies-add-help { margin:12px 0 0; }
+/* The address suggestions under the Address box (static/js/address-suggest.js) */
+.address-suggest-wrap { position:relative; }
+.address-suggest { position:absolute; z-index:20; left:0; right:0; top:100%; margin:2px 0 0; padding:4px 0; list-style:none; background:#fff; border:1px solid #c4c8ce; border-radius:6px; box-shadow:0 6px 18px rgba(0,0,0,.14); max-height:260px; overflow-y:auto; }
+.address-suggest li { display:flex; flex-direction:column; gap:1px; padding:6px 10px; cursor:pointer; }
+.address-suggest li.is-active, .address-suggest li:hover { background:#eef3f9; }
+.address-suggest small { color:#69717d; }
 @media (max-width: 760px) {
   .companies-add-form { grid-template-columns:1fr; }
   .companies-add-address { grid-column:auto; }

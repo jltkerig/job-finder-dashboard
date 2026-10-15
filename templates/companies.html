@@ -18,7 +18,7 @@
     <form id="companies-form" class="companies-form" autocomplete="off">
       <div class="form-field companies-place">
         <label for="companies-place">Search around</label>
-        <input id="companies-place" name="place" type="text" placeholder="Bel Air, MD or a ZIP code" value="{{ home_place }}" />
+        <input id="companies-place" name="place" type="text" list="city-state-options" placeholder="Bel Air, MD or a ZIP code" value="{{ home_place }}" />
       </div>
       <div class="form-field companies-miles">
         <label for="companies-miles">Within</label>
@@ -49,8 +49,8 @@
         <div class="form-field"><label for="companies-add-name">Company name</label><input id="companies-add-name" name="name" type="text" maxlength="150" required /></div>
         <div class="form-field"><label for="companies-add-website">Website</label><input id="companies-add-website" name="website" type="text" maxlength="200" placeholder="acme.com" /></div>
         <div class="form-field"><label for="companies-add-jobs-board">Job board</label><input id="companies-add-jobs-board" name="jobs_board" type="text" maxlength="400" placeholder="Indeed, or a link such as jobs.lever.co/acme" title="Where the company posts jobs, if you know: a link to its jobs page, or just the name of the board" /></div>
-        <div class="form-field companies-add-address"><label for="companies-add-address">Address</label><input id="companies-add-address" name="address" type="text" maxlength="200" placeholder="10 Main Street, Bel Air, MD 21014" /></div>
-        <div class="form-field"><label for="companies-add-place">Town, State or ZIP</label><input id="companies-add-place" name="place" type="text" maxlength="100" placeholder="Bel Air, MD" title="Used to measure how far the company is from the place you search around" /></div>
+        <div class="form-field companies-add-address"><label for="companies-add-address">Address</label><input id="companies-add-address" name="address" type="text" maxlength="200" placeholder="Start typing: 10 Main Street, Bel Air, MD 21014" /></div>
+        <div class="form-field"><label for="companies-add-place">Town, State or ZIP</label><input id="companies-add-place" name="place" type="text" list="city-state-options" maxlength="100" placeholder="Bel Air, MD" title="Used to measure how far the company is from the place you search around" /></div>
         <div class="form-field"><label for="companies-add-phone">Phone</label><input id="companies-add-phone" name="phone" type="text" maxlength="40" /></div>
         <div class="form-field companies-add-notes companies-add-notes-wide"><label for="companies-add-notes">Notes</label><textarea id="companies-add-notes" name="notes" rows="2" maxlength="500" placeholder="Who you know there, what they make, when to check back"></textarea></div>
         <div class="companies-add-actions">
@@ -91,4 +91,4 @@
     <div class="footer-tech">Built with Python, Flask, MySQL/MariaDB, Brave Search API, HTML, CSS &amp; JavaScript · Geocoding © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a> · Remote listings: <a href="https://remoteok.com/" target="_blank" rel="noopener noreferrer">Remote OK</a> · <a href="https://remotive.com/" target="_blank" rel="noopener noreferrer">Remotive</a> · <a href="https://weworkremotely.com/" target="_blank" rel="noopener noreferrer">We Work Remotely</a> · Skill and title suggestions include modified information from the <a href="https://www.onetcenter.org/database.html" target="_blank" rel="noopener noreferrer">O*NET 31.0 Database</a> by the U.S. Department of Labor, Employment and Training Administration, used under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>. USDOL/ETA has not approved or tested these modifications.
     </div>
   </div>
-</footer><script src="/static/js/charts.js?v={{ asset_version }}"></script><script src="/static/js/companies.js?v={{ asset_version }}"></script></body></html>
+</footer><datalist id="city-state-options"></datalist><script src="/static/js/charts.js?v={{ asset_version }}"></script><script src="/static/js/companies.js?v={{ asset_version }}"></script><script src="/static/js/address-suggest.js?v={{ asset_version }}"></script></body></html>

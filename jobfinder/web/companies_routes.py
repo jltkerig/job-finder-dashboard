@@ -5,7 +5,7 @@ import re
 from flask import render_template, request, jsonify
 
 from jobfinder.profiles.travel import place_point, zip_point
-from jobfinder.sources import local_companies
+from jobfinder.sources import address_lookup, local_companies
 from jobfinder.web import employer_sync, listing_queries, my_companies, profile_store
 from jobfinder.web.core import api_error, app
 
@@ -88,6 +88,20 @@ def companies_search():
         return api_error("E3503", str(error), 502)
     return jsonify({"status": "ok", "place": shown, "center": {"lat": lat, "lon": lon}, "miles": miles,
                     "count": len(companies), "companies": companies})
+
+
+@app.route("/companies/address-suggest")
+def company_address_suggest():
+    """Addresses that start like what is being typed in the Add a company form, nearest the town in its Town box (or home) first."""
+    typed = (request.args.get("q") or "").strip()
+    if len(typed) < 4:
+        return jsonify({"status": "ok", "suggestions": []})
+    found = resolve_place(request.args.get("place"), profile_store.get_user_profile())
+    try:
+        suggestions = address_lookup.suggest(typed, found[0] if found else None)
+    except ValueError as error:
+        return api_error("E3521", str(error), 502)
+    return jsonify({"status": "ok", "suggestions": suggestions})
 
 
 def _fields_from_request():
