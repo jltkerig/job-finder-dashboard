@@ -270,43 +270,6 @@
     </form>
     {% endif %}
 
-    {% if document_finds.people %}
-    <section class="found-people" id="found-people">
-      <h3>People in Your Documents</h3>
-      <p class="field-help">Choose where each person belongs: a job's supervisor, your References, both, or neither. Nothing is added until you click.</p>
-      <ul class="person-list">{% for p in document_finds.people %}
-        <li class="person-card">
-          <div class="person-info">
-            <p class="ref-name"><strong>{{ p.name }}</strong>{% if p.title or p.company %} <span class="person-role">{{ [p.title, p.company]|select|join(', ') }}</span>{% endif %}</p>
-            {% if p.user_job %}<p class="field-help">{{ 'Your supervisor' if p.relationship == 'Supervisor' else 'Worked with you' }} when you were {{ p.user_job }}</p>{% endif %}
-            {% if p.phone or p.email %}<p class="ref-contact">{{ [p.phone, p.email]|select|join(' · ') }}</p>{% endif %}
-            <p class="field-help">From {{ p.source }}</p>
-            {% if p.supervisor_on or p.is_reference %}<p class="person-placed">{% if p.supervisor_on %}✓ Supervisor on {{ p.supervisor_on|join(', ') }}{% endif %}{% if p.supervisor_on and p.is_reference %} · {% endif %}{% if p.is_reference %}✓ In your References{% endif %}</p>{% endif %}
-          </div>
-          <div class="person-choices">
-            {% if profile and profile.work_history %}
-            <form method="post" action="{{ url_for('set_supervisor') }}" class="supervisor-form">
-              <input type="hidden" name="csrf" value="{{ csrf_token() }}" />
-              <div class="supervisor-row"><label>Supervisor for <select name="sup_job_{{ p.key }}"><option value="">Choose a job…</option>{% for w in profile.work_history %}<option value="{{ loop.index0 }}"{% if loop.index0 == p.job_index %} selected{% endif %}>{{ w.role }}{% if w.company %} at {{ w.company }}{% endif %}</option>{% endfor %}</select></label><button class="bordered-button" type="submit" name="person" value="suggestion:{{ p.key }}">Set as Supervisor</button></div>
-            </form>
-            {% endif %}
-            <div class="person-buttons">
-              {% if not p.is_reference %}
-              <form method="post" action="{{ url_for('add_suggested_reference') }}">
-                <input type="hidden" name="csrf" value="{{ csrf_token() }}" />
-                <button class="bordered-button" type="submit" name="key" value="{{ p.key }}">Add to References</button>
-              </form>
-              {% endif %}
-              <form method="post" action="{{ url_for('dismiss_suggestion') }}">
-                <input type="hidden" name="csrf" value="{{ csrf_token() }}" />
-                <button class="bordered-button quiet-button" type="submit" name="dismiss" value="reference:{{ p.dismiss }}" title="Stop showing {{ p.name }} here">{{ 'Done' if p.supervisor_on or p.is_reference else 'Ignore' }}</button>
-              </form>
-            </div>
-          </div>
-        </li>{% endfor %}
-      </ul>
-    </section>
-    {% endif %}
     <details class="name-edit"{% if missing %} open{% endif %}>
       <summary class="bordered-button">Edit</summary>
       <form method="post" action="{{ url_for('save_profile') }}">
@@ -488,7 +451,8 @@
 </section>
 
 <section class="card wide" id="saved-builds">
-  <h2>Saved Résumés and Cover Letters</h2>
+<details class="section-collapse" id="saved-builds-panel" open>
+  <summary><h2>Saved Résumés and Cover Letters</h2><span class="summary-chevron" aria-hidden="true"></span></summary>
   <p class="field-help">Saved in <code>{{ output_dir }}</code></p>
   {% if builds %}
   <div class="table-wrapper"><table>
@@ -523,15 +487,16 @@
   {% else %}
     <p>Nothing yet. Ask Claude Desktop to write one.</p>
   {% endif %}
+</details>
 </section>
 
 </div>
 <script>
-  // References and Résumé Design start closed and Profile starts open; remember each choice, and open them when the link points at them
-  // (adding or editing a reference, saving a design, or "Match My Portfolio").
+  // References and Résumé Design start closed; Profile and Saved Résumés and Cover Letters start open. Each choice is remembered, and a panel
+  // opens when the link points at it (adding or editing a reference, saving a design, "Match My Portfolio", or a page link of the saved files).
   (function () {
     [["references-panel", "resumeBuilder.referencesOpen", "#references"], ["design-panel", "resumeBuilder.designOpen", "#design"],
-     ["profile-panel", "resumeBuilder.profileOpen", "#profile", true]]
+     ["profile-panel", "resumeBuilder.profileOpen", "#profile", true], ["saved-builds-panel", "resumeBuilder.savedBuildsOpen", "#saved-builds", true]]
       .forEach(function (item) {
         var panel = document.getElementById(item[0]);
         if (!panel) return;

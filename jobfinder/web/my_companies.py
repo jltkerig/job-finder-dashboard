@@ -104,6 +104,30 @@ def add(fields, home_state=""):
     return entry
 
 
+def get(company_id):
+    """The stored company with this id; KeyError when there is none."""
+    for item in load():
+        if item["id"] == company_id:
+            return item
+    raise KeyError(company_id)
+
+
+def save_all(companies):
+    """Replace the whole list (employer_sync.py uses it to refresh several companies at once)."""
+    _save(companies)
+
+
+def website_address(text):
+    """The text as a website address (https://acme.com), or "" when it is not one."""
+    return _website(text)
+
+
+def same_company(first, second):
+    """True when two names are the same company (ignoring case, punctuation and an Inc / LLC ending)."""
+    key = _same(first)
+    return bool(key) and key == _same(second)
+
+
 def update(company_id, fields, home_state=""):
     companies = load()
     for index, item in enumerate(companies):

@@ -16,6 +16,7 @@ import documents
 import jobfinder_db
 import paging
 import profile_import
+import reference_people
 import references
 import resume_file
 import writing_rules
@@ -109,10 +110,14 @@ def index():
                               "people": document_import.reference_suggestions(profile, references.load())}
         except Exception:  # an unreadable document just means no suggestions
             pass
+    # People the documents name, shown in References: the ones not saved yet as their own cards, and where the saved ones were found.
+    found_people = [p for p in document_finds["people"] if not p["is_reference"]]
+    reference_sources = {p["name"].casefold(): p["source"] for p in document_finds["people"] if p["is_reference"]}
     all_builds = builds.list_builds()
     saved, saved_page, saved_pages = paging.paginate(all_builds, request.args.get("page", 1, type=int))
     return render_template("index.html", profile=profile, profile_error=profile_error, resume_jobs=resume_jobs,
-                           resume_schools=resume_schools,
+                           resume_schools=resume_schools, found_people=found_people, reference_sources=reference_sources,
+                           relationship_options=reference_people.relationship_options,
                            document_finds=document_finds, education_degrees=jobfinder_db.EDUCATION_DEGREES,
                            reference_jobs={r['id']: document_import.job_index_for(r, profile) for r in references.load()} if profile else {},
                            profile_version=jobfinder_db.profile_version(profile) if profile else "", detail_labels=document_import.DETAIL_LABELS,
@@ -386,45 +391,50 @@ def add_from_documents():
     return redirect(url_for("index") + "#profile")
 
 
-@app.post("/profile/set-supervisor")
-def set_supervisor():
-    """Fill one job's supervisor name, title and email from a person: a suggested one, or a saved reference."""
-    source, _, key = request.form.get("person", "").partition(":")
-    try:
-        profile = jobfinder_db.get_profile()
-    except jobfinder_db.JobFinderUnavailable as error:
-        flash(f"Not saved: {error}", "error")
-        return redirect(url_for("index") + "#profile")
-    if source == "suggestion":
-        person = next((p for p in document_import.reference_suggestions(profile, references.load()) if p["key"] == key), None)
-        title = (person or {}).get("title", "")
-        anchor = "#found-people"
-    elif source == "reference":
-        person = next((r for r in references.load() if r["id"] == key), None)
-        title = (person or {}).get("job_title", "")
-        anchor = "#references"
-    else:
-        abort(400)
-    try:
-        index = int(request.form.get(f"sup_job_{key}", ""))
-    except ValueError:
-        index = -1
-    if person is None or not 0 <= index < len(profile["work_history"]):
-        flash("Choose which job they supervised.", "error")
-        return redirect(url_for("index") + anchor)
+def _make_supervisor(profile, index, person):
+    """Save this person as the supervisor on the user's job number `index`. Returns that job, or None after saying why not."""
     if not (profile["first_name"] and profile["last_name"]):
         flash("Save your first and last name in the Profile first.", "error")
-        return redirect(url_for("index") + "#profile")
-    history = [dict(w) for w in profile["work_history"]]
-    job = history[index]
-    job.update({"supervisor_name": person["name"], "supervisor_title": title or job.get("supervisor_title", ""),
-                "supervisor_email": person.get("email") or job.get("supervisor_email", ""),
-                "supervisor_phone": person.get("phone") or job.get("supervisor_phone", "")})
+        return None
+    history = reference_people.with_supervisor(profile["work_history"], index, person)
     primary = profile["primary_job_title"]
     jobfinder_db.save_profile(profile["first_name"], profile["last_name"], profile["home_location"], primary,
                               [t for t in profile["job_titles"] if t != primary], profile["skills"], history)
-    flash(f"{person['name']} is now the supervisor on {job['role']} at {job['company']}.", "ok")
-    return redirect(url_for("index") + anchor)
+    return history[index]
+
+
+def _profile_or_none():
+    try:
+        return jobfinder_db.get_profile()
+    except jobfinder_db.JobFinderUnavailable:
+        return None
+
+
+@app.post("/references/<ref_id>/relationship")
+def set_relationship(ref_id):
+    """The dropdown on a saved reference: what they were to the user, and the job they had together. Chosen as Supervisor
+    with a job, they also become that job's supervisor."""
+    reference = next((r for r in references.load() if r["id"] == ref_id), None)
+    if reference is None:
+        abort(404)
+    relationship = request.form.get("relationship", "").strip()
+    if relationship not in [""] + reference_people.relationship_options(reference["relationship"]):
+        abort(400)
+    profile = _profile_or_none()
+    index = reference_people.job_choice(request.form, profile)
+    row = dict(reference, relationship=relationship)
+    if index >= 0:
+        row["user_job"] = reference_people.job_label(profile["work_history"][index])
+    references.update(ref_id, row)
+    name = reference["name"] or "They"
+    message = f"{name} is now your {relationship}." if relationship else f"Cleared what {name} was to you."
+    if relationship == "Supervisor" and index >= 0 and reference["name"]:
+        job = _make_supervisor(profile, index, {"name": reference["name"], "title": reference["job_title"],
+                                                "email": reference["email"], "phone": reference["phone"]})
+        if job:
+            message += f" They are the supervisor on {job['role']} at {job['company']}."
+    flash(message, "ok")
+    return redirect(url_for("index") + "#references")
 
 
 @app.post("/suggestions/dismiss")
@@ -435,26 +445,35 @@ def dismiss_suggestion():
         document_import.dismiss(kind, key)
     except ValueError:
         abort(400)
-    return redirect(url_for("index") + ("#found-people" if kind == "reference" else "#document-suggestions"))
+    return redirect(url_for("index") + ("#references" if kind == "reference" else "#document-suggestions"))
 
 
 @app.post("/references/add-suggested")
 def add_suggested_reference():
-    """Add one person found in the reference documents to References, with what the documents say about them."""
-    try:
-        profile = jobfinder_db.get_profile()
-    except jobfinder_db.JobFinderUnavailable:
-        profile = {}
-    person = next((p for p in document_import.reference_suggestions(profile, references.load())
+    """Add one person found in the reference documents to References, with what the documents say about them and what the
+    user chose on their card: what they were, and the job they had together (Supervisor with a job also makes them its supervisor)."""
+    profile = _profile_or_none()
+    person = next((p for p in document_import.reference_suggestions(profile or {}, references.load())
                    if p["key"] == request.form.get("key")), None)
     if person is None:
         flash("That person is no longer suggested.", "error")
-        return redirect(url_for("index") + "#found-people")
-    references.add({"relationship": person["relationship"], "name": person["name"], "job_title": person["title"],
-                    "company": person["company"], "user_job": person["user_job"], "phone": person["phone"],
+        return redirect(url_for("index") + "#references")
+    relationship = request.form.get("relationship", person["relationship"]).strip()
+    if relationship not in [""] + reference_people.relationship_options(person["relationship"]):
+        abort(400)
+    index = reference_people.job_choice(request.form, profile)
+    user_job = reference_people.job_label(profile["work_history"][index]) if index >= 0 else person["user_job"]
+    references.add({"relationship": relationship, "name": person["name"], "job_title": person["title"],
+                    "company": person["company"], "user_job": user_job, "phone": person["phone"],
                     "email": person["email"]})
-    flash(f"Added {person['name']} to your References.", "ok")
-    return redirect(url_for("index") + "#found-people")
+    message = f"Added {person['name']} to your References."
+    if relationship == "Supervisor" and index >= 0:
+        job = _make_supervisor(profile, index, {"name": person["name"], "title": person["title"],
+                                                "email": person["email"], "phone": person["phone"]})
+        if job:
+            message += f" They are the supervisor on {job['role']} at {job['company']}."
+    flash(message, "ok")
+    return redirect(url_for("index") + "#references")
 
 
 def _count(n, one, many=None):

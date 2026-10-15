@@ -116,7 +116,10 @@
       addStatus.textContent = "Saving…";
       try {
         const reply = await post(editing ? `/companies/mine/${encodeURIComponent(editing)}` : "/companies/mine", data);
-        addStatus.textContent = editing ? `Saved ${reply.company.name}.` : `Added ${reply.company.name}.`;
+        const synced = reply.jobs_synced || 0;
+        addStatus.textContent = (editing ? `Saved ${reply.company.name}.` : `Added ${reply.company.name}.`)
+          + (synced ? ` The job${synced === 1 ? "" : "s"} you had there ${synced === 1 ? "is" : "are"} updated in your Profile too, so the Résumé Builder shows it.` : "")
+          + (reply.profile_synced === false ? " (Your Profile couldn't be updated just now.)" : "");
         resetAddForm();
         await loadMine();
       } catch (error) {

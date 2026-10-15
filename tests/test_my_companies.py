@@ -184,6 +184,9 @@ class Routes(unittest.TestCase):
         self.addCleanup(patcher.stop)
 
     def test_add_edit_and_delete_over_the_page_routes(self):
+        patcher = patch.object(companies_routes.profile_store, "update_work_details", return_value=0)  # see test_employer_sync.py
+        patcher.start()
+        self.addCleanup(patcher.stop)
         added = self.client.post("/companies/mine", json={"name": "Acme", "website": "acme.example.com"}, headers=self.headers)
         self.assertEqual(added.status_code, 200)
         company_id = added.get_json()["company"]["id"].split("/")[1]

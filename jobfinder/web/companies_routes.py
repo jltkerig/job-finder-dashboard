@@ -6,7 +6,7 @@ from flask import render_template, request, jsonify
 
 from jobfinder.profiles.travel import place_point, zip_point
 from jobfinder.sources import local_companies
-from jobfinder.web import listing_queries, my_companies, profile_store
+from jobfinder.web import employer_sync, listing_queries, my_companies, profile_store
 from jobfinder.web.core import api_error, app
 
 MILE_CHOICES = (5, 10, 15, 25, 50)
@@ -53,6 +53,7 @@ def companies_page():
     profile = profile_store.get_user_profile()
     try:  # the employers in your work history (filled from your résumé) join your companies, once each
         my_companies.sync_from_work_history(profile.get("work_history"), str(profile.get("state") or ""))
+        employer_sync.refresh_from_work_history(profile.get("work_history"), str(profile.get("state") or ""))  # and show what the Profile has for them
     except OSError:
         pass  # the list is a convenience; the page still opens
     return render_template("companies.html", home_place=home_place(profile), mile_choices=MILE_CHOICES,
@@ -112,19 +113,33 @@ def my_company_add():
         entry = my_companies.add(_fields_from_request(), state)
     except ValueError as error:
         return api_error("E3511", str(error), 400)
-    return jsonify({"status": "ok", "company": my_companies.as_result(entry)})
+    synced = employer_sync.push(entry)  # a job in your work history at this company gets its empty details filled in
+    return jsonify({"status": "ok", "company": my_companies.as_result(entry), "jobs_synced": synced or 0,
+                    "profile_synced": synced is not None})
 
 
 @app.route("/companies/mine/<company_id>", methods=["POST"])
 def my_company_update(company_id):
     state = str(profile_store.get_user_profile().get("state") or "")
+    fields = _fields_from_request()
     try:
-        entry = my_companies.update(company_id, _fields_from_request(), state)
+        before = my_companies.get(company_id)
+        changed = dict(before, **my_companies.clean(fields, state))
     except ValueError as error:
         return api_error("E3511", str(error), 400)
     except KeyError:
         return api_error("E3512", "That company is no longer in your list.", 404)
-    return jsonify({"status": "ok", "company": my_companies.as_result(entry)})
+    # The Profile first: an employer from your résumé is shown from the Profile again, so a change kept only here would
+    # be undone the next time the page opens. A company you entered yourself is saved whatever happens to the Profile.
+    synced = employer_sync.push(changed, before)
+    if synced is None and before.get("source") == "resume":
+        return api_error("E3513", "Couldn't update the job's details in your Profile, so nothing was saved. Try again.", 500)
+    try:
+        entry = my_companies.update(company_id, fields, state)
+    except KeyError:
+        return api_error("E3512", "That company is no longer in your list.", 404)
+    return jsonify({"status": "ok", "company": my_companies.as_result(entry), "jobs_synced": synced or 0,
+                    "profile_synced": synced is not None})
 
 
 @app.route("/companies/mine/<company_id>/delete", methods=["POST"])

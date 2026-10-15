@@ -333,6 +333,42 @@ def profile_version(profile):
     return hashlib.sha1(json.dumps(shared, sort_keys=True, default=str).encode("utf-8")).hexdigest()[:16]
 
 
+WORK_DETAILS_SHARED = ("street", "city", "state", "zip", "phone", "website")  # what the Companies page may change on a job
+
+
+def update_work_details(matches, values, fill_only=False):
+    """Change the address, phone and website of the work-history jobs whose company name `matches` (a function) accepts.
+
+    values maps a detail (street, city, state, zip, phone, website) to its text. With fill_only a detail that already has
+    text is left alone. Returns how many jobs matched, or None when the profile could not be changed (nothing is then)."""
+    sizes = dict(WORK_DETAIL_COLUMNS)
+    columns = [name for name in WORK_DETAILS_SHARED if name in values]
+    if not columns:
+        return 0
+    ensure_profile_tables()
+    try:
+        with db.cursor(dictionary=True, commit=True) as cursor:
+            cursor.execute("SELECT id, company FROM user_profile_work_history WHERE profile_id = 1")
+            job_ids = [row["id"] for row in cursor.fetchall() if matches(row["company"])]
+            for job_id in job_ids:
+                sets, params = [], []
+                for name in columns:
+                    text = str(values[name] or "").strip()[:sizes[name]]
+                    if fill_only:
+                        if not text:
+                            continue
+                        sets.append(f"{name} = IF({name} = '', %s, {name})")
+                    else:
+                        sets.append(f"{name} = %s")
+                    params.append(text)
+                if sets:
+                    cursor.execute(f"UPDATE user_profile_work_history SET {', '.join(sets)} WHERE id = %s", (*params, job_id))
+        return len(job_ids)
+    except Error as error:
+        print(f"Could not update the details of your work history: {error}")
+        return None
+
+
 def save_avoid_terms(terms):
     """The words a job posting can mention that rule it out for you ("motion graphics", "video editing")."""
     cleaned = list(dict.fromkeys(str(term).strip()[:80] for term in terms if str(term).strip()))[:60]
