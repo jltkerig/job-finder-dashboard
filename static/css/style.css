@@ -2218,7 +2218,8 @@ body[data-page="search"] #results-table td[data-label="Listing"] .inline-action-
 .companies-table th { font-size:.8rem; text-transform:uppercase; letter-spacing:.04em; color:#59636e; }
 .companies-miles-cell { white-space:nowrap; font-variant-numeric:tabular-nums; }
 .companies-phone { color:#59636e; }
-.companies-row-actions { display:flex; gap:6px; justify-content:flex-end; white-space:nowrap; }
+.companies-row-actions { text-align:right !important; white-space:nowrap; width:1%; }
+.companies-row-actions > * + * { margin-left:6px; }
 .companies-row-actions .bordered-button { min-height:30px; padding:3px 10px; font-size:.82rem; }
 .is-hidden-company { opacity:.5; }
 .companies-status { margin:12px 0; }
