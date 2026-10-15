@@ -142,6 +142,9 @@ def main():
         print("2. Tests")
         if not run_tests(ROOT):
             raise SystemExit("Tests failed; nothing released.")
+        # Keep the map of the code (docs/CODE-MAP.md) current: it is what makes a change quick to find.
+        subprocess.run([sys.executable, str(ROOT / "scripts" / "code_map.py"), str(ROOT / "docs" / "CODE-MAP.md")], cwd=ROOT, check=False,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         print("3. ZIP")
         out, count = build_zip(version)
         print(f"    {out} ({count} files)")
