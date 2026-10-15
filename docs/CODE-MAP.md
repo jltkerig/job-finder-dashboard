@@ -197,8 +197,8 @@ found with a search and a short read instead of opening whole files. Search this
   - readJsonResponse 31; showToast 38; saveListing 103; unsaveListing 116; restoreRejected 131; fadeResultRows 209; stateCode 222; updateClientResults 228; normalizeJobTitles 270; setupCityEditor 280; loadJobTitleSuggestions 299; setBrowsing 308; showLoading 309; hideLoading 310; showStatusModal 314; fetchWithTimeout 319; setupPagination 321; attachTitleSuggest 763; properWord 823; properTitle 830
 - `clear-results.js` (20 lines): Clear Results: after one confirmation, delete the listings you haven't saved, queued, applied t
 - `columns.js` (77 lines): The Columns row in the results filters: tick or untick a column to show or hide it. The choice 
-- `companies.js` (636 lines): Companies page: searches OpenStreetMap (through Job Finder) for places near a town or ZIP code 
-  - keepOnServer 62; say 68; cell 73; closeInfo 81; showCompany 88; button 141; dockForm 163; resetAddForm 169; editCompany 182; post 206; saveCompany 219; removeCompany 244; row 287; loadMine 383; renderKindTags 403; render 437; search 458; rememberResults 526; restoreResults 532
+- `companies.js` (653 lines): Companies page: searches OpenStreetMap (through Job Finder) for places near a town or ZIP code 
+  - keepOnServer 62; say 68; cell 73; closeInfo 81; showCompany 88; button 141; dockForm 163; resetAddForm 169; editCompany 182; post 206; saveCompany 219; removeCompany 244; row 287; loadMine 383; renderKindTags 403; render 437; search 458; rememberResults 526; restoreResults 532; addMyCompaniesToSaved 545
 - `details-all.js` (52 lines): Open All Details / Close All Details, in the Search page's filter bar: drops down (or folds up)
 - `job-title-bubbles.js` (58 lines): Search page: the job titles are bubbles under a box (like the cities), not one long box. The re
 - `listing-preview.js` (135 lines): The Job Posting section of a listing's Details: loads some of the posting the first time the de
