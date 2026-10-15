@@ -68,9 +68,8 @@
     </details>
   </section>
   <section class="company-section companies-results" id="companies-results" hidden aria-live="polite">
-    <div class="companies-toolbar">
-      <strong id="companies-count"></strong>
-    </div>
+    <details class="companies-collapse" id="companies-results-panel" open>
+    <summary class="companies-toolbar companies-collapse-summary"><strong id="companies-count"></strong><span class="summary-chevron" aria-hidden="true"></span></summary>
     <div class="table-wrapper companies-table-wrapper">
       <table class="companies-table">
         <thead><tr><th>Company</th><th>Type</th><th>Address</th><th id="companies-miles-header">Miles</th><th>Website</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
@@ -79,6 +78,7 @@
     </div>
     <p class="field-help">Places and addresses are from <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>:
       as complete as they have made it for the area, so a company that is missing may just not be mapped yet.</p>
+    </details>
   </section>
   <p id="companies-status" class="field-help companies-status" role="status"></p>
 </main>

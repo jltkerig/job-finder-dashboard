@@ -619,3 +619,11 @@
   script.src = self.src.replace("companies.js", "saved-companies.js");
   document.head.append(script);
 })();
+
+// The results list opens and closes from its "N of N companies" heading; the choice is remembered.
+(() => {
+  const panel = document.getElementById("companies-results-panel");
+  if (!panel) return;
+  try { panel.open = localStorage.getItem("jobFinder.companiesResultsOpen") !== "0"; } catch {}
+  panel.addEventListener("toggle", () => { try { localStorage.setItem("jobFinder.companiesResultsOpen", panel.open ? "1" : "0"); } catch {} });
+})();

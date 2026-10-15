@@ -2351,3 +2351,16 @@ body[data-page="dashboard"] .summary-delete-form { margin: 0; }
 .profile-collapse > summary .summary-chevron { margin-left: auto; }
 .profile-collapse[open] > summary .summary-chevron { transform: rotate(-135deg); }
 .profile-collapse > summary:focus-visible { outline: 3px solid #93c5fd; outline-offset: 4px; border-radius: 6px; }
+
+/* The Companies results collapse from their count line. */
+.companies-collapse > summary.companies-collapse-summary { list-style: none; display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.companies-collapse > summary.companies-collapse-summary::-webkit-details-marker { display: none; }
+.companies-collapse[open] > summary { margin-bottom: 10px; }
+.companies-collapse > summary .summary-chevron { margin-left: auto; }
+.companies-collapse[open] > summary .summary-chevron { transform: rotate(-135deg); }
+
+/* Saved Jobs is a white card like Recent Searches; its filter box sits inside without a second border. */
+.saved-jobs-panel { margin-bottom: 28px; padding: 22px; background: #fff; border: 1px solid #ddd; border-radius: 12px; }
+.saved-jobs-panel .filter-panel { padding: 0; border: 0; border-radius: 0; background: transparent; }
+
+.apply-queue-collapse > summary h2 { margin: 0; }

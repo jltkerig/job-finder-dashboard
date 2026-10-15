@@ -886,6 +886,12 @@ document.addEventListener("DOMContentLoaded", () => {
       try { section.open = localStorage.getItem(key) !== "0"; } catch {}
       section.addEventListener("toggle", () => { try { localStorage.setItem(key, section.open ? "1" : "0"); } catch {} });
     });
+    // The Apply Queue opens and closes too; the choice is remembered.
+    const queuePanel = document.getElementById("apply-queue-panel");
+    if (queuePanel) {
+      try { queuePanel.open = localStorage.getItem("jobFinder.applyQueueOpen") !== "0"; } catch {}
+      queuePanel.addEventListener("toggle", () => { try { localStorage.setItem("jobFinder.applyQueueOpen", queuePanel.open ? "1" : "0"); } catch {} });
+    }
     // Saved Jobs can be collapsed as a whole; the choice is remembered, and a link to one job opens it.
     const savedPanel = document.getElementById("saved-jobs-panel");
     if (savedPanel) {
