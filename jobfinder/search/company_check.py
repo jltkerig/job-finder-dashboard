@@ -35,7 +35,7 @@ AGGREGATORS = {
 ATS_HOSTS = ("myworkdayjobs.com", "greenhouse.io", "lever.co", "ashbyhq.com", "workable.com", "smartrecruiters.com",
              "icims.com", "bamboohr.com", "recruitee.com", "teamtailor.com", "paylocity.com", "ultipro.com",
              "successfactors.com", "oraclecloud.com", "adp.com", "jobvite.com", "breezy.hr", "applytojob.com",
-             "rippling.com", "paycomonline.net", "dayforcehcm.com", "taleo.net", "governmentjobs.com")
+             "rippling.com", "paycomonline.net", "dayforcehcm.com", "taleo.net", "governmentjobs.com", "jobapscloud.com")
 CLOSED = re.compile(r"no longer (?:accepting|available|open)|position has been filled|(?:job|posting|position) "
                     r"(?:has )?(?:expired|closed)|this (?:job|position|requisition) is (?:closed|no longer)", re.I)
 COMPANY_FILLER = {"inc", "llc", "ltd", "corp", "corporation", "company", "co", "the", "group", "holdings", "and", "of",

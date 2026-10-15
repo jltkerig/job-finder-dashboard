@@ -348,7 +348,7 @@ class WebAppTests(unittest.TestCase):
     def test_references_add_edit_delete(self):
         page = self.client.get("/").get_data(as_text=True)
         self.assertIn('value="Web Developer at Example Co"', page)  # suggestion from work history
-        self.assertIn("No references yet.", page)
+        self.assertIn("No people yet.", page)
         token = self.csrf()
         sam = {"csrf": token, "name": "Sam Lee", "relationship": "Supervisor", "user_job": "Web Developer at Example Co",
                "job_title": "IT Director", "company": "Example Co", "phone": "555-0111", "email": "sam@example.com",
@@ -368,6 +368,14 @@ class WebAppTests(unittest.TestCase):
         self.client.post(f"/references/{saved[1]['id']}/delete", data={"csrf": token})
         self.assertEqual([r["name"] for r in references.load()], ["Sam Lee"])
         self.assertEqual(self.client.post("/references/nope/delete", data={"csrf": token}).status_code, 404)
+
+    def test_only_people_marked_ok_are_offered_when_editing_a_build(self):
+        references.add({"name": "Marked Mia", "phone": "555-0101", "can_reference": True})
+        references.add({"name": "Unmarked Uri", "phone": "555-0102", "can_reference": False})
+        record = builds.save_build("resume", SAMPLE, job_title="Dev", profile=PROFILE)
+        page = self.client.get(f"/build/{record['pdf']}").get_data(as_text=True)
+        self.assertIn("Marked Mia", page)
+        self.assertNotIn("Unmarked Uri", page)
 
     def test_files_outside_output_are_refused(self):
         self.assertEqual(self.client.get("/files/..%5Capp.py").status_code, 404)
@@ -464,6 +472,18 @@ class ConnectorTests(unittest.TestCase):
         self.assertNotIn('"id"', out)
         self.assertIn("Web Developer at Example Co", out)
         self.assertNotIn("secret note", out)
+
+    def test_only_people_marked_ok_are_given_out_as_references(self):
+        references.add({"name": "Marked Mia", "phone": "555-0101", "can_reference": True})
+        references.add({"name": "Unmarked Uri", "phone": "555-0102", "can_reference": False})
+        out = self.text(self.call("get_references"))
+        self.assertIn("Marked Mia", out)
+        self.assertNotIn("Unmarked Uri", out)
+        self.assertNotIn("can_reference", out)
+        for row in references.load():
+            references.delete(row["id"])
+        references.add({"name": "Only Unmarked", "can_reference": False})
+        self.assertIn("No one is marked OK", self.text(self.call("get_references")))
 
     def test_database_down_message(self):
         with mock.patch.object(jobfinder_db, "get_profile", side_effect=jobfinder_db.JobFinderUnavailable("DB down")):
@@ -989,11 +1009,11 @@ class ContactListTests(unittest.TestCase):
         with mock.patch.object(jobfinder_db, "get_profile", return_value=self.profile):
             page = client.post("/references/add-suggested", data={"csrf": "t", "key": pat["key"]}, follow_redirects=True).get_data(as_text=True)
         self.assertEqual([(r["name"], r["job_title"], r["relationship"]) for r in references.load()], [("Pat Kim", "CEO", "Supervisor")])
-        self.assertIn("Added Pat Kim to your References.", page)
-        self.assertIn("✓ In your References", page)  # still shown, so they can also be set as a supervisor
-        self.assertNotIn('name="key" value="%s">Add to References' % pat["key"], page)
+        self.assertIn("Added Pat Kim to People.", page)
+        self.assertIn("From ", page)  # now a saved card, which still says which document they were found in
+        self.assertNotIn('name="key" value="%s">Add to People' % pat["key"], page)
 
-    def test_a_suggested_person_or_saved_reference_becomes_a_jobs_supervisor(self):
+    def test_a_found_person_is_added_with_what_they_were_and_a_supervisor_gets_the_job(self):
         import app as web
         import document_import
         client = web.app.test_client()
@@ -1003,25 +1023,98 @@ class ContactListTests(unittest.TestCase):
         self.assertEqual(robin["job_index"], 0)  # linked to the Acme job by her email
         with mock.patch.object(jobfinder_db, "get_profile", return_value=self.profile):
             page = client.get("/").get_data(as_text=True)
-        self.assertIn(f'name="sup_job_{robin["key"]}"', page)
+        self.assertNotIn("Set as Supervisor", page)
+        self.assertIn('<option>Co-worker</option>', page)  # what they were: a list to choose from
         with mock.patch.object(jobfinder_db, "get_profile", return_value=self.profile), \
                 mock.patch.object(jobfinder_db, "save_profile") as save:
-            client.post("/profile/set-supervisor", data={"csrf": "t", "person": f"suggestion:{robin['key']}", f"sup_job_{robin['key']}": "1"})
+            page = client.post("/references/add-suggested", data={"csrf": "t", "key": robin["key"], "relationship": "Supervisor", "job": "1"},
+                               follow_redirects=True).get_data(as_text=True)
         history = save.call_args.args[6]
         self.assertEqual((history[1]["supervisor_name"], history[1]["supervisor_title"], history[1]["supervisor_email"]),
                          ("Robin Diaz", "Marketing Technology", "rdiaz@acmewidgets.com"))  # the job chosen, not the matched one
         self.assertNotIn("supervisor_name", history[0])
-        saved = references.add({"name": "Lee Park", "job_title": "Owner", "phone": "555-555-0133", "user_job": "Junior Web Designer at Example Org"})
-        with mock.patch.object(jobfinder_db, "get_profile", return_value=self.profile), \
-                mock.patch.object(jobfinder_db, "save_profile") as save:
+        self.assertEqual([(r["name"], r["relationship"], r["user_job"]) for r in references.load()],
+                         [("Robin Diaz", "Supervisor", "Junior Web Designer at Example Org")])
+        self.assertIn("They are the supervisor on Junior Web Designer at Example Org.", page)
+        with mock.patch.object(jobfinder_db, "get_profile", return_value=self.profile):
+            self.assertEqual(client.post("/references/add-suggested", data={"csrf": "t", "key": robin["key"], "relationship": "Nonsense"}).status_code, 400)
+
+    def test_save_button_saves_what_they_were_the_job_and_who_may_be_a_reference(self):
+        import app as web
+        client = web.app.test_client()
+        with client.session_transaction() as session:
+            session["csrf"] = "t"
+        lee = references.add({"name": "Lee Park", "job_title": "Owner", "phone": "555-555-0133", "relationship": "Mentor",
+                              "user_job": "Junior Web Designer at Example Org"})
+        kim = references.add({"name": "Kim Fox", "relationship": "Co-worker", "can_reference": False})
+        row = lambda ref: next(r for r in references.load() if r["id"] == ref["id"])
+        with mock.patch.object(jobfinder_db, "get_profile", return_value=self.profile):
             page = client.get("/").get_data(as_text=True)
-            self.assertIn(f'name="sup_job_{saved["id"]}"><option value="">Choose a job…</option><option value="0">', page)
-            client.post("/profile/set-supervisor", data={"csrf": "t", "person": f"reference:{saved['id']}", f"sup_job_{saved['id']}": "1"})
-        self.assertEqual((save.call_args.args[6][1]["supervisor_name"], save.call_args.args[6][1]["supervisor_title"]), ("Lee Park", "Owner"))
+        self.assertNotIn("Set as Supervisor", page)
+        self.assertIn('<form id="people-form" method="post" action="/references/save-people">', page)
+        self.assertIn(f'name="relationship_{lee["id"]}" form="people-form"', page)
+        self.assertIn("<option selected>Mentor</option>", page)  # a value saved earlier that isn't on the list stays on it
+        self.assertIn('<option value="1" selected>', page)  # the job they had together, from "your job together"
+        self.assertRegex(page, rf'name="can_{lee["id"]}" value="1" form="people-form" checked')  # saved before this existed: counts as yes
+        self.assertNotRegex(page, rf'name="can_{kim["id"]}" value="1" form="people-form" checked')
+        self.assertLess(page.index('form="people-form" title="Save'), page.index('Add a Person</summary>'))  # Save sits next to Add a Person
+        both = {"csrf": "t", "id": [lee["id"], kim["id"]]}
         with mock.patch.object(jobfinder_db, "get_profile", return_value=self.profile), \
                 mock.patch.object(jobfinder_db, "save_profile") as save:
-            client.post("/profile/set-supervisor", data={"csrf": "t", "person": f"reference:{saved['id']}"})  # no job chosen
-        save.assert_not_called()
+            client.post("/references/save-people", data={**both, f"relationship_{lee['id']}": "Co-worker", f"job_{lee['id']}": "0",
+                                                         f"relationship_{kim['id']}": "Co-worker", f"can_{kim['id']}": "1"})
+            save.assert_not_called()  # only a Supervisor changes a job
+        self.assertEqual((row(lee)["relationship"], row(lee)["user_job"], row(lee)["can_reference"]),
+                         ("Co-worker", "Front End Web Developer at Acme Widgets LLC", False))  # unticked = not a reference
+        self.assertTrue(row(kim)["can_reference"])
+        with mock.patch.object(jobfinder_db, "get_profile", return_value=self.profile), \
+                mock.patch.object(jobfinder_db, "save_profile") as save:
+            page = client.post("/references/save-people", data={**both, f"relationship_{lee['id']}": "Supervisor", f"job_{lee['id']}": "1",
+                                                                f"relationship_{kim['id']}": "Supervisor", f"job_{kim['id']}": "0",
+                                                                f"can_{lee['id']}": "1", f"can_{kim['id']}": "1"},
+                               follow_redirects=True).get_data(as_text=True)
+        history = save.call_args.args[6]
+        self.assertEqual(save.call_count, 1)  # both supervisors in one save
+        self.assertEqual((history[1]["supervisor_name"], history[1]["supervisor_title"]), ("Lee Park", "Owner"))
+        self.assertEqual(history[0]["supervisor_name"], "Kim Fox")
+        self.assertIn("Saved 2 people.", page)
+        self.assertEqual((row(lee)["relationship"], row(lee)["user_job"]), ("Supervisor", "Junior Web Designer at Example Org"))
+        with mock.patch.object(jobfinder_db, "get_profile", return_value=self.profile), \
+                mock.patch.object(jobfinder_db, "save_profile") as save:
+            page = client.post("/references/save-people", data={"csrf": "t", "id": [lee["id"]], f"relationship_{lee['id']}": "Supervisor",
+                                                                f"job_{lee['id']}": "1", f"can_{lee['id']}": "1"},
+                               follow_redirects=True).get_data(as_text=True)
+            save.assert_not_called()  # nothing changed, so Save leaves the jobs alone
+            self.assertIn("Nothing to save", page)
+            client.post("/references/save-people", data={"csrf": "t", "id": [lee["id"]], f"relationship_{lee['id']}": "Manager",
+                                                         f"can_{lee['id']}": "1"})  # no job chosen: the job together is kept
+            self.assertEqual((row(lee)["relationship"], row(lee)["user_job"]), ("Manager", "Junior Web Designer at Example Org"))
+            self.assertEqual(client.post("/references/save-people", data={"csrf": "t", "id": [lee["id"]],
+                                                                          f"relationship_{lee['id']}": "Nonsense"}).status_code, 400)
+            client.post("/references/save-people", data={"csrf": "t", "id": [lee["id"]], f"relationship_{lee['id']}": "", f"can_{lee['id']}": "1"})
+        self.assertEqual(row(lee)["relationship"], "")
+
+    def test_a_found_person_is_not_a_reference_until_marked(self):
+        import app as web
+        import document_import
+        client = web.app.test_client()
+        with client.session_transaction() as session:
+            session["csrf"] = "t"
+        pat = next(p for p in document_import.reference_suggestions(self.profile, []) if p["name"] == "Pat Kim")
+        with mock.patch.object(jobfinder_db, "get_profile", return_value=self.profile):
+            client.post("/references/add-suggested", data={"csrf": "t", "key": pat["key"]})
+        self.assertFalse(references.load()[0]["can_reference"])  # found in a document, not asked yet
+        for row in references.load():
+            references.delete(row["id"])
+        with mock.patch.object(jobfinder_db, "get_profile", return_value=self.profile):
+            client.post("/references/add-suggested", data={"csrf": "t", "key": pat["key"], "can_reference": "1"})
+        self.assertTrue(references.load()[0]["can_reference"])
+
+    def test_saved_builds_can_be_collapsed(self):
+        import app as web
+        page = web.app.test_client().get("/").get_data(as_text=True)
+        self.assertIn('<details class="section-collapse" id="saved-builds-panel" open>', page)
+        self.assertIn("resumeBuilder.savedBuildsOpen", page)  # the choice is remembered, like the other sections
 
     def test_profile_links_are_shown(self):
         import app as web
@@ -1042,8 +1135,9 @@ class ContactListTests(unittest.TestCase):
         with mock.patch.object(jobfinder_db, "get_profile", return_value=self.profile), \
                 mock.patch.object(jobfinder_db, "save_profile") as save:
             page = client.get("/").get_data(as_text=True)
-            self.assertIn("People in Your Documents", page)  # not under References: the user chooses where each one goes
-            self.assertLess(page.index('id="found-people"'), page.index('id="references"'))
+            self.assertNotIn("People in Your Documents", page)  # one place for people: References
+            self.assertLess(page.index('id="references"'), page.index('id="found-people"'))
+            self.assertIn("Found in Your Documents", page)
             self.assertNotIn("Possible References", page)
             client.post("/profile/add-from-documents", data={"csrf": "t", "detail": ["0"], "reference": [key]})
         saved = {w["company"]: w for w in save.call_args.args[6]}

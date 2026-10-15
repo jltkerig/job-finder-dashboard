@@ -25,6 +25,7 @@ from jobfinder.sources.remote_states import is_remote_place, place_states
 from jobfinder.sources.employer_boards import Ashby, BambooHR, Greenhouse, Lever, Recruitee, Rippling, Teamtailor
 from jobfinder.sources.employer_common import HTML, USER_AGENT, Http, _arrangement, _opening, _plain, _schedule  # noqa: F401
 from jobfinder.sources.employer_enterprise import ICIMS, Oracle, SuccessFactors, UltiPro, Workday
+from jobfinder.sources.employer_jobaps import JobAps
 from jobfinder.sources.employer_more import ADP, NeoGov, Paylocity, SmartRecruiters, Workable
 SOURCE_TYPE = "Employer careers"
 CONFIG_FILE = paths.WATCHED_EMPLOYERS_FILE
@@ -101,13 +102,14 @@ DEFAULT_EMPLOYERS = [
     {"name": "Ingredion", "system": "workday", "host": "ingredion.wd1.myworkdayjobs.com", "tenant": "ingredion", "site": "IngredionCareers", "domain": "ingredion.com"},
     {"name": "Harford County Government", "system": "workday", "host": "harfordcountymd.wd503.myworkdayjobs.com", "tenant": "harfordcountymd", "site": "Harford_County_External_Career_Site", "domain": "harfordcountymd.gov"},
     {"name": "Long & Foster Real Estate", "system": "smartrecruiters", "company": "LongFosterRealEstate", "domain": "longandfoster.com"},
+    {"name": "State of Maryland", "system": "jobaps", "agency": "MD", "state": "MD", "domain": "maryland.gov"},
 ]
 
 
 
 ADAPTERS = {"workday": Workday, "oracle": Oracle, "icims": ICIMS, "successfactors": SuccessFactors, "ultipro": UltiPro,
             "greenhouse": Greenhouse, "lever": Lever, "ashby": Ashby, "bamboohr": BambooHR, "smartrecruiters": SmartRecruiters,
-            "adp": ADP, "paylocity": Paylocity, "workable": Workable, "neogov": NeoGov,
+            "adp": ADP, "paylocity": Paylocity, "workable": Workable, "neogov": NeoGov, "jobaps": JobAps,
             "recruitee": Recruitee, "teamtailor": Teamtailor, "rippling": Rippling}
 
 

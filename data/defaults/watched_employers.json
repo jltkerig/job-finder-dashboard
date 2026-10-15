@@ -381,5 +381,12 @@
     "system": "smartrecruiters",
     "company": "LongFosterRealEstate",
     "domain": "longandfoster.com"
+  },
+  {
+    "name": "State of Maryland",
+    "system": "jobaps",
+    "agency": "MD",
+    "state": "MD",
+    "domain": "maryland.gov"
   }
 ]

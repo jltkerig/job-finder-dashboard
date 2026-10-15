@@ -113,9 +113,14 @@ def get_current_resume() -> list:
 
 @server.tool()
 def get_references() -> str:
-    """The user's references: name, who they are to the user, the user's job together, their title, company, phone, email."""
-    rows = [{k: v for k, v in r.items() if k not in ("notes", "id")} for r in references.load()]
-    return _json(rows) if rows else f"No references saved. The user can add them at http://127.0.0.1:{config.PORT}/#references."
+    """The user's references: only the people they marked OK to use as a reference. Name, who they are to the user, the user's job together, their title, company, phone, email."""
+    people = references.load()
+    rows = [{k: v for k, v in r.items() if k not in ("notes", "id", "can_reference")} for r in people if r["can_reference"]]
+    if rows:
+        return _json(rows)
+    if people:
+        return f"No one is marked OK to use as a reference yet. The user marks them under People at http://127.0.0.1:{config.PORT}/#references."
+    return f"No references saved. The user can add people at http://127.0.0.1:{config.PORT}/#references."
 
 
 @server.tool()

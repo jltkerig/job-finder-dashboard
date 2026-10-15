@@ -72,6 +72,11 @@ def identify(url):
             and parts[1].casefold() not in {"home", "search", "jobs", "api"}:
         return {"system": "neogov", "agency": parts[1].casefold()}
 
+    # JobAps government portals: jobapscloud.com/<agency>/... (the State of Maryland is "MD")
+    if host in ("jobapscloud.com", "www.jobapscloud.com", "jobaps.com", "www.jobaps.com") and parts \
+            and re.fullmatch(r"[A-Za-z0-9]{2,16}", parts[0]) and parts[0].casefold() not in _NOT_A_BOARD | {"css", "js", "mainshared", "sup", "images"}:
+        return {"system": "jobaps", "agency": parts[0].upper(), **({"state": "MD"} if parts[0].upper() == "MD" else {})}
+
     if host == "apply.workable.com":
         return {"system": "workable", "slug": parts[0]} if parts and parts[0].casefold() not in _NOT_A_BOARD | {"j", "j"} else None
 
@@ -130,6 +135,8 @@ def identify_unreadable(url):
 def pretty_name(config):
     """A readable company name from a board's address parts, used when nothing better is known."""
     raw = (config.get("slug") or config.get("company") or config.get("agency") or config.get("tenant") or "")
+    if config.get("system") == "jobaps" and str(config.get("agency")).upper() == "MD":
+        return "State of Maryland"
     if config.get("system") == "icims":
         raw = re.sub(r"^(?:careers|jobs|career)-", "", config["host"].split(".")[0])
     if config.get("system") == "ultipro":

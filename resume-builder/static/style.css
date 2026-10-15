@@ -303,6 +303,18 @@ input:not([type]), input[type="text"], input[type="search"], input[type="number"
 .add-reference-panel > summary { display: inline-flex; list-style: none; cursor: pointer; }
 .add-reference-panel > summary::-webkit-details-marker { display: none; }
 .add-reference-panel[open] > summary { margin-bottom: 10px; background: #1f2937; border-color: #1f2937; color: #fff; }
+/* People: Save sits next to Add a Person; an open Add panel takes the full row below them */
+.people-actions { display: grid; grid-template-columns: 150px 1fr; column-gap: 10px; align-items: start; margin: 12px 0 16px; }
+.people-actions > .add-reference-panel { grid-column: 1 / -1; margin: 0; padding: 0; border: 0; border-radius: 0; }  /* no box of its own: the open form has one */
+/* With a Save button, Save and Add a Person share the first row; the open form then runs the full width below them */
+.people-actions > .bordered-button { grid-column: 1; grid-row: 1; }
+.people-actions > .bordered-button + .add-reference-panel { grid-column: 2; grid-row: 1; }
+.people-actions > .bordered-button + .add-reference-panel[open] > form { margin-left: -160px; }
+/* Save and Add a Person are the same size */
+.people-actions > .bordered-button, .people-actions > .add-reference-panel > summary { box-sizing: border-box; width: 150px; min-height: 40px; justify-content: center; }
+.can-reference { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+.ref-grid .can-reference { display: flex; margin-top: 12px; }
+.ref-grid .can-reference input { width: 18px; height: 18px; min-height: 0; margin: 0; padding: 0; flex: none; accent-color: #1f2937; }
 /* Make a person a job's supervisor */
 .supervisor-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; font-size: .84rem; font-weight: 600; color: #374151; }
 .supervisor-row label { display: inline-flex; align-items: center; gap: 8px; }

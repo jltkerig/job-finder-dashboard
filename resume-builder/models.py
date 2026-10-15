@@ -32,6 +32,7 @@ class Reference(BaseModel):
     phone: str = ""
     email: str = ""
     notes: str = Field("", description="Private notes for the user, never printed.")
+    can_reference: bool = Field(True, description="True when the person agreed to be used as a reference. Rows saved before this existed count as yes.")
 
 
 class PrintedReference(BaseModel):

@@ -347,6 +347,19 @@
 </section>
 
 
+{# What a person was to you (a list to choose from), the job you had together, and whether they may be used as a reference.
+   For a saved person (key = their id) the boxes belong to the form at the top of the list and are saved with its Save button;
+   for a found person (no key) they are part of that person's own Add form. #}
+{% macro relationship_choice(current, job_index, can, key) %}
+  {% set suffix = '_' ~ key if key else '' %}
+  {% set attach = ' form="people-form"' if key else '' %}
+  <div class="supervisor-row">
+    <label>What they were <select name="relationship{{ suffix }}"{{ attach|safe }}><option value="">Choose…</option>{% for option in relationship_options(current) %}<option{% if option == current %} selected{% endif %}>{{ option }}</option>{% endfor %}</select></label>
+    {% if profile and profile.work_history %}<label>When you were <select name="job{{ suffix }}"{{ attach|safe }}><option value="">Choose a job…</option>{% for w in profile.work_history %}<option value="{{ loop.index0 }}"{% if loop.index0 == job_index %} selected{% endif %}>{{ w.role }}{% if w.company %} at {{ w.company }}{% endif %}</option>{% endfor %}</select></label>{% endif %}
+    <label class="can-reference"><input type="checkbox" name="{{ 'can_' ~ key if key else 'can_reference' }}" value="1"{{ attach|safe }}{% if can %} checked{% endif %} /> OK to use as a reference</label>
+  </div>
+{% endmacro %}
+
 {% macro reference_fields(r) %}
   <div class="ref-grid">
     <label>Name <input name="name" value="{{ r.name }}" autocomplete="off" placeholder="e.g. Sam Lee" /></label>
@@ -357,16 +370,19 @@
     <label>Phone <input name="phone" value="{{ r.phone }}" type="tel" autocomplete="off" placeholder="e.g. (410) 555-0123" /></label>
     <label>Email <input name="email" value="{{ r.email }}" type="email" autocomplete="off" placeholder="e.g. sam.lee@example.com" /></label>
     <label class="ref-notes">Private notes <input name="notes" value="{{ r.notes }}" placeholder="e.g. asked 9/2026, prefers a text first" /></label>
+    <label class="ref-notes can-reference"><input type="checkbox" name="can_reference" value="1"{% if r.can_reference %} checked{% endif %} /> OK to use as a reference</label>
   </div>
 {% endmacro %}
 <section class="card wide" id="references">
 <details class="section-collapse" id="references-panel">
-  <summary><h2>References</h2><span class="summary-chevron" aria-hidden="true"></span></summary>
-  <p class="field-help">People who agreed to vouch for you. Kept only on this computer. When you ask, Claude Desktop adds the ones you choose as the last section of the résumé. Otherwise they stay off résumés, and never go in cover letters.</p>
+  <summary><h2>People</h2><span class="summary-chevron" aria-hidden="true"></span></summary>
+  <p class="field-help">People from your jobs and documents. Tick <em>OK to use as a reference</em> only for the ones who agreed to vouch for you, then press Save. Only the ticked ones can go to Claude Desktop, which adds the ones you choose as the last section of the résumé. Otherwise they stay off résumés, and never go in cover letters. Kept only on this computer.</p>
   <datalist id="relationships">{% for r in relationships %}<option value="{{ r }}">{% endfor %}</datalist>
   <datalist id="past-jobs">{% for j in past_jobs %}<option value="{{ j }}">{% endfor %}</datalist>
 
   {% if references %}
+  {# Empty on purpose: each person's boxes below point at it with form="people-form", and the Save button next to Add a Person submits it. #}
+  <form id="people-form" method="post" action="{{ url_for('save_people') }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}" /></form>
   <ul class="ref-list">
   {% for r in references %}
     <li class="ref-entry">
@@ -382,12 +398,10 @@
         {% if r.notes %}<p class="field-help">Note: {{ r.notes }}</p>{% endif %}
         {% set supervised = (profile.work_history if profile else [])|selectattr('supervisor_name', 'equalto', r.name)|list %}
         {% if supervised %}<p class="ref-together">Supervisor on: {% for w in supervised %}{{ w.role }} at {{ w.company }}{{ ', ' if not loop.last }}{% endfor %}</p>{% endif %}
-        {% if profile and profile.work_history and r.name %}
-        <form method="post" action="{{ url_for('set_supervisor') }}" class="supervisor-form">
-          <input type="hidden" name="csrf" value="{{ csrf_token() }}" />
-          <div class="supervisor-row"><label>Supervisor for <select name="sup_job_{{ r.id }}"><option value="">Choose a job…</option>{% for w in profile.work_history %}<option value="{{ loop.index0 }}"{% if loop.index0 == reference_jobs.get(r.id, -1) %} selected{% endif %}>{{ w.role }}{% if w.company %} at {{ w.company }}{% endif %}</option>{% endfor %}</select></label><button class="dismiss-button" type="submit" name="person" value="reference:{{ r.id }}">Set as Supervisor</button></div>
-        </form>
-        {% endif %}
+        {% set found_in = reference_sources.get(r.name|lower) %}
+        {% if found_in %}<p class="field-help">From {{ found_in }}</p>{% endif %}
+        <input type="hidden" name="id" value="{{ r.id }}" form="people-form" />
+        {{ relationship_choice(r.relationship, reference_jobs.get(r.id, -1), r.can_reference, r.id) }}
       </div>
       <div class="ref-actions">
         <details class="ref-edit">
@@ -399,7 +413,7 @@
           </form>
         </details>
         <form method="post" action="{{ url_for('delete_reference', ref_id=r.id) }}"
-              onsubmit="return confirm('Delete this reference?');">
+              onsubmit="return confirm('Delete this person?');">
           <input type="hidden" name="csrf" value="{{ csrf_token() }}" />
           <button class="bordered-button danger" type="submit">Delete</button>
         </form>
@@ -408,17 +422,46 @@
   {% endfor %}
   </ul>
   {% else %}
-    <p>No references yet.</p>
+    <p>No people yet.</p>
   {% endif %}
 
-  <details class="add-reference-panel"{% if not references %} open{% endif %}>
-    <summary class="bordered-button">Add a Reference</summary>
-    <form method="post" action="{{ url_for('add_reference') }}" class="reference add-box">
-      <input type="hidden" name="csrf" value="{{ csrf_token() }}" />
-      {{ reference_fields({}) }}
-      <button class="bordered-button primary" type="submit">Add reference</button>
-    </form>
-  </details>
+  {% if found_people %}
+  <section class="found-people" id="found-people">
+    <h3>Found in Your Documents</h3>
+    <p class="field-help">People your reference documents name. Choose what they were to you and the job you had together, then add them. Nothing is added until you click.</p>
+    <ul class="person-list">{% for p in found_people %}
+      <li class="person-card found-person">
+        <div class="person-info">
+          <p class="ref-name"><strong>{{ p.name }}</strong>{% if p.title or p.company %} <span class="person-role">{{ [p.title, p.company]|select|join(', ') }}</span>{% endif %}</p>
+          {% if p.user_job %}<p class="field-help">{{ 'Your supervisor' if p.relationship == 'Supervisor' else 'Worked with you' }} when you were {{ p.user_job }}</p>{% endif %}
+          {% if p.phone or p.email %}<p class="ref-contact">{{ [p.phone, p.email]|select|join(' · ') }}</p>{% endif %}
+          <p class="field-help">From {{ p.source }}</p>
+          {% if p.supervisor_on %}<p class="person-placed">✓ Supervisor on {{ p.supervisor_on|join(', ') }}</p>{% endif %}
+        </div>
+        <form method="post" action="{{ url_for('add_suggested_reference') }}" class="person-choices supervisor-form">
+          <input type="hidden" name="csrf" value="{{ csrf_token() }}" />
+          {{ relationship_choice(p.relationship, p.job_index, false, '') }}
+          <div class="person-buttons">
+            <button class="bordered-button" type="submit" name="key" value="{{ p.key }}">Add to People</button>
+            <button class="bordered-button quiet-button" type="submit" formaction="{{ url_for('dismiss_suggestion') }}" formnovalidate name="dismiss" value="reference:{{ p.dismiss }}" title="Stop showing {{ p.name }} here">{{ 'Done' if p.supervisor_on else 'Ignore' }}</button>
+          </div>
+        </form>
+      </li>{% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  <div class="people-actions">
+    {% if references %}<button class="bordered-button primary" type="submit" form="people-form" title="Save what they were, the job, and who may be used as a reference, for everyone listed">Save</button>{% endif %}
+    <details class="add-reference-panel"{% if not references %} open{% endif %}>
+      <summary class="bordered-button">Add a Person</summary>
+      <form method="post" action="{{ url_for('add_reference') }}" class="reference add-box">
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}" />
+        {{ reference_fields({}) }}
+        <button class="bordered-button primary" type="submit">Add person</button>
+      </form>
+    </details>
+  </div>
 
 
 </details>
@@ -492,7 +535,7 @@
 
 </div>
 <script>
-  // References and Résumé Design start closed; Profile and Saved Résumés and Cover Letters start open. Each choice is remembered, and a panel
+  // People and Résumé Design start closed; Profile and Saved Résumés and Cover Letters start open. Each choice is remembered, and a panel
   // opens when the link points at it (adding or editing a reference, saving a design, "Match My Portfolio", or a page link of the saved files).
   (function () {
     [["references-panel", "resumeBuilder.referencesOpen", "#references"], ["design-panel", "resumeBuilder.designOpen", "#design"],

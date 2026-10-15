@@ -95,7 +95,7 @@ jobfinder/              the code
                         (shared settings, session, searching (Brave), fetching, company_site, company_check,
                         usa_location, geo, relevance ...)
   sources/              where jobs come from: job sites, feeds, employer career boards
-                        (employer_jobs.py, with adapters split into employer_common/enterprise/boards/more)
+                        (employer_jobs.py, with adapters split into employer_common/enterprise/boards/more/jobaps)
   profiles/             your profile's helpers: skills and Job Fit, O*NET titles, places, drive times
   records/              what Job Finder remembers: skipped pages, board health, imported captures, retention
 

@@ -21,7 +21,9 @@ def load():
 
 
 def _clean(row):
-    values = {k: str(row.get(k) or "").strip()[:300] for k in Reference.model_fields if k != "id"}
+    values = {k: str(row.get(k) or "").strip()[:300] for k in Reference.model_fields if k not in ("id", "can_reference")}
+    can = row.get("can_reference", True)  # a row from code that says nothing counts as yes; a form sends "1" or ""
+    values["can_reference"] = can is True or str(can).lower() in ("1", "yes", "on", "true")
     return Reference.model_validate(values).model_dump()
 
 

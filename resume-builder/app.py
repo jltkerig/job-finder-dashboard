@@ -385,22 +385,30 @@ def add_from_documents():
     for person in picked_people:
         references.add({"relationship": person["relationship"], "name": person["name"], "job_title": person["title"],
                         "company": person["company"], "user_job": person["user_job"], "phone": person["phone"],
-                        "email": person["email"]})
-    parts.append(_count(len(picked_people), "reference"))
+                        "email": person["email"], "can_reference": False})  # found in a document: not asked yet
+    parts.append(_count(len(picked_people), "person", "people"))
     flash(f"Added {', '.join(p for p in parts if p)}.", "ok")
     return redirect(url_for("index") + "#profile")
 
 
-def _make_supervisor(profile, index, person):
-    """Save this person as the supervisor on the user's job number `index`. Returns that job, or None after saying why not."""
+def _save_supervisors(profile, assignments):
+    """Save people as supervisors on the user's jobs, in one save: `assignments` is [(job index, person)]. Returns the jobs
+    changed, or None after saying why not."""
     if not (profile["first_name"] and profile["last_name"]):
         flash("Save your first and last name in the Profile first.", "error")
         return None
-    history = reference_people.with_supervisor(profile["work_history"], index, person)
+    history = profile["work_history"]
+    for index, person in assignments:
+        history = reference_people.with_supervisor(history, index, person)
     primary = profile["primary_job_title"]
     jobfinder_db.save_profile(profile["first_name"], profile["last_name"], profile["home_location"], primary,
                               [t for t in profile["job_titles"] if t != primary], profile["skills"], history)
-    return history[index]
+    return [history[index] for index, _ in assignments]
+
+
+def _as_supervisor(reference_or_person, title_key="job_title"):
+    row = reference_or_person
+    return {"name": row["name"], "title": row.get(title_key, ""), "email": row.get("email", ""), "phone": row.get("phone", "")}
 
 
 def _profile_or_none():
@@ -410,29 +418,36 @@ def _profile_or_none():
         return None
 
 
-@app.post("/references/<ref_id>/relationship")
-def set_relationship(ref_id):
-    """The dropdown on a saved reference: what they were to the user, and the job they had together. Chosen as Supervisor
-    with a job, they also become that job's supervisor."""
-    reference = next((r for r in references.load() if r["id"] == ref_id), None)
-    if reference is None:
-        abort(404)
-    relationship = request.form.get("relationship", "").strip()
-    if relationship not in [""] + reference_people.relationship_options(reference["relationship"]):
-        abort(400)
+@app.post("/references/save-people")
+def save_people():
+    """The Save button under People: for every person listed, what they were to the user, the job they had together, and
+    whether they may be used as a reference. Only people ticked as OK go to Claude Desktop or the résumé's pick list. A person
+    newly chosen as Supervisor with a job also becomes that job's supervisor; one who was already left alone."""
+    by_id = {r["id"]: r for r in references.load()}
+    listed = [i for i in request.form.getlist("id") if i in by_id]
     profile = _profile_or_none()
-    index = reference_people.job_choice(request.form, profile)
-    row = dict(reference, relationship=relationship)
-    if index >= 0:
-        row["user_job"] = reference_people.job_label(profile["work_history"][index])
-    references.update(ref_id, row)
-    name = reference["name"] or "They"
-    message = f"{name} is now your {relationship}." if relationship else f"Cleared what {name} was to you."
-    if relationship == "Supervisor" and index >= 0 and reference["name"]:
-        job = _make_supervisor(profile, index, {"name": reference["name"], "title": reference["job_title"],
-                                                "email": reference["email"], "phone": reference["phone"]})
-        if job:
-            message += f" They are the supervisor on {job['role']} at {job['company']}."
+    changes, supervisors = [], []
+    for ref_id in listed:
+        reference = by_id[ref_id]
+        relationship = request.form.get(f"relationship_{ref_id}", reference["relationship"]).strip()
+        if relationship not in [""] + reference_people.relationship_options(reference["relationship"]):
+            abort(400)
+        index = reference_people.job_choice({"job": request.form.get(f"job_{ref_id}", "")}, profile)
+        row = dict(reference, relationship=relationship, can_reference=request.form.get(f"can_{ref_id}") == "1")
+        if index >= 0:
+            row["user_job"] = reference_people.job_label(profile["work_history"][index])
+        if row != reference:
+            changes.append((ref_id, row))
+        if relationship == "Supervisor" and index >= 0 and reference["name"] and (row["relationship"], row["user_job"]) != (
+                reference["relationship"], reference["user_job"]):
+            supervisors.append((index, _as_supervisor(reference)))
+    for ref_id, row in changes:
+        references.update(ref_id, row)
+    message = f"Saved {_count(len(changes), 'person', 'people')}." if changes else "Nothing to save: no changes."
+    if supervisors:
+        jobs = _save_supervisors(profile, supervisors)
+        if jobs:
+            message += " Supervisor set on " + ", ".join(f"{j['role']} at {j['company']}" for j in jobs) + "."
     flash(message, "ok")
     return redirect(url_for("index") + "#references")
 
@@ -465,13 +480,12 @@ def add_suggested_reference():
     user_job = reference_people.job_label(profile["work_history"][index]) if index >= 0 else person["user_job"]
     references.add({"relationship": relationship, "name": person["name"], "job_title": person["title"],
                     "company": person["company"], "user_job": user_job, "phone": person["phone"],
-                    "email": person["email"]})
-    message = f"Added {person['name']} to your References."
+                    "email": person["email"], "can_reference": request.form.get("can_reference") == "1"})
+    message = f"Added {person['name']} to People."
     if relationship == "Supervisor" and index >= 0:
-        job = _make_supervisor(profile, index, {"name": person["name"], "title": person["title"],
-                                                "email": person["email"], "phone": person["phone"]})
-        if job:
-            message += f" They are the supervisor on {job['role']} at {job['company']}."
+        jobs = _save_supervisors(profile, [(index, _as_supervisor(person, "title"))])
+        if jobs:
+            message += f" They are the supervisor on {jobs[0]['role']} at {jobs[0]['company']}."
     flash(message, "ok")
     return redirect(url_for("index") + "#references")
 
@@ -695,7 +709,7 @@ def edit_build(filename):
     fonts += [f for f in sorted(design.GOOGLE_FONTS) if f not in fonts]
     if draft["layout"]["font_family"] not in fonts:
         fonts.insert(0, draft["layout"]["font_family"])
-    saved = [{k: v for k, v in r.items() if k in PrintedReference.model_fields} for r in references.load()]
+    saved = [{k: v for k, v in r.items() if k in PrintedReference.model_fields} for r in references.load() if r["can_reference"]]
     return render_template("build.html", draft=draft, fonts=fonts, saved_references=saved)
 
 
