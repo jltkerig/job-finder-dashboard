@@ -2302,3 +2302,11 @@ body[data-page="search"] .results-toolbar #result-state-filter { width:96px; }
 .local-gov-item { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; padding:6px 0; border-top:1px solid #e3e7ec; }
 .local-gov-item:first-of-type { border-top:0; }
 .local-gov-item .bordered-button { min-height:34px; padding:4px 12px; font-size:.85rem; }
+/* Companies page: the results filters sit in the search form */
+.companies-filters { flex:1 1 100%; display:flex; flex-wrap:wrap; align-items:center; gap:10px 16px; }
+.companies-filters .companies-filter { flex:1 1 280px; max-width:460px; }
+.companies-filters .companies-filter input { width:100%; box-sizing:border-box; }
+.companies-kinds[hidden] { display:none; }
+.companies-filters [hidden] { display:none; }
+.companies-form .companies-kind-tags { flex:1 1 100%; margin:0; }
+.companies-kind-tag.is-empty { opacity:.5; }

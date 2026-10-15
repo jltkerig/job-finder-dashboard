@@ -66,7 +66,7 @@ from jobfinder.sources.job_feeds import FEEDS, FEED_NAMES
 from jobfinder.sources.job_listings import canonical_url, extract_jobs, looks_like_not_a_job, matching_title as matching_job_title
 from jobfinder.sources.job_sites import JOB_SITE_NAMES, job_site_for
 from jobfinder.search import company_check
-from jobfinder.search.searching import brave_key, search_web
+from jobfinder.search.searching import brave_enabled, brave_key, search_web
 
 SEARCH_SCOPE_FILE = paths.SEARCH_SCOPE_FILE
 RESTORABLE_REASONS = ("wrong_role", "wrong_location")
@@ -729,7 +729,7 @@ def update_existing_results(company_ids=None):
     except Error as error:
         print(f"Could not tidy closed jobs: {error}")
     # With a Brave Search key, a refresh also looks for employers' own postings of job-site listings.
-    if brave_key() and not shared.stop_requested():
+    if brave_key() and brave_enabled() and not shared.stop_requested():
         try:
             with timed("Company-site check"):
                 found = company_check.check_listings(database, lambda query: search_web(query), fetch_text)

@@ -24,9 +24,13 @@
         <label for="companies-miles">Within</label>
         <select id="companies-miles" name="miles">{% for miles in mile_choices %}<option value="{{ miles }}"{% if miles == default_miles %} selected{% endif %}>{{ miles }} miles</option>{% endfor %}</select>
       </div>
-      <fieldset class="companies-kinds">
-        <legend>Kinds of place</legend>
-        <span class="companies-kinds-tools"><button class="chip-button" id="companies-kinds-all" type="button">All</button><button class="chip-button" id="companies-kinds-none" type="button">None</button></span>
+      <div class="companies-filters">
+        <label class="companies-filter"><span class="visually-hidden">Filter these results</span><input id="companies-filter" type="search" placeholder="Filter by name, type or street" /></label>
+        <label class="companies-website-only"><input id="companies-website-only" type="checkbox" /> Only with a website</label>
+        <button class="bordered-button secondary-action" id="companies-show-hidden" type="button" hidden>Show hidden</button>
+      </div>
+      <div class="companies-kind-tags" id="companies-kind-tags" role="group" aria-label="Kinds of place: pick some to search and show only those"></div>
+      <fieldset class="companies-kinds" hidden>
         {% for key, label in kinds %}<label class="companies-kind"><input type="checkbox" name="kinds" value="{{ key }}"{% if key in default_kinds %} checked{% endif %} /> {{ label }}</label>{% endfor %}
       </fieldset>
       <div class="companies-actions"><button class="bordered-button primary-action" id="companies-search" type="submit">Search</button></div>
@@ -67,11 +71,7 @@
   <section class="company-section companies-results" id="companies-results" hidden aria-live="polite">
     <div class="companies-toolbar">
       <strong id="companies-count"></strong>
-      <label class="companies-filter"><span class="visually-hidden">Filter these results</span><input id="companies-filter" type="search" placeholder="Filter by name, type or street" /></label>
-      <label class="companies-website-only"><input id="companies-website-only" type="checkbox" /> Only with a website</label>
-      <button class="bordered-button secondary-action" id="companies-show-hidden" type="button" hidden>Show hidden</button>
     </div>
-    <div class="companies-kind-tags" id="companies-kind-tags" role="group" aria-label="Show only these kinds of place" hidden></div>
     <div class="table-wrapper companies-table-wrapper">
       <table class="companies-table">
         <thead><tr><th>Company</th><th>Type</th><th>Address</th><th id="companies-miles-header">Miles</th><th>Website</th><th><span class="visually-hidden">Actions</span></th></tr></thead>

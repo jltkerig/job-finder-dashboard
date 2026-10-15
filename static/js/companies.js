@@ -20,6 +20,21 @@
   const mineEmpty = document.getElementById("companies-mine-empty");
   const mineWrapper = document.getElementById("companies-mine-table-wrapper");
   const mineMilesHeader = document.getElementById("companies-mine-miles-header");
+  // The results filters sit up top with the search; the kinds of place list is gone (every default kind is searched,
+  // and the tags under the results narrow them). A page from the older cached template is rearranged here.
+  (function arrange() {
+    const kinds = form.querySelector(".companies-kinds");
+    if (kinds) kinds.hidden = true; // its boxes are still read, so the usual kinds are searched
+    const actions = form.querySelector(".companies-actions");
+    if (!form.querySelector(".companies-filters")) {
+      const bar = document.createElement("div");
+      bar.className = "companies-filters";
+      for (const node of [filter, websiteOnly, showHidden]) bar.append(node.closest("label") || node);
+      (kinds || actions).before(bar);
+    }
+    const tags = document.getElementById("companies-kind-tags");
+    if (tags && !form.contains(tags)) (kinds || actions).before(tags); // an older cached page has them under the results
+  })();
   const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || "";
   const HIDDEN_KEY = "jobFinder.hiddenCompanies";
   let companies = [];
@@ -287,36 +302,35 @@
     }
   }
 
-  // One tag per kind of place found, with how many; click tags to show only those kinds (click again to undo).
+  // The kinds of place: one tag for each, always listed. After a search each shows how many were found. Picking tags
+  // shows only those kinds, and the next search looks for just those (none picked: the usual kinds).
   function renderKindTags(hidden) {
     if (!kindTags) return;
-    const found = new Map();  // kind -> [label, count]
+    const found = new Map(); // kind -> how many
     for (const company of companies) {
       if (!company.mine && hidden.has(keyOf(company)) && !revealHidden) continue;
-      (company.kinds || []).forEach((kind, index) => {
-        const entry = found.get(kind) || [(company.kindLabels || [])[index] || kind, 0];
-        entry[1] += 1;
-        found.set(kind, entry);
-      });
+      for (const kind of company.kinds || []) found.set(kind, (found.get(kind) || 0) + 1);
     }
-    for (const kind of [...activeKinds]) if (!found.has(kind)) activeKinds.delete(kind);
-    kindTags.hidden = found.size < 2;
+    const kinds = [...form.querySelectorAll('input[name="kinds"]')].map((box) => ({
+      key: box.value, label: (box.closest("label")?.textContent || box.value).trim(),
+    }));
+    kindTags.hidden = false;
     kindTags.replaceChildren();
-    if (found.size < 2) return;
-    const all = document.createElement("button");
-    all.type = "button";
-    all.className = `chip-button companies-kind-tag${activeKinds.size ? "" : " is-active"}`;
-    all.textContent = "All kinds";
-    all.addEventListener("click", () => { activeKinds.clear(); render(); });
-    kindTags.append(all);
-    for (const [kind, [label, total]] of [...found.entries()].sort((a, b) => b[1][1] - a[1][1])) {
+    const make = (text, active, onClick, dim) => {
       const tag = document.createElement("button");
       tag.type = "button";
-      tag.className = `chip-button companies-kind-tag${activeKinds.has(kind) ? " is-active" : ""}`;
-      tag.setAttribute("aria-pressed", String(activeKinds.has(kind)));
-      tag.textContent = `${label} (${total})`;
-      tag.addEventListener("click", () => { if (activeKinds.has(kind)) activeKinds.delete(kind); else activeKinds.add(kind); render(); });
+      tag.className = `chip-button companies-kind-tag${active ? " is-active" : ""}${dim ? " is-empty" : ""}`;
+      tag.setAttribute("aria-pressed", String(active));
+      tag.textContent = text;
+      tag.addEventListener("click", onClick);
       kindTags.append(tag);
+    };
+    make("All kinds", activeKinds.size === 0, () => { activeKinds.clear(); render(); });
+    const searched = companies.length > 0;
+    for (const { key, label } of kinds) {
+      const count = found.get(key) || 0;
+      make(searched ? `${label} (${count})` : label, activeKinds.has(key),
+        () => { if (activeKinds.has(key)) activeKinds.delete(key); else activeKinds.add(key); render(); }, searched && count === 0);
     }
   }
 
@@ -343,7 +357,11 @@
   // One kind of place at a time: OpenStreetMap's free service is slow with a big question and refuses quick repeats, so
   // each kind is its own small question. Results appear as they arrive, and one kind failing does not lose the others.
   async function search() {
-    const boxes = [...form.querySelectorAll('input[name="kinds"]:checked')];
+    // The picked kind tags are what is searched; with none picked, the usual kinds (the boxes' own defaults).
+    const allBoxes = [...form.querySelectorAll('input[name="kinds"]')];
+    if (activeKinds.size) allBoxes.forEach((box) => { box.checked = activeKinds.has(box.value); });
+    else allBoxes.forEach((box) => { box.checked = box.defaultChecked; });
+    const boxes = allBoxes.filter((box) => box.checked);
     if (!boxes.length) { say("Choose at least one kind of place.", true); return; }
     searchButton.disabled = true;
     companies = [];
@@ -402,6 +420,7 @@
   }
 
   loadMine();
+  renderKindTags(readHidden()); // every kind of place is listed from the start
   // All / None: the long list of kinds is quicker to start from one end.
   const setKinds = (on) => form.querySelectorAll('input[name="kinds"]').forEach((box) => { box.checked = on; });
   document.getElementById("companies-kinds-all")?.addEventListener("click", () => setKinds(true));

@@ -17,6 +17,11 @@ def brave_key():
     return str(shared.settings.get("brave_api_key") or "").strip()
 
 
+def brave_enabled():
+    """False when Brave Search is switched off on the Tuning page: no query is sent, so no credit is used."""
+    return bool(shared.settings.get("brave_search_enabled", True))
+
+
 def search_blocked_message(empty_queries):
     return (f"Brave Search returned nothing for {empty_queries} queries in a row. Try again later, or try more job "
             "titles or a larger area.")
@@ -24,7 +29,7 @@ def search_blocked_message(empty_queries):
 
 def search_web(query, page=1):
     with timed("Search engine queries (including polite pauses)"):
-        if session.engine_refused or not session.web_search_ok():
+        if not brave_enabled() or session.engine_refused or not session.web_search_ok():
             return []
         results = _search_brave(query, page)
         if results is None:

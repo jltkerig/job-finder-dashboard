@@ -54,7 +54,7 @@ from jobfinder.search.refresh import (
 )
 from jobfinder.search.relevance import apply_link_closed, expand_job_titles, fetch_text
 from jobfinder.search import company_check
-from jobfinder.search.searching import brave_key, search_blocked_message, search_web
+from jobfinder.search.searching import brave_enabled, brave_key, search_blocked_message, search_web
 from jobfinder.search.shared import (
     BLOCKED_COMPANIES,
     BLOCKED_DOMAINS,
@@ -664,6 +664,13 @@ def _run_search(job_title=None, state=None, cities_json=None, max_new=None):
 
     if shared.stop_requested():
         print("Stop requested before the web search started.")
+        database.close()
+        return
+    if not brave_enabled():
+        print()
+        print("Brave Search is switched off on the Tuning page, so the web search was skipped and no credits were used.", flush=True)
+        if shared._debug_run is not None:
+            shared._debug_run.stop_reason = "Brave Search switched off: web search skipped"
         database.close()
         return
     if not brave_key():
