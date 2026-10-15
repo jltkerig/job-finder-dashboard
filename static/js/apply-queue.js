@@ -3,6 +3,15 @@
   const section = document.getElementById("apply-queue");
   if (!section) return;
   const status = document.getElementById("apply-queue-status");
+  // A message under the queue fades away by itself (longer for a problem), so none is left hanging.
+  if (status) {
+    let timer = null;
+    new MutationObserver(() => {
+      clearTimeout(timer);
+      const text = status.textContent;
+      if (text) timer = setTimeout(() => { if (status.textContent === text) status.textContent = ""; }, /could not|try again/i.test(text) ? 15000 : 6000);
+    }).observe(status, { childList: true, characterData: true, subtree: true });
+  }
   const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || "";
 
   // Keep the Job Apply Stats box beside the profile and the heading count in step without a reload.
@@ -13,8 +22,11 @@
   function refreshCount() {
     const count = section.querySelectorAll(".apply-queue-item").length;
     const label = document.querySelector("#apply-queue-heading .field-help");
-    if (label) label.textContent = `(${count})`;
-    if (!count) section.hidden = true;
+    if (label) label.textContent = count ? `(${count})` : "";
+    const empty = document.getElementById("apply-queue-empty");  // the queue stays on the page (the Add Jobs row is in it)
+    if (empty) empty.hidden = count > 0;
+    const sort = section.querySelector(".apply-queue-sort");
+    if (sort) sort.hidden = count < 2;
   }
   // Rejecting (or marking Closed) a saved job elsewhere on the page takes it off the queue too (static/js/charts.js).
   window.ApplyQueueDrop = (ids) => {
@@ -251,7 +263,7 @@
         bump("total", 1);
         bump(`month-${month}`, 1);
       }
-      status.textContent = button.classList.contains("apply-queue-applied") ? "Marked Applied." : "Removed from the queue.";
+      status.textContent = "";  // the job leaves the list and the numbers change: nothing more to say
       refreshCount();
     } catch {
       status.textContent = "Could not save that. Try again.";
