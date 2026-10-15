@@ -1,5 +1,6 @@
 """Tests with made-up data only. Every folder is temporary; the database is never touched."""
 import asyncio
+import json
 import os
 import re
 import shutil
@@ -28,6 +29,7 @@ assert str(config.OUTPUT_DIR).startswith(str(TEMP.resolve())) and str(config.DAT
     'tests are pointed at real folders: refusing to run'
 
 import documents  # noqa: E402
+import auto_writer  # noqa: E402
 import job_link  # noqa: E402
 import jobfinder_db  # noqa: E402
 import profile_import  # noqa: E402
@@ -1278,6 +1280,62 @@ class JobLinkTests(unittest.TestCase):
         listed = [b["pdf"] for b in builds.list_builds()]  # the same drafts are what the Saved list shows
         self.assertTrue({resume["pdf"], letter["pdf"], old["pdf"]} <= set(listed))
 
+    def test_linkedin_titles_give_the_job_and_the_company(self):
+        html = '<html><head><meta property="og:title" content="The Hartford hiring Web Designer in Wayne, PA | LinkedIn"></head></html>'
+        self.assertEqual(job_link._title_and_company(html, "www.linkedin.com"), ("Web Designer", "The Hartford"))
+
+    def test_the_automatic_writer_asks_for_both_files_and_never_waits(self):
+        text = auto_writer.prompt_text("https://acme.com/j", "Web Designer", "Acme", "the posting")
+        self.assertIn("save_resume", text)
+        self.assertIn("save_cover_letter", text)
+        self.assertIn("https://acme.com/j", text)
+        self.assertIn("the posting", text)
+        self.assertIn("without asking", text)
+
+    def test_the_automatic_writer_reports_when_claude_code_is_missing(self):
+        with mock.patch.object(auto_writer, "claude_program", return_value=""):
+            run_id = auto_writer.start("https://acme.com/j", "T", "C", "x")
+        self.assertEqual(auto_writer.status(run_id)["state"], "failed")
+        self.assertIn("isn't installed", auto_writer.status(run_id)["message"])
+
+    def test_a_run_only_uses_the_resume_builder_tools_and_reports_progress(self):
+        import subprocess
+        seen = {}
+        def fake_run(command, **kwargs):
+            seen["command"] = command
+            builds.save_build("resume", SAMPLE, job_title="Web Designer", company="Acme", profile=PROFILE)
+            return SimpleNamespace(returncode=0, stdout=json.dumps({"result": "Saved both."}), stderr="")
+        with mock.patch.object(auto_writer, "claude_program", return_value="claude"), mock.patch.object(subprocess, "run", fake_run):
+            run_id = auto_writer.start("https://acme.com/j", "Web Designer", "Acme", "x")
+            for _ in range(50):
+                if auto_writer.status(run_id)["state"] == "done":
+                    break
+                time.sleep(0.1)
+        done = auto_writer.status(run_id)
+        self.assertEqual(done["state"], "done")
+        self.assertEqual(done["summary"], "Saved both.")
+        self.assertEqual([f["kind"] for f in done["files"]], ["resume"])
+        allowed = seen["command"][seen["command"].index("--allowedTools") + 1]
+        self.assertTrue(all(name.startswith("mcp__resume-builder__") for name in allowed.split(",")))
+        self.assertNotIn("Bash", allowed)
+        self.assertIn("--strict-mcp-config", seen["command"])
+
+    def test_the_make_and_status_routes(self):
+        import app as web
+        client = web.app.test_client()
+        client.get("/")
+        with client.session_transaction() as session:
+            token = session["csrf"]
+        found = {"url": "https://acme.com/j", "title": "Web Designer", "company": "Acme", "text": "body", "note": ""}
+        with mock.patch.object(job_link, "read", return_value=found), mock.patch.object(auto_writer, "start", return_value="abc123") as started:
+            reply = client.post("/job-link/make", data={"url": "acme.com/j", "csrf": token}).get_json()
+        self.assertEqual(reply["id"], "abc123")
+        started.assert_called_once_with("https://acme.com/j", "Web Designer", "Acme", "body")
+        with mock.patch.object(job_link, "read", return_value={"url": "", "title": "", "company": "", "text": "", "note": "Bad link."}):
+            bad = client.post("/job-link/make", data={"url": "nonsense", "csrf": token})
+        self.assertEqual(bad.status_code, 400)
+        self.assertEqual(client.get("/job-link/status?id=nope").status_code, 404)
+
     def test_the_routes_read_a_link_and_build_the_request(self):
         import app as web
         client = web.app.test_client()
@@ -1349,6 +1407,28 @@ class BackupTests(unittest.TestCase):
         self.assertEqual(backup.restore(saved), 4)
         self.assertTrue((config.OUTPUT_DIR / "file1.pdf").exists())
         self.assertTrue((config.OUTPUT_DIR / "new.pdf").exists())
+
+    def test_ticked_files_are_deleted_and_nothing_else(self):
+        import app as web
+        for folder in (config.OUTPUT_DIR, config.DATA_DIR):
+            shutil.rmtree(folder, ignore_errors=True)
+        config.ensure_dirs()
+        client = web.app.test_client()
+        keep = builds.save_build("resume", SAMPLE, job_title="Keep Me", company="A", profile=PROFILE)
+        drop1 = builds.save_build("resume", SAMPLE, job_title="Drop One", company="B", profile=PROFILE)
+        drop2 = builds.save_build("cover_letter", LETTER, job_title="Drop Two", company="C", profile=PROFILE)
+        outside = config.OUTPUT_DIR.parent / "precious.pdf"
+        outside.write_bytes(b"%PDF-keep")
+        with mock.patch.object(jobfinder_db, "get_profile", return_value=PROFILE):
+            token = re.search(r'name="csrf" value="([^"]+)"', client.get("/").get_data(as_text=True)).group(1)
+            reply = client.post("/builds/delete", data={"csrf": token, "file": [drop1["pdf"], drop2["pdf"], "../precious.pdf", "x.txt"]})
+            self.assertEqual(reply.status_code, 302)
+            none = client.post("/builds/delete", data={"csrf": token}, follow_redirects=True).get_data(as_text=True)
+        left = [b["pdf"] for b in builds.list_builds()]
+        self.assertEqual(left, [keep["pdf"]])
+        self.assertFalse((config.OUTPUT_DIR / drop1["pdf"]).exists())
+        self.assertTrue(outside.exists())
+        self.assertIn("Tick at least one file first.", none)
 
     def test_deleting_a_file_in_the_app_takes_a_snapshot_first(self):
         import app as web

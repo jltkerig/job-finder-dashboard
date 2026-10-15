@@ -19,6 +19,14 @@ Each entry: what went wrong, why, the fix, and the check that would have caught 
 
 ## Reading postings
 
+- **LinkedIn's own notice was saved as a company; a place was saved as a company** (2026-10-15). On a LinkedIn job card you
+  applied to, "Your application was viewed" sits between the title and the company, and the Web Job Scraper's card
+  reader (`cards()` in `linkedin-parse.js`) took the second line as the company (job #57, "application was viewed"). The
+  job page reader already skipped such notices; the card reader did not. Fix: cards drop notice lines first
+  (`cardLines`), and `tidy_company_name` refuses a notice as a name. Also the "add a link" feature took "Houston, Texas,
+  United States" from a page title as the company (job #467); a place-shaped piece is now skipped. Check: a card with a
+  notice line before the company, and a page title that ends in a place.
+
 - **A sentence taken for a company name crashed a capture import** (2026-10-15). The Maryland Workforce Exchange reader
   put a fit chart's explanation in the company field; the company-site guess turned it into a web address and
   `requests` raised `LocationParseError`, which stopped the whole import. Fix: `tidy_company_name` drops names over 120

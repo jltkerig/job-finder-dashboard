@@ -1986,3 +1986,33 @@ body[data-page="search"] .results-toolbar .toolbar-title { padding-right: 140px;
 .saved-jobs-panel > summary .summary-chevron { margin-left: auto; }
 .bulk-bar .collapse-all-actions { margin-left: auto; display: flex; gap: 8px; }
 .bulk-bar { align-items: center; }
+
+/* Folding rows keep their arrow on the right, never the browser's own arrow on the left. */
+.display-options > summary { list-style: none; display: flex; align-items: center; gap: 10px; width: auto; }
+.display-options > summary::-webkit-details-marker { display: none; }
+.display-options > summary::after { content: ""; margin-left: auto; flex: none; width: 9px; height: 9px; border-right: 2px solid #6b7280; border-bottom: 2px solid #6b7280; transform: rotate(45deg); }
+.display-options[open] > summary::after { transform: rotate(-135deg); }
+body[data-page="search"] .results-toolbar .display-options > summary { width: 100%; }
+
+/* Add Jobs to the Queue */
+.queue-add { margin: 14px 0 0; padding: 12px 14px; border: 1px solid #d9dee5; border-radius: 10px; background: #fafbfc; }
+.queue-add > summary { list-style: none; display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 700; }
+.queue-add > summary::-webkit-details-marker { display: none; }
+.queue-add > summary .summary-chevron { margin-left: auto; }
+.queue-add[open] > summary { margin-bottom: 10px; }
+.queue-add[open] > summary .summary-chevron { transform: rotate(-135deg); }
+#queue-add-search { width: 100%; box-sizing: border-box; height: 40px; padding: 0 12px; border: 1px solid #c4c8ce; border-radius: 8px; font: inherit; margin: 0 0 8px; }
+.queue-add-list { list-style: none; margin: 0 0 10px; padding: 0; max-height: 280px; overflow: auto; border: 1px solid #e1e5ea; border-radius: 8px; background: #fff; }
+.queue-add-list li { border-bottom: 1px solid #eef0f2; }
+.queue-add-list li:last-child { border-bottom: 0; }
+.queue-add-list label { display: flex; align-items: center; gap: 10px; padding: 8px 12px; cursor: pointer; }
+.queue-add-list input { width: 18px; height: 18px; margin: 0; flex: none; accent-color: #1f2937; }
+.queue-add-list small { color: #4b5563; }
+.queue-add-none { padding: 12px; color: #4b5563; }
+.queue-add-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.queue-add-actions .field-help { margin: 0; }
+.apply-queue .empty-note { margin: 10px 0; padding: 12px 14px; border: 1px dashed #c4c8ce; border-radius: 10px; color: #4b5563; background: #fafbfc; }
+.queue-link-row { display: flex; gap: 8px; margin: 0 0 6px; }
+.queue-link-row input { flex: 1 1 auto; min-width: 0; height: 40px; box-sizing: border-box; padding: 0 12px; border: 1px solid #c4c8ce; border-radius: 8px; font: inherit; }
+.queue-link-row .bordered-button { height: 40px; box-sizing: border-box; padding: 0 16px; }
+#queue-link-status { margin: 0 0 12px; min-height: 1.2em; }

@@ -434,3 +434,135 @@ input:not([type]), input[type="text"], input[type="search"], input[type="number"
 .pager .bordered-button, .pager .pager-current { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; height: 36px; min-width: 36px; padding: 0 12px; line-height: 1; text-decoration: none; vertical-align: middle; margin: 0; }
 .pager { gap: 8px; }
 .pager .pager-gap { display: inline-flex; align-items: center; height: 36px; }
+
+/* Reference Documents: one clear row per document, with a type badge, the name and file on separate lines, and quiet icon buttons. */
+#documents .doc-intro { margin: 0 0 14px; color: #4b5563; font-size: .92rem; line-height: 1.5; }
+.doc-list { list-style: none; margin: 0 0 16px; padding: 0; display: grid; gap: 10px; }
+.doc-row { display: grid; grid-template-columns: auto 1fr auto; gap: 14px; align-items: center; padding: 12px 14px; background: #fff; border: 1px solid #d9dee5; border-radius: 10px; }
+.doc-type { display: grid; place-items: center; width: 46px; height: 54px; border: 1.5px solid #1f2937; border-radius: 6px; background: #f6f8fa; color: #1f2937; font-size: .72rem; font-weight: 800; letter-spacing: .03em; }
+.doc-main { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.doc-label { font-size: 1.02rem; overflow-wrap: anywhere; }
+.doc-file { color: #4b5563; font-size: .88rem; overflow-wrap: anywhere; }
+.doc-meta { color: #6b7280; font-size: .82rem; }
+#documents .doc-actions { display: flex; flex-direction: row; align-items: center; gap: 6px; }
+#documents .doc-actions .icon-button { width: 36px; height: 36px; background: #fff; border: 1px solid #c4c8ce; border-radius: 8px; color: #1f2937; }
+#documents .doc-actions .icon-button:hover { border-color: #1f2937; background: #f3f5f8; }
+#documents .doc-actions .icon-delete { background: #fff; color: #b42318; border-color: #e3b3ae; }
+#documents .doc-actions .icon-delete:hover { background: #b42318; border-color: #b42318; color: #fff; }
+#documents .doc-actions form, #documents .doc-actions details { margin: 0; }
+#documents .doc-row .ref-edit[open] { position: static; }
+#documents form.reference-new { margin-top: 4px; }
+#documents form.reference-new h3 { margin: 0 0 4px; font-size: 1.05rem; }
+#documents form.reference-new .field-help { display: block; margin: 0 0 10px; }
+#documents form.reference-new .upload-row input[type="file"] { background: #fff; color: #111827; border-color: #fff; }
+@media (max-width: 520px) { .doc-row { grid-template-columns: auto 1fr; } .doc-actions { grid-column: 1 / -1; justify-content: flex-end; } }
+
+/* Add a Document: the file chooser and the button are the same height and line up; the chooser's own button is styled to match. */
+#documents form.reference-new { padding: 16px 18px 18px; }
+#documents form.reference-new .upload-row { display: flex; flex-wrap: wrap; align-items: stretch; gap: 10px; margin: 0; }
+#documents form.reference-new .upload-row input[type="file"] { flex: 1 1 220px; min-width: 0; height: 44px; box-sizing: border-box; padding: 0 8px; display: flex; align-items: center; border-radius: 8px; font-size: .92rem; cursor: pointer; }
+#documents form.reference-new .upload-row input[type="file"]::file-selector-button { height: 30px; margin: 0 10px 0 0; padding: 0 12px; border: 1px solid #1f2937; border-radius: 6px; background: #f3f5f8; color: #1f2937; font: inherit; font-weight: 700; cursor: pointer; }
+#documents form.reference-new .upload-row .bordered-button { height: 44px; box-sizing: border-box; margin: 0; padding: 0 20px; flex: 0 0 auto; }
+
+/* Add a Document: a neutral background with the navy as its outline (it was a solid dark box). */
+#documents form.reference-new { background: #fff; color: #111827; border: 2px solid #1f2937; }
+#documents form.reference-new h3, #documents form.reference-new label { color: #111827; }
+#documents form.reference-new .field-help { color: #4b5563; }
+#documents form.reference-new .upload-row input[type="file"] { background: #fff; color: #111827; border-color: #c4c8ce; }
+#documents form.reference-new .bordered-button.primary, #documents form.reference-new .upload-row .bordered-button { background: #1f2937; color: #fff; border-color: #1f2937; }
+
+/* Centre "Choose File" and "No file chosen" in their box: let the padding, not a fixed height, set the size. */
+#documents form.reference-new .upload-row input[type="file"],
+.upload.dropzone .upload-row input[type="file"] { display: block; height: auto; min-height: 44px; padding: 6px 10px; line-height: 30px; box-sizing: border-box; }
+#documents form.reference-new .upload-row input[type="file"]::file-selector-button,
+.upload.dropzone .upload-row input[type="file"]::file-selector-button { height: 30px; margin: 0 10px 0 0; padding: 0 12px; line-height: 28px; vertical-align: middle; }
+
+/* Replace this résumé looks like Add a Document: white, navy outline, same heading, hint, chooser and button. */
+.upload.dropzone { border: 2px solid #1f2937; border-radius: 10px; background: #fff; padding: 16px 18px 18px; }
+.upload.dropzone label { margin: 0 0 4px; font-size: 1.05rem; font-weight: 700; color: #111827; }
+.upload.dropzone .field-help { color: #4b5563; margin: 0 0 10px; }
+.upload.dropzone .upload-row { display: flex; flex-wrap: wrap; align-items: stretch; gap: 10px; margin: 0; }
+.upload.dropzone .upload-row input[type="file"] { flex: 1 1 220px; border: 1px solid #c4c8ce; border-radius: 8px; background: #fff; font-size: .92rem; cursor: pointer; }
+.upload.dropzone .upload-row .bordered-button { height: 44px; box-sizing: border-box; margin: 0; padding: 0 20px; flex: 0 0 auto; background: #1f2937; color: #fff; border-color: #1f2937; }
+.upload.dropzone .upload-row input[type="file"]::file-selector-button { border: 1px solid #1f2937; border-radius: 6px; background: #f3f5f8; color: #1f2937; font: inherit; font-weight: 700; cursor: pointer; }
+
+/* Résumé Design: tidy groups, aligned fields, a folded "What It Sees". */
+#design-panel > .field-help { margin: 4px 0 14px; font-size: .95rem; color: #4b5563; line-height: 1.5; }
+.design-sees { margin: 0 0 16px; padding: 0; border: 1px solid #d9dee5; border-radius: 10px; background: #f6f8fa; }
+.design-sees > summary { cursor: pointer; padding: 12px 16px; font-weight: 700; font-size: 1.02rem; }
+.design-sees[open] > summary { border-bottom: 1px solid #e1e5ea; }
+.design-sees .design-rows { margin: 0; padding: 4px 16px; }
+.design-sees .inline-form { padding: 10px 16px 14px; margin: 0; }
+.design-group { margin: 0 0 16px; padding: 16px 18px 18px; border: 1px solid #e1e5ea; border-radius: 10px; background: #fafbfc; }
+.design-group h3 { margin: 0 0 4px; font-size: 1.1rem; }
+.design-group > .field-help { margin: 0 0 12px; }
+#design .design-group .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px 16px; align-items: end; margin: 0; }
+#design .design-group .fields > label, #design .design-group .font-field > label { display: flex; flex-direction: column; justify-content: flex-end; gap: 5px; margin: 0; font-size: .85rem; font-weight: 700; color: #111827; }
+#design .design-group input:not([type="checkbox"]):not([type="color"]), #design .design-group select { width: 100%; box-sizing: border-box; height: 42px; margin: 0; padding: 0 10px; border: 1px solid #c4c8ce; border-radius: 8px; background: #fff; font: inherit; font-weight: 400; color: #111827; }
+#design .design-group input[type="color"] { width: 100%; height: 42px; padding: 3px; border: 1px solid #c4c8ce; border-radius: 8px; background: #fff; cursor: pointer; }
+#design .design-group .fields > label.check { flex-direction: row; align-items: center; justify-content: flex-start; gap: 10px; height: 42px; padding: 0 12px; border: 1px solid #c4c8ce; border-radius: 8px; background: #fff; font-weight: 600; }
+#design .design-group .fields > label.check input { width: 18px; height: 18px; margin: 0; }
+#design .font-fields .font-field { display: flex; flex-direction: column; gap: 4px; }
+#design .font-status { margin: 0; font-size: .8rem; color: #4b5563; line-height: 1.35; }
+#design .design-group textarea { display: block; width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid #c4c8ce; border-radius: 8px; background: #fff; font: inherit; font-size: .92rem; line-height: 1.5; }
+#design .form-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
+#design .form-actions .bordered-button { display: inline-flex; align-items: center; justify-content: center; height: 42px; padding: 0 18px; text-decoration: none; box-sizing: border-box; }
+#design .design-group h3, #design .design-form .design-group h3 { margin: 0 0 6px; padding: 0; }
+#design .design-group > .field-help:last-child { margin: 12px 0 0; }
+#design .design-group .fields + .field-help { margin-top: 12px; }
+
+/* Each Résumé Design group folds up like the other boxes. */
+details.design-group > summary { list-style: none; display: flex; align-items: center; gap: 10px; cursor: pointer; }
+details.design-group > summary::-webkit-details-marker { display: none; }
+details.design-group > summary h3 { margin: 0; }
+details.design-group[open] > summary { margin-bottom: 10px; }
+details.design-group > summary .summary-chevron { margin-left: auto; }
+details.design-group[open] > summary .summary-chevron { transform: rotate(-135deg); }
+details.design-group > summary:focus-visible { outline: 3px solid #93c5fd; outline-offset: 3px; border-radius: 6px; }
+
+/* Folding rows keep their arrow on the right, never the browser's own arrow on the left. */
+.design-sees > summary, .job-link-text > summary, .history-extra > summary, .design-sees > summary { list-style: none; display: flex; align-items: center; gap: 8px; }
+.design-sees > summary::-webkit-details-marker, .job-link-text > summary::-webkit-details-marker, .history-extra > summary::-webkit-details-marker { display: none; }
+.design-sees > summary::after, .job-link-text > summary::after, .history-extra > summary::after { content: ""; margin-left: auto; flex: none; width: 9px; height: 9px; border-right: 2px solid #6b7280; border-bottom: 2px solid #6b7280; transform: rotate(45deg); }
+.design-sees[open] > summary::after, .job-link-text[open] > summary::after, .history-extra[open] > summary::after { transform: rotate(-135deg); }
+.layout-fold > summary { list-style: none; display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 700; }
+.layout-fold > summary::-webkit-details-marker { display: none; }
+.layout-fold > summary::after { content: ""; margin-left: auto; flex: none; width: 9px; height: 9px; border-right: 2px solid #6b7280; border-bottom: 2px solid #6b7280; transform: rotate(45deg); }
+.layout-fold[open] > summary::after { transform: rotate(-135deg); }
+
+/* Résumé Design: one spacing for every box (padding, heading gap, rows, help text) so they all match. */
+#design .design-sees, #design details.design-group { margin: 0 0 16px; padding: 16px 18px 18px; border: 1px solid #e1e5ea; border-radius: 10px; background: #fafbfc; }
+#design .design-sees > summary, #design details.design-group > summary { padding: 0; margin: 0; font-size: 1.1rem; font-weight: 700; line-height: 1.3; }
+#design .design-sees > summary { border: 0; }
+#design .design-sees[open] > summary, #design details.design-group[open] > summary { margin: 0 0 12px; }
+#design .design-sees > summary .field-help { font-size: .88rem; font-weight: 400; }
+#design details.design-group > summary h3 { margin: 0; font-size: 1.1rem; line-height: 1.3; }
+#design .design-group p.field-help, #design .design-sees p.field-help { margin: 0 0 12px; line-height: 1.45; }
+#design .design-group .fields { gap: 14px 16px; }
+#design .design-group .fields + p.field-help { margin: 12px 0 0; }
+#design .design-group > :last-child, #design .design-sees > :last-child { margin-bottom: 0; }
+#design .design-sees .design-rows { margin: 0 0 12px; padding: 0; background: #fff; }
+#design .design-sees .inline-form { margin: 0; padding: 0; }
+#design .design-group .font-fields { gap: 14px 16px; }
+#design .design-group .font-fields .font-field { gap: 5px; }
+#design .design-group .font-status { margin: 0; line-height: 1.35; }
+#design .design-group textarea { margin: 0; }
+.job-link-status { min-height: 1.4em; margin: 8px 0 0; color: #1f2937; font-weight: 600; }
+
+/* Saved Résumés and Cover Letters: tick boxes and a Delete Selected bar. */
+.builds-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 0 0 10px; padding: 8px 12px; background: #f6f8fa; border: 1px solid #e1e5ea; border-radius: 8px; }
+.builds-all { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
+.builds-bar .field-help { margin: 0; }
+.builds-bar .destructive { margin-left: auto; color: #b42318; border-color: #d46a62; background: #fff; }
+.builds-bar .destructive:hover:not(:disabled) { background: #b42318; color: #fff; border-color: #b42318; }
+.builds-bar .destructive:disabled { opacity: .45; cursor: default; }
+.pick-col { width: 36px; text-align: center; }
+.pick-col input { width: 18px; height: 18px; accent-color: #1f2937; cursor: pointer; }
+tr.is-picked td { background: #eef3fb; }
+
+/* Saved list columns: the older rules were written for the old column order, so each column is set by its name. */
+#builds-form td:first-child { overflow-wrap: normal; }
+#builds-form td[data-label="Job"] { white-space: normal; min-width: 180px; }
+#builds-form td[data-label="File"] { white-space: normal; overflow-wrap: anywhere; word-break: break-word; min-width: 220px; }
+#builds-form td[data-label="Type"], #builds-form td[data-label="Updated"] { white-space: nowrap; }
+#builds-form td.pick-col, #builds-form th.pick-col { width: 40px; min-width: 40px; padding-left: 6px; padding-right: 6px; }

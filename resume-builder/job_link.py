@@ -26,6 +26,10 @@ def clean_url(url):
     return url if parts.scheme in ("http", "https") and "." in (parts.hostname or "") and " " not in url else ""
 
 
+# "Houston, Texas, United States" or "Baltimore, MD" in a page title is where the job is, not who the employer is.
+_PLACE = re.compile(r"(?:,\s*(?:United States|USA|US)\s*$)|(?:^[A-Z][A-Za-z .'-]+,\s*[A-Z]{2}\s*(?:\d{5})?$)|(?:^[A-Z][A-Za-z .'-]+,\s*[A-Z][a-z]+(?:\s[A-Z][a-z]+)*$)")
+
+
 def _title_and_company(html, host):
     from bs4 import BeautifulSoup
     soup = BeautifulSoup(html or "", "html.parser")
@@ -38,10 +42,14 @@ def _title_and_company(html, host):
         return ""
     title = meta("og:title", "twitter:title") or (soup.title.string.strip() if soup.title and soup.title.string else "")
     company = meta("og:site_name", "application-name")
+    linkedin = re.match(r"^(.+?) hiring (.+?)(?: in .+?)?\s*\|\s*LinkedIn$", title)  # "Acme hiring Web Designer in Town, ST | LinkedIn"
+    if linkedin:
+        return linkedin.group(2).strip()[:150], linkedin.group(1).strip()[:150]
     pieces = [p.strip() for p in re.split(r"\s+[|\-–—·]\s+| at ", title) if p.strip()]
     if len(pieces) > 1:
         title, rest = pieces[0], pieces[1:]
-        company = company or next((p for p in rest if not re.search(r"\b(jobs?|careers?|apply)\b", p, re.I)), "")
+        company = company or next((p for p in rest if not re.search(r"\b(jobs?|careers?|apply)\b", p, re.I) and not _PLACE.search(p)), "")
+    company = "" if _PLACE.search(company or "") else company
     if not company:
         company = host.split(".")[-2].capitalize() if host.count(".") else ""
     return title[:150], company[:150]

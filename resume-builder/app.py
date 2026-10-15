@@ -20,6 +20,7 @@ import profile_import
 import skill_suggest
 import address_suggest
 import backup
+import auto_writer
 import job_link
 import reference_people
 import references
@@ -144,7 +145,7 @@ def index():
 
 
 DESIGN_FONT_ROLES = (("name_font", "Name Font"), ("heading_font", "Section Heading Font"),
-                     ("font_family", "Body Text Font"), ("detail_font", "Dates, Sub-headings and Contact Font"))
+                     ("font_family", "Body Text Font"), ("detail_font", "Dates and Contact Font"))
 FONT_NAME = re.compile(r"^[A-Za-z0-9 .&'\-]{0,60}$")
 DESIGN_NUMBERS = ("body_size", "name_size", "heading_size", "line_spacing", "section_gap",
                   "margin_top", "margin_right", "margin_bottom", "margin_left")
@@ -577,6 +578,29 @@ def job_link_request():
                     "started": datetime.now().isoformat(timespec="seconds")})
 
 
+@app.post("/job-link/make")
+def job_link_make():
+    """Read the posting at the link, then write the résumé and cover letter on its own (no copy and paste)."""
+    found = job_link.read(request.form.get("url", ""))
+    if not found["url"]:
+        return jsonify({"error": found["note"] or "That doesn't look like a web address."}), 400
+    backup.safely("before-job-link")
+    run_id = auto_writer.start(found["url"], found["title"], found["company"], found["text"])
+    return jsonify({"id": run_id, "title": found["title"], "company": found["company"], "note": found["note"]})
+
+
+@app.get("/job-link/status")
+def job_link_status():
+    result = auto_writer.status(request.args.get("id", ""))
+    if result is None:
+        return jsonify({"error": "That run wasn't found. Start it again."}), 404
+    for item in result["files"]:
+        item["url"] = url_for("download", filename=item["pdf"], download=1)
+        item["content"] = None
+        item["layout"] = None
+    return jsonify(result)
+
+
 @app.get("/job-link/files")
 def job_link_files():
     """The résumés and cover letters saved since a time (the page asks every few seconds after the request is sent)."""
@@ -824,6 +848,25 @@ def delete_build(filename):
     builds.delete_build(filename)
     flash(f"Deleted {draft['pdf']}.", "ok")
     return redirect(url_for("index"))
+
+
+@app.post("/builds/delete")
+def delete_builds():
+    """Delete the saved résumés and cover letters ticked in the list (a backup copy is taken first)."""
+    names = [n for n in request.form.getlist("file") if builds.SAFE_NAME.match(n or "")][:500]
+    if not names:
+        flash("Tick at least one file first.", "error")
+    else:
+        backup.safely("before-delete-files")
+        gone = 0
+        for name in dict.fromkeys(names):
+            try:
+                builds.delete_build(name)
+                gone += 1
+            except (ValueError, OSError):
+                continue
+        flash(f"Deleted {gone} file{'s' if gone != 1 else ''}. A backup copy was saved first.", "ok")
+    return redirect(url_for("index", q=request.form.get("q") or None) + "#saved-builds")
 
 
 if __name__ == "__main__":

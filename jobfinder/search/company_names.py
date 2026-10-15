@@ -20,12 +20,18 @@ OFFICIAL_BOARD_CREDIBILITY = 8
 _LEADING_NUMBER_CODE = re.compile(r"^\s*\d{4,}\s+(?=[A-Z]{2,}\b)")
 
 
+# LinkedIn's own notices ("Your application was viewed") are never a company; an older Web Job Scraper saved one as a name.
+_NOTICE = re.compile(r"\b(?:resume|application|profile)\b.*\bwas\s+(?:downloaded|viewed|sent|submitted)\b|^application was\b|^resume was\b", re.I)
+
+
 def tidy_company_name(name, title=None):
     """The company name without a leading entity code or a tagline after a bar ("Coda Search│Staffing"), and empty
     when a job site put the job title where the company belongs."""
     cleaned = _LEADING_NUMBER_CODE.sub("", _LEADING_CODE.sub("", str(name or "")))
     cleaned = re.split(r"\s*[│|]\s*", cleaned)[0].strip()
     if title and cleaned.casefold() == str(title).strip().casefold():
+        return ""
+    if _NOTICE.search(cleaned):
         return ""
     if len(cleaned) > 120 or len(cleaned.split()) > 12:
         return ""  # a sentence from the page (a fit chart's explanation), not a company name

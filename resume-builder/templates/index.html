@@ -19,23 +19,23 @@
     <li>
       <span class="step-number" aria-hidden="true">1</span>
       <h3>Upload Your Résumé</h3>
-      <p>Choose your current résumé below. Its layout is copied: fonts, sizes, colors and section order.</p>
+      <p>Pick your current résumé below. The new one will match its fonts, sizes, colors and section order.</p>
     </li>
     <li>
       <span class="step-number" aria-hidden="true">2</span>
       <h3>Check Your Profile</h3>
-      <p>Make sure your name, location, job titles, work history and skills are right.</p>
+      <p>Confirm your name, location, job titles, work history and skills are correct. Everything Claude writes comes from here.</p>
     </li>
     <li>
       <span class="step-number" aria-hidden="true">3</span>
       <h3>Ask Claude Desktop</h3>
-      <p>Ask it to write for a job you saved:</p>
+      <p>Pick a job you saved in Job Finder and ask for a tailored résumé and cover letter, for example:</p>
       <q>Use Résumé Builder to write a résumé and cover letter for the Acme web developer job.</q>
     </li>
     <li>
       <span class="step-number" aria-hidden="true">4</span>
       <h3>Review and Download</h3>
-      <p>Come back here to read, edit and download the finished PDFs.</p>
+      <p>Return here to read the drafts, make any edits and download the finished PDFs.</p>
     </li>
   </ol>
   {% if not connector.installed %}
@@ -82,17 +82,18 @@
 
 <section class="sub-card" id="documents">
   <h2>Reference Documents</h2>
-  <p class="field-help">Anything that helps Claude write about you: past cover letters, performance reviews, award letters, certificates, a list of projects. Claude Desktop can read these in every chat and uses only what is actually in them. Kept only on this computer.</p>
+  <p class="doc-intro">Anything that helps Claude write about you: past cover letters, reviews, certificates, project lists. Claude Desktop reads them in every chat and uses only what is in them. They stay on this computer.</p>
   {% if documents %}
-  <ul class="ref-list">
+  <ul class="doc-list">
   {% for d in documents %}
-    <li class="ref-entry">
-      <div class="ref-summary">
-        <p class="ref-name"><strong>{{ d.label }}</strong> <span class="chip">{{ d.type }}</span></p>
-        <p class="field-help">{{ d.original_name }} &middot; uploaded {{ d.uploaded_at.replace('T', ' ') }}{% if d.pages %} &middot; {{ d.pages }} page{{ 's' if d.pages != 1 }}{% endif %}
-          &middot; {% if d.chars %}{{ '{:,}'.format(d.chars) }} characters of text{% else %}<span class="status-warn">no text found (scan or image)</span>{% endif %}</p>
+    <li class="doc-row">
+      <span class="doc-type" aria-hidden="true">{{ d.type }}</span>
+      <div class="doc-main">
+        <strong class="doc-label">{{ d.label }}</strong>
+        <span class="doc-file">{{ d.original_name }}</span>
+        <span class="doc-meta">Added {{ d.uploaded_at|nice_date }}{% if d.pages %} &middot; {{ d.pages }} page{{ 's' if d.pages != 1 }}{% endif %} &middot; {% if d.chars %}{{ '{:,}'.format(d.chars) }} characters read{% else %}<span class="status-warn">no text found (scan or image)</span>{% endif %}</span>
       </div>
-      <div class="ref-actions">
+      <div class="ref-actions doc-actions">
         <a class="icon-button" href="{{ url_for('document_file', doc_id=d.id) }}" target="_blank" rel="noopener" title="{{ 'View' if d.type == 'PDF' else 'Download' }} {{ d.label }}" aria-label="{{ 'View' if d.type == 'PDF' else 'Download' }} {{ d.label }}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5.5 5.5"/></svg></a>
         <details class="ref-edit">
           <summary class="icon-button" title="Rename {{ d.label }}" aria-label="Rename {{ d.label }}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h9l5 5v13H5z"/><path d="M14 3v5h5"/><path d="M9 17l1-3 6-6 2 2-6 6z"/></svg></summary>
@@ -111,16 +112,16 @@
   {% endfor %}
   </ul>
   {% else %}
-    <p>No documents yet.</p>
+    <p class="empty-note">No documents yet. Add one below.</p>
   {% endif %}
   <form method="post" action="{{ url_for('add_document') }}" enctype="multipart/form-data" class="reference reference-new">
     <h3>Add a Document</h3>
     <input type="hidden" name="csrf" value="{{ csrf_token() }}" />
-    <div class="ref-grid">
-      <label>File <span class="field-help">PDF, Word .docx, .txt or .md, up to 10 MB</span>
-        <input name="document" type="file" accept=".pdf,.docx,.txt,.md" required /></label>
+    <span class="field-help">PDF, Word .docx, .txt or .md, up to 10 MB</span>
+    <div class="upload-row">
+      <input name="document" type="file" accept=".pdf,.docx,.txt,.md" required aria-label="Choose a document" />
+      <button class="bordered-button primary" type="submit">Add Document</button>
     </div>
-    <button class="bordered-button primary" type="submit">Add document</button>
   </form>
 </section>
   </div>
@@ -130,28 +131,18 @@
 <section class="card wide" id="job-link">
 <details class="section-collapse" id="job-link-panel" open>
   <summary><h2>Job Link Résumé Creation</h2><span class="summary-chevron" aria-hidden="true"></span></summary>
-  <p class="field-help">Paste a link to a job. Résumé Builder reads the posting, then copies a ready request for Claude Desktop, which tailors your résumé and writes the cover letter.</p>
+  <p class="field-help">Paste a link to a job and press Create. Résumé Builder reads the posting, then Claude writes a tailored résumé and cover letter from your résumé, profile, documents and rules. They are saved to your list and show up here to download. It takes a few minutes.</p>
   <form id="job-link-form" class="job-link-form" autocomplete="off">
     <input type="hidden" name="csrf" value="{{ csrf_token() }}" />
     <label class="visually-hidden" for="job-link-url">Link to the job</label>
     <input id="job-link-url" name="url" type="url" inputmode="url" placeholder="Paste the job link, for example https://company.com/careers/web-designer" required />
-    <button class="bordered-button primary" type="submit" id="job-link-read">Read the Job</button>
+    <button class="bordered-button primary" type="submit" id="job-link-read">Create Résumé and Cover Letter</button>
   </form>
-  <div id="job-link-found" class="job-link-found" hidden>
-    <div class="ref-grid">
-      <label>Job title <input id="job-link-title" maxlength="150" /></label>
-      <label>Company <input id="job-link-company" maxlength="150" /></label>
-    </div>
-    <p id="job-link-note" class="field-help"></p>
-    <details class="job-link-text"><summary>Posting text that will go with the request <span class="field-help" id="job-link-size"></span></summary>
-      <textarea id="job-link-text" rows="8" maxlength="12000" data-autogrow></textarea></details>
-    <button class="bordered-button primary" type="button" id="job-link-copy">Copy Request and Open Claude Desktop</button>
-  </div>
-  <p id="job-link-status" class="field-help" role="status"></p>
+  <p id="job-link-status" class="job-link-status" role="status"></p>
   <div id="job-link-results" class="job-link-results" hidden>
     <h3>Your Files</h3>
     <ul id="job-link-files" class="job-link-files"></ul>
-    <button class="bordered-button" type="button" id="job-link-check">Check Again</button>
+    <p class="field-help">They are also in Saved Résumés and Cover Letters below.</p>
   </div>
 </details>
 </section>
@@ -162,21 +153,23 @@
   <summary><h2>Résumé Design</h2><span class="summary-chevron" aria-hidden="true"></span></summary>
   <p class="field-help">What Résumé Builder sees in your uploaded résumé is written out below. Change anything, then Save Design: new résumés and cover letters are drawn with it, and Claude Desktop reads your notes.</p>
 
-  <h3>What It Sees</h3>
-  <dl class="design-rows">
+  <details class="design-sees">
+    <summary>What It Sees <span class="field-help">(what was read from your uploaded résumé)</span></summary>
+    <dl class="design-rows">
     {% for label, text in design_rows %}<div><dt>{{ label }}</dt><dd>{{ text }}</dd></div>{% endfor %}
   </dl>
-  <form method="post" action="{{ url_for('reread_design') }}" class="inline-form">
+    <form method="post" action="{{ url_for('reread_design') }}" class="inline-form">
     <input type="hidden" name="csrf" value="{{ csrf_token() }}" />
     <button class="bordered-button" type="submit">Look at My Résumé Again</button>
   </form>
+  </details>
 
   <form method="post" action="{{ url_for('save_design') }}" class="design-form">
     <input type="hidden" name="csrf" value="{{ csrf_token() }}" />
     {% if design_unsaved %}<p class="flash flash-warn">These are the fonts from jamiekerig.com. They are not saved yet: check them, then Save Design.</p>{% endif %}
     {% set l = design_layout %}
 
-    <h3>Fonts</h3>
+    <details class="design-group" id="design-fonts" open><summary><h3>Fonts</h3><span class="summary-chevron" aria-hidden="true"></span></summary>
     <p class="field-help">Pick from the list or type a name. The list has the fonts installed on this computer and Google Fonts; a Google Font is saved here the first time you use it.</p>
     <datalist id="font-list">
       {% for f in installed_fonts %}<option value="{{ f }}" label="Installed"></option>{% endfor %}
@@ -195,24 +188,27 @@
     </div>
     <p class="field-help">Leave a font empty to use the body text font. Dates, sub-headings and the contact lines use the last one.</p>
 
-    <h3>Sizes and Spacing</h3>
+    </details>
+    <details class="design-group" id="design-sizes-and-spacing" open><summary><h3>Sizes and Spacing</h3><span class="summary-chevron" aria-hidden="true"></span></summary>
     <div class="fields">
-      <label>Name Size (pt) <input name="name_size" type="number" step="0.5" min="10" max="40" value="{{ l.name_size }}" /></label>
-      <label>Section Heading Size (pt) <input name="heading_size" type="number" step="0.5" min="8" max="24" value="{{ l.heading_size }}" /></label>
-      <label>Body Text Size (pt) <input name="body_size" type="number" step="0.5" min="7" max="14" value="{{ l.body_size }}" /></label>
-      <label>Line Height (times the text size) <input name="line_spacing" type="number" step="0.05" min="1" max="1.8" value="{{ l.line_spacing }}" /></label>
-      <label>Space Above Headings (pt) <input name="section_gap" type="number" step="1" min="2" max="40" value="{{ l.section_gap if l.section_gap is not none }}" placeholder="same as text" /></label>
+      <label>Name Size (pt) <input name="name_size" type="number" step="0.5" min="10" max="40" value="{{ l.name_size|round(1) }}" /></label>
+      <label>Section Heading Size (pt) <input name="heading_size" type="number" step="0.5" min="8" max="24" value="{{ l.heading_size|round(1) }}" /></label>
+      <label>Body Text Size (pt) <input name="body_size" type="number" step="0.5" min="7" max="14" value="{{ l.body_size|round(1) }}" /></label>
+      <label>Line Height (times the text size) <input name="line_spacing" type="number" step="0.05" min="1" max="1.8" value="{{ l.line_spacing|round(2) }}" /></label>
+      <label>Space Above Headings (pt) <input name="section_gap" type="number" step="1" min="2" max="40" value="{{ l.section_gap|round(0)|int if l.section_gap is not none }}" placeholder="same as text" /></label>
     </div>
 
-    <h3>Page and Margins</h3>
+    </details>
+    <details class="design-group" id="design-page-and-margins" open><summary><h3>Page and Margins</h3><span class="summary-chevron" aria-hidden="true"></span></summary>
     <div class="fields">
       <label>Paper <select name="page_size"><option value="letter" {{ 'selected' if l.page_size == 'letter' }}>Letter</option><option value="a4" {{ 'selected' if l.page_size == 'a4' }}>A4</option></select></label>
       {% for side in ('top', 'right', 'bottom', 'left') %}{% set key = 'margin_' ~ side %}
-      <label>Margin, {{ side|capitalize }} (in) <input name="{{ key }}" type="number" step="0.05" min="0.3" max="1.5" value="{{ l[key] if l[key] is not none else '' }}" placeholder="{{ l.margin_in }}" /></label>
+      <label>Margin, {{ side|capitalize }} (in) <input name="{{ key }}" type="number" step="0.05" min="0.3" max="1.5" value="{{ l[key]|round(2) if l[key] is not none else '' }}" placeholder="{{ l.margin_in }}" /></label>
       {% endfor %}
     </div>
 
-    <h3>Header and Headings</h3>
+    </details>
+    <details class="design-group" id="design-header-and-headings" open><summary><h3>Header and Headings</h3><span class="summary-chevron" aria-hidden="true"></span></summary>
     <div class="fields">
       <label>Name Position <select name="name_align"><option value="left" {{ 'selected' if l.name_align == 'left' }}>Left</option><option value="center" {{ 'selected' if l.name_align == 'center' }}>Centered</option></select></label>
       <label>Contact Items Separated By <select name="contact_separator">{% for c in ('|', '•', '·', '/', ',', '–', '-') %}<option {{ 'selected' if l.contact_separator == c }}>{{ c }}</option>{% endfor %}</select></label>
@@ -224,10 +220,12 @@
       <label class="check"><input name="heading_rule" type="checkbox" {{ 'checked' if l.heading_rule }} /> Line Under Each Heading</label>
     </div>
 
-    <h3>Design Notes</h3>
+    </details>
+    <details class="design-group" id="design-design-notes" open><summary><h3>Design Notes</h3><span class="summary-chevron" aria-hidden="true"></span></summary>
     <p class="field-help">Written from your résumé. Edit it as you like; Claude Desktop reads it when it writes for you.</p>
     <textarea name="notes" rows="12" maxlength="6000">{{ design_notes }}</textarea>
 
+    </details>
     <div class="form-actions">
       <button class="bordered-button primary" type="submit">Save Design</button>
       <a class="bordered-button" href="{{ url_for('design_preview') }}" target="_blank" rel="noopener">Preview With Sample Text</a>
@@ -567,11 +565,20 @@
     {% if build_search %}<a class="bordered-button" href="{{ url_for('index') }}#saved-builds">Clear</a>{% endif %}
   </form>
   {% if builds %}
+  <form method="post" action="{{ url_for('delete_builds') }}" id="builds-form" class="builds-form">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}" />
+    <input type="hidden" name="q" value="{{ build_search }}" />
+    <div class="builds-bar">
+      <label class="builds-all"><input type="checkbox" id="builds-select-all" /> Select all {{ builds|length }} shown</label>
+      <span id="builds-count" class="field-help" role="status">None selected</span>
+      <button type="submit" id="builds-delete" class="bordered-button destructive" disabled>Delete Selected</button>
+    </div>
   <div class="table-wrapper"><table>
-    <thead><tr><th>Job</th><th>Type</th><th>File</th><th>Updated</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
+    <thead><tr><th class="pick-col"><span class="visually-hidden">Select</span></th><th>Job</th><th>Type</th><th>File</th><th>Updated</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
     <tbody>
     {% for b in builds %}
       <tr>
+        <td class="pick-col" data-label="Select"><input type="checkbox" class="build-pick" name="file" value="{{ b.pdf }}" aria-label="Select {{ b.pdf }}" /></td>
         <td data-label="Job">{{ b.job_title }}{% if b.company %} at {{ b.company }}{% endif %}</td>
         <td data-label="Type">{{ 'Résumé' if b.kind == 'resume' else 'Cover letter' }}</td>
         <td data-label="File">{{ b.pdf }}{% if not b.pdf_exists %} <span class="status-warn">(PDF missing)</span>{% endif %}</td>
@@ -584,6 +591,7 @@
     {% endfor %}
     </tbody>
   </table></div>
+  </form>
   {% if builds_pages > 1 %}
   <nav class="pager" aria-label="Pages of saved résumés and cover letters">
     <span class="pager-count">Showing {{ (builds_page - 1) * builds_per_page + 1 }}–{{ (builds_page - 1) * builds_per_page + builds|length }} of {{ builds_total }}</span>
@@ -608,7 +616,7 @@
   // opens when the link points at it (adding or editing a reference, saving a design, "Match My Portfolio", or a page link of the saved files).
   (function () {
     [["references-panel", "resumeBuilder.referencesOpen", "#references"], ["design-panel", "resumeBuilder.designOpen", "#design"],
-     ["uploads-panel", "resumeBuilder.uploadsOpen", "#uploads", true], ["job-link-panel", "resumeBuilder.jobLinkOpen", "#job-link", true], ["profile-panel", "resumeBuilder.profileOpen", "#profile", true], ["saved-builds-panel", "resumeBuilder.savedBuildsOpen", "#saved-builds", true]]
+     ["design-fonts", "resumeBuilder.designFontsOpen", "#design-fonts", true], ["design-sizes-and-spacing", "resumeBuilder.designSizesAndSpacingOpen", "#design-sizes-and-spacing", true], ["design-page-and-margins", "resumeBuilder.designPageAndMarginsOpen", "#design-page-and-margins", true], ["design-header-and-headings", "resumeBuilder.designHeaderAndHeadingsOpen", "#design-header-and-headings", true], ["design-design-notes", "resumeBuilder.designDesignNotesOpen", "#design-design-notes", true], ["uploads-panel", "resumeBuilder.uploadsOpen", "#uploads", true], ["job-link-panel", "resumeBuilder.jobLinkOpen", "#job-link", true], ["profile-panel", "resumeBuilder.profileOpen", "#profile", true], ["saved-builds-panel", "resumeBuilder.savedBuildsOpen", "#saved-builds", true]]
       .forEach(function (item) {
         var panel = document.getElementById(item[0]);
         if (!panel) return;

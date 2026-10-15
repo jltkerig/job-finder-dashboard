@@ -16,7 +16,7 @@
     <a class="bordered-button" href="{{ url_for('download', filename=draft.pdf, download=1) }}">Download PDF</a>
   </div>
 
-  <details>
+  <details class="layout-fold">
     <summary>Layout</summary>
     <div class="fields">
       <label>Font <select name="font_family">{% for f in fonts %}<option {{ 'selected' if f == l.font_family }}>{{ f }}</option>{% endfor %}</select></label>
