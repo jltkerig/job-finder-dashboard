@@ -1,6 +1,6 @@
 # Job Finder
 
-Personal job discovery project using Python, MySQL, Flask, Brave Search API, Remote OK, USAJOBS and Adzuna (optional free API keys), local O*NET occupation data, and OpenStreetMap Nominatim. The version number is shown in the dashboard footer and set in `dashboard.py` (`APP_VERSION`); the sections below are a history by version.
+Personal job discovery project using Python, MySQL, Flask, Brave Search API, Remote OK, USAJOBS and Adzuna (optional free API keys), the State of Maryland's JobAps portal, employer career pages on Greenhouse, Lever, Workday, Ashby and similar systems, local O*NET occupation data, OpenStreetMap Nominatim for geocoding and Photon for address suggestions. The footer on every page lists these. The version number is shown in the dashboard footer and set in `dashboard.py` (`APP_VERSION`); the sections below are a history by version.
 
 ## What Job Finder does
 
