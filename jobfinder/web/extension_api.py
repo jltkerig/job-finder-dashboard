@@ -46,14 +46,14 @@ def extension_updates():
     return jsonify({"addons": {EXTENSION_ID: {"updates": updates}}})
 
 
-EXTENSION_READS = {"/extension/fit-profile", "/extension/distances"}
+EXTENSION_READS = {"/extension/fit-profile", "/extension/distances", "/extension/profile-file"}
 
 
 @app.after_request
 def let_firefox_extensions_read(response):
     """Firefox reports a "NetworkError" when the extension asks for these without its permission for this address
     in force (not yet granted after an update, or turned off in about:addons): the request is then treated like any
-    other site's. So these two read-only answers allow an extension's own address. Ordinary web pages can't claim a
+    other site's. So these read-only answers allow an extension's own address. Ordinary web pages can't claim a
     moz-extension:// origin, so they still get nothing back."""
     origin = request.headers.get("Origin", "")
     if request.path in EXTENSION_READS and origin.startswith("moz-extension://"):
@@ -106,7 +106,8 @@ def extension_file(name):
 @app.route("/extension/profile-file")
 def extension_profile_file():
     """"Export for Web Job Scraper" on the Dashboard: the fit profile plus your home's map point, as a file to load in
-    the extension (Load profile). The extension then works on its own, without asking Job Finder for anything."""
+    the extension (Load a file). The extension also asks for this file itself once a day while Job Finder is running,
+    so its markers follow your profile without anyone exporting it."""
     from datetime import datetime
     from jobfinder.profiles.places import STATE_NAMES
     from jobfinder.profiles.travel import zip_point

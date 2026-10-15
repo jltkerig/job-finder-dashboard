@@ -23,14 +23,14 @@ class FitProfileForTheExtension(unittest.TestCase):
         origin = "moz-extension://4f1c2a9e-0b7d-4e55-9a31-2c8d6e7f1a00"
         with patch.object(profile_store, "get_user_profile", return_value={"home_zip": ""}), \
                 patch.object(blocklists, "get_blocked_companies", return_value=[]):
-            for path in ("/extension/fit-profile", "/extension/distances?places=Towson, MD"):
+            for path in ("/extension/fit-profile", "/extension/distances?places=Towson, MD", "/extension/profile-file"):
                 response = client.get(path, headers={"Origin": origin})
                 self.assertEqual(response.headers.get("Access-Control-Allow-Origin"), origin)  # the same, not "*"
                 self.assertIn("Origin", response.headers.get("Vary", ""))
                 page = client.get(path, headers={"Origin": "https://www.linkedin.com"})
                 self.assertNotIn("Access-Control-Allow-Origin", page.headers)
             other = client.get("/extension/updates.json", headers={"Origin": origin})
-            self.assertNotIn("Access-Control-Allow-Origin", other.headers)  # only the two reads
+            self.assertNotIn("Access-Control-Allow-Origin", other.headers)  # only the profile reads
 
     def test_primary_title_first_without_repeats(self):
         with patch.object(blocklists, "get_blocked_companies", return_value=["Bark"]):
