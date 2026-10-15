@@ -2,13 +2,11 @@
 * { box-sizing: border-box; }
 body { margin: 0; min-height: 100vh; display: flex; flex-direction: column; font-family: Arial, sans-serif; background: #f5f5f5; color: #222; }
 a { color: #1d4ed8; }
-
 .top-nav { position: sticky; top: 0; z-index: 10; background: #1f2937; border-bottom: 1px solid #111827; }
 .nav-inner { display: flex; flex-wrap: wrap; gap: 10px; max-width: 1400px; margin: 0 auto; padding: 12px 40px; }
 .nav-link { display: inline-flex; align-items: center; justify-content: center; min-width: 110px; padding: 10px 18px; border-radius: 999px; color: #e5e7eb; font-weight: 700; text-decoration: none; transition: background .18s ease, color .18s ease, transform .18s ease; }
 .nav-link:hover { background: #374151; color: #fff; text-decoration: none; transform: translateY(-1px); }
 .nav-link.active { background: #fff; color: #111827; }
-
 /* The same header as Job Finder's pages. */
 header { padding: 30px 40px; background: #eef1f4; color: #252a31; border-bottom: 1px solid #cfd4da; }
 .header-content { display: flex; align-items: center; justify-content: space-between; gap: 24px; max-width: 1400px; margin: 0 auto; width: 100%; }
@@ -16,35 +14,29 @@ header h1 { margin: 0 0 8px; color: #252a31; }
 header p { margin: 0; color: #59636e; }
 main { flex: 1; padding: 32px 40px; }
 footer { padding: 14px 40px; color: #777; font-size: .85rem; }
-
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 20px; max-width: 1400px; margin: 0 auto; }
 .card { background: #fff; border: 1px solid #ddd; border-radius: 10px; padding: 20px 24px; }
 .card h2 { margin-top: 0; font-size: 1.2rem; }
 .wide { grid-column: 1 / -1; }
 .steps li { margin-bottom: 6px; line-height: 1.4; }
-
 .flash, .status { padding: 10px 14px; border-radius: 7px; max-width: 1400px; margin: 0 auto 16px; }
 .flash-ok, .status-ok { background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; }
 .flash-error, .status-warn { background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412; }
 span.status-warn { border: 0; background: none; padding: 0; }
 .field-help { color: #666; font-size: .88rem; font-weight: normal; }
-.swatch { display: inline-block; width: 12px; height: 12px; border: 1px solid #999; border-radius: 3px; vertical-align: middle; margin-right: 3px; }
 .chip { display: inline-block; margin: 0 6px 6px 0; padding: 3px 9px; border-radius: 999px; background: #eef2ff; font-size: .85rem; }
 .facts { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; }
 .facts dt { font-weight: 700; }
 .facts dd { margin: 0; }
-
 .pages { display: flex; gap: 12px; overflow-x: auto; margin: 12px 0; }
 .pages img { width: 220px; border: 1px solid #ccc; box-shadow: 0 1px 4px rgba(0,0,0,.1); }
 .upload { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 12px; }
 .upload label { width: 100%; font-weight: 700; }
-
 .bordered-button { min-height: 38px; padding: 8px 14px; border: 1px solid #b9bec5; border-radius: 7px; background: #fff; color: #252a31; font: inherit; font-size: .88rem; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; cursor: pointer; }
 .bordered-button:hover { background: #f3f4f6; border-color: #8f969f; }
 .bordered-button.primary { background: #1f2937; border-color: #1f2937; color: #fff; }
 .bordered-button.primary:hover { background: #374151; }
 .bordered-button.danger { color: #b91c1c; border-color: #fca5a5; margin-top: 12px; }
-
 .table-wrapper { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: 10px; border-bottom: 1px solid #eee; vertical-align: middle; }
@@ -62,7 +54,6 @@ th, td { text-align: left; padding: 10px; border-bottom: 1px solid #eee; vertica
 .pager-gap { padding: 0 4px; color: #777; }
 td.actions { display: flex; gap: 8px; justify-content: flex-end; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
-
 .editor { display: grid; grid-template-columns: minmax(380px, 1fr) minmax(380px, 1fr); gap: 20px; align-items: start; }
 .editor form label { display: block; margin: 10px 0; font-weight: 700; font-size: .92rem; }
 .editor input:not([type=checkbox]):not([type=color]), .editor textarea, .editor select { display: block; width: 100%; margin-top: 4px; padding: 7px 9px; border: 1px solid #c4c8ce; border-radius: 6px; font: inherit; font-weight: normal; }
@@ -79,7 +70,6 @@ legend { font-weight: 700; padding: 0 6px; }
 .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .preview { position: sticky; top: 72px; }
 .preview iframe { width: 100%; height: calc(100vh - 190px); min-height: 500px; border: 1px solid #ddd; border-radius: 6px; }
-
 .count { display: inline-block; min-width: 24px; padding: 1px 8px; border-radius: 999px; background: #e5e7eb; font-size: .85rem; text-align: center; vertical-align: middle; }
 .ref-list { list-style: none; margin: 0 0 16px; padding: 0; display: grid; gap: 10px; }
 .ref-entry { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding: 12px 16px; border: 1px solid #e5e7eb; border-left: 4px solid #1f2937; border-radius: 8px; }
@@ -105,7 +95,6 @@ legend { font-weight: 700; padding: 0 6px; }
 .ref-grid label { display: block; margin: 8px 0 0; font-weight: 700; font-size: .88rem; }
 .ref-grid input { display: block; width: 100%; margin-top: 4px; padding: 7px 9px; border: 1px solid #c4c8ce; border-radius: 6px; font: inherit; font-weight: normal; }
 .ref-notes { grid-column: 1 / -1; }
-
 @media (max-width: 900px) {
   .ref-entry { flex-direction: column; }
   .ref-grid { grid-template-columns: 1fr; }
@@ -115,7 +104,6 @@ legend { font-weight: 700; padding: 0 6px; }
   .row { grid-template-columns: 1fr; }
   td.actions { justify-content: flex-start; flex-wrap: wrap; }
 }
-
 .name-edit { margin: 0 0 14px; padding: 0; border: 0; }
 .name-edit summary { list-style: none; }
 .name-edit summary::-webkit-details-marker { display: none; }
@@ -132,7 +120,6 @@ legend { font-weight: 700; padding: 0 6px; }
 #profile .facts { grid-template-columns: max-content 1fr; }
 #profile .name-edit form { max-width: 900px; }
 #profile .history-row .ref-grid { grid-template-columns: 1fr 1fr; }
-
 /* Two columns: resume and reference documents side by side; wide cards span both. */
 .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 #documents .ref-grid { grid-template-columns: 1fr; }
@@ -140,7 +127,6 @@ legend { font-weight: 700; padding: 0 6px; }
   .grid { grid-template-columns: 1fr; }
   .how-to .steps { grid-template-columns: 1fr; }
 }
-
 /* Collapsible sections (References). */
 .section-collapse > summary { list-style: none; display: flex; align-items: center; gap: 10px; cursor: pointer; }
 .section-collapse > summary::-webkit-details-marker { display: none; }
@@ -153,7 +139,6 @@ legend { font-weight: 700; padding: 0 6px; }
 .add-box { margin: 4px 0 16px; background: #e4e9f0; border: 1px solid #c3cdd9; }
 .add-box input { background: #fff; }
 .section-collapse { margin: 0; padding: 0; border: 0; }
-
 /* Job title type-ahead and suggested titles (same look as Job Finder). */
 .title-suggest-host { position: relative; }
 .title-suggest { position: absolute; z-index: 60; left: 0; right: 0; margin: 4px 0 0; padding: 4px; list-style: none; background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; box-shadow: 0 10px 24px rgba(17, 24, 39, .12); max-height: 280px; overflow-y: auto; font-weight: normal; }
@@ -164,9 +149,7 @@ legend { font-weight: 700; padding: 0 6px; }
 .title-chips .chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .suggest-chip { border: 1px solid #c7cbd1; border-radius: 999px; background: #f6f7f8; color: #252a31; padding: 5px 10px; font: inherit; font-size: .85rem; cursor: pointer; }
 .suggest-chip:hover { background: #eef2f7; border-color: #8f969f; }
-
 header p.app-version { font-size: .9rem; margin-top: -4px; }
-
 /* Profile: more room between the headings and rows */
 #profile h2 { margin-bottom: 0; }
 #profile-panel[open] > summary { margin-bottom: 20px; }
@@ -180,7 +163,6 @@ header p.app-version { font-size: .9rem; margin-top: -4px; }
 #profile .name-edit .field-help { margin: 4px 0 14px; }
 #profile .ref-grid label { margin-top: 16px; }
 #profile .history-row { margin-top: 18px; padding: 8px 16px 16px; }
-
 /* Résumé Design */
 #design h3 { margin: 30px 0 8px; font-size: 1.1rem; }
 #design-panel > .field-help { margin-bottom: 18px; }
@@ -202,14 +184,15 @@ header p.app-version { font-size: .9rem; margin-top: -4px; }
 .design-table { width: 100%; border-collapse: collapse; margin: 6px 0 10px; }
 .design-table th, .design-table td { padding: 9px 12px; text-align: left; border-bottom: 1px solid #eef0f2; vertical-align: top; }
 .design-form .form-actions { margin-top: 22px; display: flex; flex-wrap: wrap; gap: 10px; }
-@media (max-width: 640px) { .design-rows > div { grid-template-columns: 1fr; gap: 2px; } }
+@media (max-width: 640px) {
+  .design-rows > div { grid-template-columns: 1fr; gap: 2px; }
+}
 #design .fields { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px 20px; }
 #design .fields label { display: block; font-weight: 600; font-size: .9rem; }
 #design .fields label.check { display: flex; align-items: center; gap: 8px; align-self: end; font-weight: 400; }
 #design .fields input:not([type="checkbox"]):not([type="color"]), #design .fields select { display: block; width: 100%; box-sizing: border-box; margin-top: 4px; padding: 7px 9px; }
 #design .fields input[type="color"] { display: block; margin-top: 4px; width: 64px; height: 36px; padding: 2px; }
 #design .fields input[type="checkbox"] { width: auto; margin: 0; }
-
 /* How to Use It: four numbered steps, each with a short title */
 .how-to { padding: 22px 24px 24px; }
 .how-to-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; margin-bottom: 18px; }
@@ -223,25 +206,23 @@ header p.app-version { font-size: .9rem; margin-top: -4px; }
 .how-to .steps p { margin: 0; font-size: .95rem; line-height: 1.5; color: #374151; }
 .how-to .steps q { display: block; margin-top: 10px; padding: 10px 12px; background: #fff; border-left: 4px solid #1f2937; border-radius: 4px; font-size: .9rem; line-height: 1.45; color: #1f2937; quotes: none; }
 .how-to-setup { margin: 16px 0 0; padding: 10px 14px; border-radius: 7px; background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412; }
-@media (max-width: 1100px) { .how-to .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 640px) { .how-to .steps { grid-template-columns: 1fr; } }
-
+@media (max-width: 1100px) {
+  .how-to .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .how-to .steps { grid-template-columns: 1fr; }
+}
 /* One look for every text box, number box, drop-down and note field */
-input:not([type]), input[type="text"], input[type="search"], input[type="number"], input[type="email"], input[type="url"], input[type="password"], input[type="tel"], input[type="date"], input[type="datetime-local"], input[type="month"], input[type="time"], input[type="week"], select, textarea {
-  box-sizing: border-box !important; min-height: 42px !important; padding: 10px 12px !important; border: 1px solid #cbd5e1 !important; border-radius: 8px !important;
-  background-color: #ffffff !important; color: #111827 !important; font-family: inherit !important; font-size: 1rem !important; font-weight: 400 !important; line-height: 1.3 !important;
-}
+input:not([type]), input[type="text"], input[type="search"], input[type="number"], input[type="email"], input[type="url"], input[type="password"], input[type="tel"], input[type="date"], input[type="datetime-local"], input[type="month"], input[type="time"], input[type="week"], select, textarea {  box-sizing: border-box !important; min-height: 42px !important; padding: 10px 12px !important; border: 1px solid #cbd5e1 !important; border-radius: 8px !important;
+  background-color: #ffffff !important; color: #111827 !important; font-family: inherit !important; font-size: 1rem !important; font-weight: 400 !important; line-height: 1.3 !important;}
 textarea { min-height: 96px !important; resize: vertical; }
-input:not([type]):focus, input[type="text"]:focus, input[type="search"]:focus, input[type="number"]:focus, input[type="email"]:focus, input[type="url"]:focus, input[type="password"]:focus, input[type="tel"]:focus, input[type="date"]:focus, input[type="datetime-local"]:focus, input[type="month"]:focus, input[type="time"]:focus, input[type="week"]:focus, select:focus, textarea:focus {
-  outline: 3px solid rgba(37, 99, 235, 0.14); border-color: #2563eb !important;
-}
+input:not([type]):focus, input[type="text"]:focus, input[type="search"]:focus, input[type="number"]:focus, input[type="email"]:focus, input[type="url"]:focus, input[type="password"]:focus, input[type="tel"]:focus, input[type="date"]:focus, input[type="datetime-local"]:focus, input[type="month"]:focus, input[type="time"]:focus, input[type="week"]:focus, select:focus, textarea:focus {  outline: 3px solid rgba(37, 99, 235, 0.14); border-color: #2563eb !important;}
 input::placeholder, textarea::placeholder { color: #6b7280; opacity: 1; }
 input:not([type]), input[type="text"], input[type="search"], input[type="number"], input[type="email"], input[type="url"], input[type="password"], input[type="tel"], input[type="date"], input[type="datetime-local"], input[type="month"], input[type="time"], input[type="week"], select { height: 44px !important; }
-
 /* Résumé Rules and Cover Letter Rules: the box fills the section, the Save button sits under it */
 .writing-rules-form { display: grid; gap: 12px; justify-items: start; }
-.writing-rules-form textarea { display: block; width: 100%; box-sizing: border-box; min-height: 320px !important; font-family: inherit; font-size: .95rem; line-height: 1.5; }.rules-format { margin: 0 0 12px; padding: 10px 12px; border-radius: 8px; background: #f1f5f9; color: #334155; line-height: 1.5; }
-
+.writing-rules-form textarea { display: block; width: 100%; box-sizing: border-box; min-height: 320px !important; font-family: inherit; font-size: .95rem; line-height: 1.5; }
+.rules-format { margin: 0 0 12px; padding: 10px 12px; border-radius: 8px; background: #f1f5f9; color: #334155; line-height: 1.5; }
 /* Phones: the menu wraps, cards never run past the screen edge */
 .grid > * { min-width: 0; }
 .card { overflow-wrap: anywhere; }
@@ -255,8 +236,11 @@ input:not([type]), input[type="text"], input[type="search"], input[type="number"
   footer { padding: 14px 16px; }
   .card, .how-to { padding: 16px; }
   .writing-rules-form textarea { min-height: 260px !important; }
-}@media (max-width: 640px) { #profile .history-row .ref-grid { grid-template-columns: 1fr; } #profile .facts { grid-template-columns: 1fr; } }
-
+}
+@media (max-width: 640px) {
+  #profile .history-row .ref-grid { grid-template-columns: 1fr; }
+  #profile .facts { grid-template-columns: 1fr; }
+}
 /* Reference Documents: small icon buttons (view, rename, delete) */
 #documents .ref-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 #documents .ref-actions form { margin: 0; }
@@ -268,8 +252,9 @@ input:not([type]), input[type="text"], input[type="search"], input[type="number"
 .icon-button.icon-delete { border-radius: 50%; border-color: #dc2626; background: #dc2626; color: #fff; }
 .icon-button.icon-delete:hover { background: #b91c1c; border-color: #b91c1c; }
 .icon-button.icon-delete svg { width: 14px; height: 14px; stroke-width: 2.6; }
-#documents details.ref-edit[open] > summary.icon-button { background: #1f2937; border-color: #1f2937; color: #fff; }#documents .icon-button svg { width: 20px; height: 20px; } #documents .icon-button.icon-delete svg { width: 16px; height: 16px; }
-
+#documents details.ref-edit[open] > summary.icon-button { background: #1f2937; border-color: #1f2937; color: #fff; }
+#documents .icon-button svg { width: 20px; height: 20px; }
+#documents .icon-button.icon-delete svg { width: 16px; height: 16px; }
 /* Suggestions from reference documents: tick what to add */
 .document-finds { margin: 16px 0; padding: 16px; border: 1px solid #c7d7ea; border-radius: 10px; background: #f3f8fd; }
 .document-finds h3 { margin: 0 0 4px; font-size: 1.05rem; }
@@ -287,8 +272,9 @@ input:not([type]), input[type="text"], input[type="search"], input[type="number"
 /* Work history: optional location, contact and supervisor details, folded away until needed */
 .history-extra { margin: 10px 0 0; }
 .history-extra > summary { cursor: pointer; font-size: .88rem; font-weight: 700; color: #1f2937; }
-.history-extra[open] > summary { margin-bottom: 8px; }.education-current { display: flex; align-items: center; gap: 8px; font-weight: 600; } .education-current input { width: 18px; height: 18px; min-height: 0 !important; margin: 0; }
-
+.history-extra[open] > summary { margin-bottom: 8px; }
+.education-current { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+.education-current input { width: 18px; height: 18px; min-height: 0 !important; margin: 0; }
 /* Suggestions: a quiet "no thanks" on each one */
 .find-list li { display: flex; align-items: flex-start; gap: 8px; }
 .find-list li > label { flex: 1; min-width: 0; }
@@ -305,7 +291,8 @@ input:not([type]), input[type="text"], input[type="search"], input[type="number"
 .add-reference-panel[open] > summary { margin-bottom: 10px; background: #1f2937; border-color: #1f2937; color: #fff; }
 /* People: Save sits next to Add a Person; an open Add panel takes the full row below them */
 .people-actions { display: grid; grid-template-columns: 150px 1fr; column-gap: 10px; align-items: start; margin: 12px 0 16px; }
-.people-actions > .add-reference-panel { grid-column: 1 / -1; margin: 0; padding: 0; border: 0; border-radius: 0; }  /* no box of its own: the open form has one */
+.people-actions > .add-reference-panel { grid-column: 1 / -1; margin: 0; padding: 0; border: 0; border-radius: 0; }
+/* no box of its own: the open form has one */
 /* With a Save button, Save and Add a Person share the first row; the open form then runs the full width below them */
 .people-actions > .bordered-button { grid-column: 1; grid-row: 1; }
 .people-actions > .bordered-button + .add-reference-panel { grid-column: 2; grid-row: 1; }
@@ -313,7 +300,8 @@ input:not([type]), input[type="text"], input[type="search"], input[type="number"
 /* Save and Add a Person are the same size */
 .people-actions > .bordered-button, .people-actions > .add-reference-panel > summary { box-sizing: border-box; width: 150px; min-height: 40px; justify-content: center; }
 .can-reference { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
-@media (max-width: 640px) {  /* the person cards' dropdowns wrap under their labels instead of running off the screen */
+@media (max-width: 640px) {
+  /* the person cards' dropdowns wrap under their labels instead of running off the screen */
   .supervisor-row label { flex-wrap: wrap; max-width: 100%; }
   .supervisor-row select { max-width: 100%; min-width: 0; }
   .ref-summary { min-width: 0; max-width: 100%; }
@@ -326,9 +314,9 @@ input:not([type]), input[type="text"], input[type="search"], input[type="number"
 .supervisor-row select { height: 32px !important; min-height: 32px !important; padding: 2px 8px !important; font-size: .85rem !important; max-width: 320px; }
 .find-list li { flex-wrap: wrap; }
 .find-list li > .supervisor-row { flex-basis: 100%; margin: 0 0 4px 30px; }
-.supervisor-form { margin: 6px 0 0; }.find-list li > .supervisor-row { order: 3; }
+.supervisor-form { margin: 6px 0 0; }
+.find-list li > .supervisor-row { order: 3; }
 .find-list .supervisor-row label { padding: 0; border: 0; background: none; cursor: default; }
-
 /* References: people found in documents, in the same section as saved references */
 .found-people { margin: 22px 0 8px; padding: 16px; border: 1px solid #c7d7ea; border-radius: 10px; background: #f3f8fd; }
 .found-people h3 { margin: 0 0 4px; font-size: 1.05rem; }
@@ -351,7 +339,9 @@ input:not([type]), input[type="text"], input[type="search"], input[type="number"
 .person-buttons form, .person-choices form { margin: 0; }
 .person-choices .bordered-button { min-height: 34px; padding: 4px 12px; font-size: .85rem; }
 .quiet-button { color: #6b7280; }
-@media (max-width: 640px) { .person-choices { justify-items: start; } }
+@media (max-width: 640px) {
+  .person-choices { justify-items: start; }
+}
 /* Profile > Work History: a labelled marker above each job, and buttons to change their order */
 .section-marker { display:flex; justify-content:space-between; align-items:center; gap:10px; margin:22px 0 0; padding:5px 12px; border-radius:6px; background:#eef2f7; color:#33415c; font-size:.82rem; font-weight:700; letter-spacing:.04em; text-transform:uppercase; }
 .section-marker .marker-count { font-weight:600; text-transform:none; letter-spacing:0; }
@@ -363,24 +353,21 @@ input:not([type]), input[type="text"], input[type="search"], input[type="number"
 .more-links { border:1px solid #e5e7eb; border-radius:8px; padding:6px 12px 10px; margin:8px 0; }
 .more-links legend { font-weight:600; font-size:.9rem; padding:0 4px; }
 .link-row { display:grid; grid-template-columns:minmax(120px, 180px) 1fr; gap:8px; margin-top:6px; }
-@media (max-width: 640px) { .link-row { grid-template-columns:1fr; } }
-
+@media (max-width: 640px) {
+  .link-row { grid-template-columns:1fr; }
+}
 /* The Work History heading in the Profile editor: dark bar with light text. */
 #profile h3.dark-heading { background: #1f2937; color: #f3f4f6; padding: 8px 14px; border-radius: 8px; }
-
 /* The Profile's Edit button sits in the top right corner of the panel, just left of the collapse chevron. */
 #profile-panel { position: relative; }
 #profile .name-edit:not([open]) { margin: 0; }
 #profile .name-edit:not([open]) > summary { position: absolute; top: 0; right: 32px; margin: 0; }
-
 /* Suggested titles and skills (the "+ Title" chips and the skills found in documents): dark with light text. */
 .suggest-chip, .find-skill { background: #1f2937; color: #f3f4f6; border-color: #111827; }
 .suggest-chip:hover { background: #374151; border-color: #374151; }
 .find-skill .dismiss-x { color: #cbd5e1; }
-
 /* Saved skills in the Profile: dark chips with light text. */
 #profile .facts .chip { background: #1f2937; color: #f3f4f6; }
-
 /* All skill and suggestion chips share one size and weight, wherever they appear. */
 .chip, .suggest-chip, .find-skill, .chip-button { box-sizing: border-box; border: 1px solid transparent; border-radius: 999px; font: inherit !important; font-size: .85rem !important; font-weight: 400 !important; line-height: 1.3 !important; }
 .chip, .suggest-chip, .chip-button { padding: 5px 12px !important; }
@@ -388,9 +375,7 @@ input:not([type]), input[type="text"], input[type="search"], input[type="number"
 .find-skill > label { padding: 5px 4px 5px 12px; font-weight: 400; }
 .chip { margin: 0 8px 8px 0 !important; }
 .ref-name .chip { margin: 0 0 0 6px !important; padding: 3px 10px !important; }
-
 /* The "Work History · Job 1 of 11" markers above each job: dark with light text. */
 .section-marker { background: #1f2937; color: #f3f4f6; }
-
 /* Move up / Move down are arrow icons. */
 .job-order .bordered-button { display: inline-flex; align-items: center; justify-content: center; padding: 4px 10px; }
