@@ -104,33 +104,6 @@ def ensure_database_schema(connection):
             cursor.close()
 
 
-def clear_companies_table(connection):
-    cursor = None
-
-    try:
-        cursor = connection.cursor()
-
-        cursor.execute("TRUNCATE TABLE companies")
-
-        connection.commit()
-
-        print()
-        print("Previous test company data cleared.")
-
-        return True
-
-    except Error as error:
-        print()
-        print("Could not clear companies table.")
-        print(error)
-
-        return False
-
-    finally:
-        if cursor is not None:
-            cursor.close()
-
-
 def save_company(
     connection,
     name,

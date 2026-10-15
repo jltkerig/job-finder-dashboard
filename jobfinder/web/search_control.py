@@ -59,11 +59,6 @@ def scraper_status():
         return False, None
 
 
-def scraper_is_running():
-    running, _ = scraper_status()
-    return running
-
-
 def _finish_graceful_stop(process):
     """Wait for a search to clean up after a stop request; force it only as a fallback."""
     try:

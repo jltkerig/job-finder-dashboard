@@ -301,7 +301,3 @@ def current_page_images():
         return []
     return page_images(config.UPLOAD_DIR / info["preview_pdf"])
 
-
-def current_file_path():
-    info = current_info()
-    return config.UPLOAD_DIR / info["file"] if info else None

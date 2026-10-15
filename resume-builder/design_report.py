@@ -277,6 +277,3 @@ def describe(facts, layout):
 def notes_text(rows):
     return "\n".join(f"{label}: {text}" for label, text in rows)
 
-
-def fonts_seen(facts):
-    return [f["font"] for f in (facts or {}).get("fonts", [])]
