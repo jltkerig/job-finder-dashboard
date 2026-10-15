@@ -2269,3 +2269,15 @@ body[data-page="search"] .section-heading-row { margin:6px 0 8px; }
 /* The Add Location and Add Term buttons are as tall as the boxes beside them */
 body[data-page="search"] .city-add-row, body[data-page="search"] .skill-add-row { align-items:stretch; }
 body[data-page="search"] .city-add-row > .bordered-button, body[data-page="search"] .skill-add-row > .bordered-button { height:auto; min-height:0; align-self:stretch; margin:0; }
+
+/* Job title bubbles: the title box is a box plus an Add button, like the cities; every bubble on the search panel
+   (titles, towns, ignored words, and the suggestions in blue) has the same size and text */
+body[data-page="search"] .job-title-field .city-add-row { display:flex; gap:10px; align-items:stretch; max-width:100%; }
+body[data-page="search"] .job-title-field .city-add-row > input { flex:1 1 auto; min-width:0; }
+body[data-page="search"] .job-title-field .city-add-row > .bordered-button { flex:none; margin:0; }
+body[data-page="search"] .job-title-field .city-list-below { margin:6px 0 0; gap:5px; }
+body[data-page="search"] .job-title-suggestions { margin-top:6px; gap:5px; }
+body[data-page="search"] .city-chip, body[data-page="search"] .skill-chip, body[data-page="search"] .job-suggestion-button {
+  display:inline-flex; align-items:center; gap:5px; margin:0; padding:2px 5px 2px 9px; font-size:.8rem; font-weight:400; line-height:1.25; border-radius:999px; }
+body[data-page="search"] .job-suggestion-button { padding:2px 9px; background:#e6f0ff; border:1px solid #9bbcf2; color:#1d4f9c; }
+body[data-page="search"] .job-suggestion-button:hover { background:#d3e5ff; }

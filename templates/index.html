@@ -34,9 +34,11 @@
         </div>
       </div>
       <form id="job-search-form" class="job-search-form">
-        <div class="form-field job-title-field"><label for="job-title">Job Titles</label>
+        <div class="form-field job-title-field"><label for="job-title-add">Job Titles</label>
           <p class="field-help">Separate multiple titles with commas. Related titles appear as you type. Leave empty to find any jobs nearby.
-          </p><input id="job-title" name="job_title" type="text" data-title-suggest="list" placeholder="e.g. Web Designer, UI Designer" value="{{ profile_job_titles|join(', ') }}" />
+          </p><input id="job-title" name="job_title" type="hidden" value="{{ profile_job_titles|join(', ') }}" />
+          <div class="city-add-row"><input id="job-title-add" type="text" data-title-suggest="single" maxlength="120" placeholder="e.g. Web Designer" autocomplete="off" aria-label="Add a job title" /><button class="bordered-button secondary-action" id="add-job-title" type="button">Add Title</button></div>
+          <div id="job-title-list" class="city-list city-list-below"></div>
           <div id="job-title-suggestions" class="job-title-suggestions" hidden aria-live="polite">
           </div>
         </div>
@@ -223,6 +225,7 @@
   <script src="/static/js/captures.js?v={{ asset_version }}"></script>
   <script src="/static/js/columns.js?v={{ asset_version }}"></script>
   <script src="/static/js/clear-results.js?v={{ asset_version }}"></script>
+  <script src="/static/js/job-title-bubbles.js?v={{ asset_version }}"></script>
   <script src="/static/js/reject-reason.js?v={{ asset_version }}"></script>
   <script src="/static/js/top-picks-score.js?v={{ asset_version }}"></script>
   <script src="/static/js/top-picks-facts.js?v={{ asset_version }}"></script>
