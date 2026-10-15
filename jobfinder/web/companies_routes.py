@@ -90,6 +90,16 @@ def companies_search():
                     "count": len(companies), "companies": companies})
 
 
+@app.route("/companies/place")
+def company_place():
+    """Where a town or ZIP code is, so the page can re-measure the results it already has from a new place."""
+    found = resolve_place(request.args.get("place"), profile_store.get_user_profile())
+    if found is None:
+        return api_error("E3502", "That place wasn't found. Use a town and state such as Bel Air, MD, or a 5-digit ZIP code.", 404)
+    (lat, lon), shown = found
+    return jsonify({"status": "ok", "place": shown, "center": {"lat": lat, "lon": lon}})
+
+
 @app.route("/companies/address-suggest")
 def company_address_suggest():
     """Addresses that start like what is being typed in the Add a company form, nearest the town in its Town box (or home) first."""

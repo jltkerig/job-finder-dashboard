@@ -68,7 +68,13 @@
     button.className = "bordered-button secondary-action companies-delete";
     button.textContent = "Remove";
     button.addEventListener("click", () => remove(company));
-    actions.append(button);
+    const edit = document.createElement("button");
+    edit.type = "button";
+    edit.className = "bordered-button secondary-action companies-edit";
+    edit.textContent = "Edit";
+    edit.title = "Add its job board, notes or a fixed address. It moves to My Companies.";
+    edit.addEventListener("click", () => document.dispatchEvent(new CustomEvent("edit-saved-company", { detail: { company, tr } })));
+    actions.append(edit, button);
     tr.append(name, cell(company.address), cell(company.miles == null ? "" : String(company.miles)), site, actions);
     return tr;
   }

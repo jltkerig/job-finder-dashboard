@@ -99,15 +99,26 @@
     dockForm();
     addForm.reset();
     addId.value = "";
+    fromSaved = "";
     addSave.textContent = "Add company";
     addCancel.hidden = true;
   }
 
-  function editCompany(company, tr) {
+  // A search result or a saved company can be edited too (to add its job board, say): saving puts it in My Companies,
+  // and a saved one leaves Saved Companies when it does.
+  let fromSaved = "";
+  const ADDRESS = /^(.*?),\s*([^,]+),\s*([A-Za-z]{2})\s*(\d{5}(?:-\d{4})?)?$/;
+  function editCompany(company, tr, saved) {
     dockForm();
-    for (const name of FIELDS) field(name).value = company[name] || "";
-    addId.value = company.id.replace(/^mine\//, "");
-    addSave.textContent = "Save changes";
+    const isMine = Boolean(company.mine);
+    const parts = isMine || company.street !== undefined ? company : (() => {
+      const m = ADDRESS.exec(company.address || "");
+      return m ? { street: m[1], city: m[2], state: m[3].toUpperCase(), zip: m[4] || "" } : { street: company.address || "" };
+    })();
+    for (const name of FIELDS) field(name).value = (name in parts ? parts[name] : company[name]) || "";
+    addId.value = isMine ? company.id.replace(/^mine\//, "") : "";
+    fromSaved = saved ? company.id : "";
+    addSave.textContent = isMine ? "Save changes" : "Add to My Companies";
     addCancel.hidden = false;
     addStatus.textContent = "";
     const editRow = document.createElement("tr");
@@ -169,6 +180,8 @@
     }
   }
 
+  document.addEventListener("edit-saved-company", (event) => editCompany(event.detail.company, event.detail.tr, true));
+
   if (addForm) {
     addForm.addEventListener("submit", async (event) => {
       event.preventDefault();
@@ -178,6 +191,10 @@
       addStatus.textContent = "Saving…";
       try {
         const reply = await post(editing ? `/companies/mine/${encodeURIComponent(editing)}` : "/companies/mine", data);
+        if (fromSaved) {
+          await post(`/companies/saved/${encodeURIComponent(fromSaved)}/delete`).catch(() => {});
+          document.dispatchEvent(new CustomEvent("saved-companies-changed"));
+        }
         const synced = reply.jobs_synced || 0;
         const message = (editing ? `Saved ${reply.company.name}.` : `Added ${reply.company.name}.`)
           + (synced ? ` The job${synced === 1 ? "" : "s"} you had there ${synced === 1 ? "is" : "are"} updated in your Profile too, so the Résumé Builder shows it.` : "")
@@ -273,6 +290,7 @@
       save.disabled = saved;
       save.title = saved ? "In Saved Companies" : "Keep this company in Saved Companies";
       actions.append(save);
+      actions.append(button("Edit", "companies-edit", () => editCompany(company, tr)));
       actions.append(button(hidden.has(keyOf(company)) ? "Unhide" : "Hide", "companies-hide", () => {
         const set = readHidden();
         if (set.has(keyOf(company))) set.delete(keyOf(company)); else set.add(keyOf(company));
@@ -382,6 +400,7 @@
           throw new Error(data.message || "The search did not work.");
         }
         shown = data.place;
+        measuredFrom = place.value.trim();
         milesHeader.textContent = `Miles from ${shown}`;
         const kindLabel = box.closest("label").textContent.trim();
         for (const company of data.companies || []) {
@@ -403,6 +422,7 @@
       }
     }
     searchButton.disabled = false;
+    rememberResults(shown);
     loadMine();  // the miles in your own box are from this place too
     if (problem) { say(problem, true); return; }
     if (!companies.length && failed.length === boxes.length) {
@@ -417,6 +437,60 @@
     render();
   }
 
+  // The results are kept in this browser, so a refresh shows them again (a new search replaces them).
+  const RESULTS_KEY = "jobFinder.companyResults";
+  function rememberResults(shown) {
+    try {
+      localStorage.setItem(RESULTS_KEY, JSON.stringify({ place: place.value.trim(), shown, miles: miles.value, companies }));
+    } catch { /* remembering is a convenience */ }
+  }
+  function restoreResults() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(RESULTS_KEY) || "null");
+      if (!saved || !Array.isArray(saved.companies) || !saved.companies.length) return;
+      companies = saved.companies;
+      if (saved.place) place.value = saved.place;
+      if (saved.miles) miles.value = saved.miles;
+      milesHeader.textContent = saved.shown ? `Miles from ${saved.shown}` : "Miles";
+      say(`Your last search, around ${saved.shown || saved.place}. Press Search to look again.`);
+      render();
+    } catch { /* an unreadable copy is ignored */ }
+  }
+
+  // A new place in the box keeps the results already found and measures them again from it (no new search).
+  let measuredFrom = place.value.trim();
+  const miles_between = (a, b) => {
+    const rad = Math.PI / 180;
+    const h = Math.sin((b.lat - a.lat) * rad / 2) ** 2
+      + Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin((b.lon - a.lon) * rad / 2) ** 2;
+    return 3958.8 * 2 * Math.asin(Math.sqrt(h));
+  };
+  place.addEventListener("change", async () => {
+    const text = place.value.trim();
+    if (!text || text === measuredFrom) return;
+    try {
+      const response = await fetch(`/companies/place?${new URLSearchParams({ place: text })}`, { cache: "no-store" });
+      const data = await response.json();
+      if (!response.ok) { say(data.message || "That place wasn't found.", true); return; }
+      measuredFrom = text;
+      for (const company of companies) {
+        if (company.lat != null && company.lon != null) {
+          company.miles = Math.round(miles_between(data.center, { lat: Number(company.lat), lon: Number(company.lon) }) * 10) / 10;
+        }
+      }
+      companies.sort(byDistance);
+      milesHeader.textContent = `Miles from ${data.place}`;
+      rememberResults(data.place);
+      if (companies.length) say(`Measured again from ${data.place}. Search again to look for places around there.`);
+      render();
+      loadMine();
+      document.dispatchEvent(new CustomEvent("saved-companies-changed"));
+    } catch (error) {
+      say("Could not measure from that place just now.", true);
+    }
+  });
+  restoreResults();
+  measuredFrom = place.value.trim();
   loadMine();
   renderKindTags(readHidden()); // every kind of place is listed from the start
   // All / None: the long list of kinds is quicker to start from one end.
