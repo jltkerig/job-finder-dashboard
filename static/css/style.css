@@ -2266,3 +2266,6 @@ body[data-page="search"] .job-title-suggestions { margin-top:5px; }
 body[data-page="search"] .search-controls { gap:8px; }
 body[data-page="search"] .capture-prompt:not([hidden]) { margin-top:10px; padding:8px 12px; }
 body[data-page="search"] .section-heading-row { margin:6px 0 8px; }
+/* The Add Location and Add Term buttons are as tall as the boxes beside them */
+body[data-page="search"] .city-add-row, body[data-page="search"] .skill-add-row { align-items:stretch; }
+body[data-page="search"] .city-add-row > .bordered-button, body[data-page="search"] .skill-add-row > .bordered-button { height:auto; min-height:0; align-self:stretch; margin:0; }
