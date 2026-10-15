@@ -1,9 +1,11 @@
 """The Companies page: businesses, offices, plants and schools near a place, with their address and website."""
 
+import json
 import re
 
 from flask import render_template, request, jsonify
 
+from jobfinder import paths
 from jobfinder.profiles.travel import place_point, zip_point
 from jobfinder.sources import address_lookup, local_companies
 from jobfinder.web import employer_sync, listing_queries, my_companies, profile_store, saved_companies
@@ -88,6 +90,37 @@ def companies_search():
         return api_error("E3503", str(error), 502)
     return jsonify({"status": "ok", "place": shown, "center": {"lat": lat, "lon": lon}, "miles": miles,
                     "count": len(companies), "companies": companies})
+
+
+def _page_state():
+    try:
+        data = json.loads(paths.COMPANIES_PAGE_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+@app.route("/companies/page-state", methods=["GET"])
+def company_page_state():
+    """The last search's results and the results you hid. The page also keeps them in the browser, but clearing the
+    browser's data would lose those, so a copy is kept here."""
+    return jsonify({"status": "ok", **_page_state()})
+
+
+@app.route("/companies/page-state", methods=["POST"])
+def company_page_state_save():
+    data = _fields_from_request()
+    state = _page_state()
+    if isinstance(data.get("results"), dict) and isinstance(data["results"].get("companies"), list):
+        state["results"] = data["results"]
+    if isinstance(data.get("hidden"), list):
+        state["hidden"] = [str(key)[:400] for key in data["hidden"]][-2000:]
+    path = paths.COMPANIES_PAGE_FILE
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp = path.with_suffix(".tmp")
+    temp.write_text(json.dumps(state), encoding="utf-8")
+    temp.replace(path)
+    return jsonify({"status": "ok"})
 
 
 @app.route("/companies/place")

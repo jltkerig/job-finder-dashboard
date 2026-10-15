@@ -50,11 +50,19 @@
   };
   const writeHidden = (set) => {
     try { localStorage.setItem(HIDDEN_KEY, JSON.stringify([...set].slice(-2000))); } catch { /* remembering is a convenience */ }
+    keepOnServer({ hidden: [...set].slice(-2000) });
   };
   // A company is told apart by its name and address, so it stays hidden whichever town you search from.
   const keyOf = (company) => `${company.name}|${company.address}`.toLowerCase();
   // Nearest first; a company with no map point (one you entered without a place) goes after the measured ones.
   const byDistance = (a, b) => (a.miles ?? 1e9) - (b.miles ?? 1e9) || a.name.localeCompare(b.name);
+
+  // A copy of the last search and the hidden list is also kept by the server, so clearing the browser's data keeps them.
+  function keepOnServer(part) {
+    fetch("/companies/page-state", {
+      method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken }, body: JSON.stringify(part),
+    }).catch(() => { /* the browser's own copy still works */ });
+  }
 
   function say(message, isError) {
     status.textContent = message || "";
@@ -443,10 +451,11 @@
     try {
       localStorage.setItem(RESULTS_KEY, JSON.stringify({ place: place.value.trim(), shown, miles: miles.value, companies }));
     } catch { /* remembering is a convenience */ }
+    keepOnServer({ results: { place: place.value.trim(), shown, miles: miles.value, companies } });
   }
-  function restoreResults() {
+  function restoreResults(fromServer) {
     try {
-      const saved = JSON.parse(localStorage.getItem(RESULTS_KEY) || "null");
+      const saved = fromServer || JSON.parse(localStorage.getItem(RESULTS_KEY) || "null");
       if (!saved || !Array.isArray(saved.companies) || !saved.companies.length) return;
       companies = saved.companies;
       if (saved.place) place.value = saved.place;
@@ -491,6 +500,17 @@
   });
   restoreResults();
   measuredFrom = place.value.trim();
+  // Cleared browser data: the server's copy of the last search and the hidden list come back.
+  fetch("/companies/page-state", { cache: "no-store" }).then((r) => r.json()).then((state) => {
+    if (Array.isArray(state.hidden) && state.hidden.length && !readHidden().size) {
+      try { localStorage.setItem(HIDDEN_KEY, JSON.stringify(state.hidden)); } catch { /* ok */ }
+      render();
+    }
+    if (!companies.length && state.results) {
+      restoreResults(state.results);
+      measuredFrom = place.value.trim();
+    }
+  }).catch(() => { /* not available: the page works without it */ });
   loadMine();
   renderKindTags(readHidden()); // every kind of place is listed from the start
   // All / None: the long list of kinds is quicker to start from one end.
