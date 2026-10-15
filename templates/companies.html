@@ -32,8 +32,8 @@
       <div class="companies-actions"><button class="bordered-button primary-action" id="companies-search" type="submit">Search</button></div>
     </form>
     <p class="field-help companies-origin">One place at a time: it starts at your home. The miles in the list are straight-line miles from the place in the box.</p>
-    <section class="companies-mine" id="companies-mine" aria-labelledby="companies-mine-heading">
-    <h2 id="companies-mine-heading">My Companies <span class="field-help" id="companies-mine-count"></span></h2>
+    <details class="companies-mine history-collapse" id="companies-mine" data-remember="jobFinder.myCompaniesOpen" data-open-default>
+    <summary><h2 id="companies-mine-heading">My Companies <span class="field-help" id="companies-mine-count"></span></h2><span class="summary-chevron" aria-hidden="true"></span></summary>
     <p class="field-help" id="companies-mine-empty" hidden>None yet. The employers in your work history are added here, and you can add your own above.</p>
     <div class="table-wrapper companies-table-wrapper" id="companies-mine-table-wrapper" hidden>
       <table class="companies-table companies-mine-table">
@@ -41,7 +41,7 @@
         <tbody id="companies-mine-body"></tbody>
       </table>
     </div>
-  </section>
+  </details>
     <details class="companies-add" id="companies-add">
       <summary>Add a company of your own</summary>
       <form id="companies-add-form" class="companies-add-form" autocomplete="off">
@@ -71,6 +71,7 @@
       <label class="companies-website-only"><input id="companies-website-only" type="checkbox" /> Only with a website</label>
       <button class="bordered-button secondary-action" id="companies-show-hidden" type="button" hidden>Show hidden</button>
     </div>
+    <div class="companies-kind-tags" id="companies-kind-tags" role="group" aria-label="Show only these kinds of place" hidden></div>
     <div class="table-wrapper companies-table-wrapper">
       <table class="companies-table">
         <thead><tr><th>Company</th><th>Type</th><th>Address</th><th id="companies-miles-header">Miles</th><th>Website</th><th><span class="visually-hidden">Actions</span></th></tr></thead>

@@ -249,14 +249,19 @@ document.addEventListener("DOMContentLoaded", () => {
       const details=row.nextElementSibling;
       if(details?.classList.contains("details-row")&&row.hidden)details.hidden=true;
     });
-    const sortValue = resultSort?.value || "default"; rows.sort((a,b) => sortValue === "company" ? (a.dataset.company||"").localeCompare(b.dataset.company||"") : sortValue === "job" ? (a.dataset.job||"").localeCompare(b.dataset.job||"") : sortValue === "distance" ? Number(a.dataset.distance||99999)-Number(b.dataset.distance||99999) : sortValue === "career-credibility" ? Number(b.dataset.careerCredibility||0)-Number(a.dataset.careerCredibility||0) : sortValue === "usa-credibility" ? Number(b.dataset.usaCredibility||0)-Number(a.dataset.usaCredibility||0) : 0);
+    const sortValue = resultSort?.value || "default"; rows.sort((a,b) => sortValue === "company" ? (a.dataset.company||"").localeCompare(b.dataset.company||"") : sortValue === "job" ? (a.dataset.job||"").localeCompare(b.dataset.job||"") : sortValue === "distance" ? Number(a.dataset.distance||99999)-Number(b.dataset.distance||99999) : sortValue === "career-credibility" ? Number(b.dataset.careerCredibility||0)-Number(a.dataset.careerCredibility||0) : sortValue === "usa-credibility" ? Number(b.dataset.usaCredibility||0)-Number(a.dataset.usaCredibility||0) : sortValue === "job-fit" ? fitRank(b)-fitRank(a) || Number(b.dataset.fitCount||0)-Number(a.dataset.fitCount||0) : 0);
     rows.forEach((row) => { const details = row.nextElementSibling; resultsTableBody.appendChild(row); if (details?.classList.contains("details-row")) resultsTableBody.appendChild(details); });
     const visible = rows.filter((row) => !row.hidden).length; if (resultsCount) resultsCount.textContent = `${visible} result${visible === 1 ? "" : "s"}`;
   }
+  // Job fit, best first. A listing with no score yet ("?") sorts after every scored one.
+  const fitRank=row=>{const raw=row.dataset.jobFit;return raw===undefined||raw===""||Number.isNaN(Number(raw))?-1:Number(raw);};
+  if(resultSort&&![...resultSort.options].some(option=>option.value==="job-fit")){const option=document.createElement("option");option.value="job-fit";option.textContent="Job fit";resultSort.insertBefore(option,resultSort.querySelector('option[value="career-credibility"]'));}
   if(resultStateFilter&&resultsTableBody){
     const codes=[...new Set($$(".result-row",resultsTableBody).map(row=>stateCode(row.dataset.state)).filter(Boolean))];
-    codes.sort((a,b)=>(STATE_NAMES[a]||a).localeCompare(STATE_NAMES[b]||b));
-    codes.forEach(code=>{const option=document.createElement("option");option.value=code;option.textContent=STATE_NAMES[code]?`${STATE_NAMES[code]} (${code})`:code;resultStateFilter.appendChild(option);});
+    // Only the abbreviation, so the box can stay narrow; the full name is the tooltip.
+    codes.sort((a,b)=>a.localeCompare(b));
+    codes.forEach(code=>{const option=document.createElement("option");option.value=code;option.textContent=code;if(STATE_NAMES[code])option.title=STATE_NAMES[code];resultStateFilter.appendChild(option);});
+    if(resultStateFilter.options[0])resultStateFilter.options[0].textContent="All";
   }
   [resultFilter,resultStateFilter,resultArrangementFilter,resultStatusFilter,resultSort,resultMinCredibility,resultScheduleFilter,resultNewFilter].forEach(control=>control?.addEventListener("input",updateClientResults));
   [resultStateFilter,resultArrangementFilter,resultStatusFilter,resultSort,resultMinCredibility,resultScheduleFilter,resultNewFilter].forEach(control=>control?.addEventListener("change",updateClientResults));
@@ -832,7 +837,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // Collapsible panels marked data-remember start closed and keep the user's choice.
   $$("details[data-remember]").forEach((panel) => {
     const key = panel.dataset.remember;
-    try { panel.open = localStorage.getItem(key) === "1"; } catch {}
+    try { const saved = localStorage.getItem(key); panel.open = saved === null ? panel.hasAttribute("data-open-default") : saved === "1"; } catch {}
     if (panel.hasAttribute("data-open-now")) panel.open = true; // e.g. "Saved." must be seen
     panel.addEventListener("toggle", () => { try { localStorage.setItem(key, panel.open ? "1" : "0"); } catch {} });
   });

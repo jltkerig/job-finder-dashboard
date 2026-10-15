@@ -96,15 +96,26 @@ class Ashby(_WholeBoard):
         match = re.search(r"/([0-9a-f]{8}-[0-9a-f-]{27})", url)
         return match.group(1) if match else None
 
+    @staticmethod
+    def _says_in_person(job):
+        """True when the posting itself puts the job on site: a LOCATION heading followed by "In-Person" / "On-site" /
+        "In office", and nowhere does it say hybrid or remote. Employers often leave Ashby's workplace box on Hybrid."""
+        text = str(job.get("descriptionPlain") or "") or re.sub(r"<[^>]+>", "\n", str(job.get("descriptionHtml") or ""))
+        if re.search(r"hybrid|remote|work from home|telecommut", text, re.I):
+            return False
+        return bool(re.search(r"\blocation\b[:\s]*\n?\s*(?:in[- ]?person|on[- ]?site|in[- ]?(?:the[- ])?office)\b", text, re.I))
+
     def workplace(self, job):
         """Remote, Hybrid or Onsite as Ashby lists the job, or None. Ashby's page data says TELECOMMUTE for hybrid jobs
-        too (isRemote is true for them), so workplaceType is the one to trust."""
-        return _arrangement(job.get("workplaceType"))
+        too (isRemote is true for them), so workplaceType is the one to trust, unless the posting plainly says the job
+        is in person (see _says_in_person)."""
+        listed = _arrangement(job.get("workplaceType"))
+        return "Onsite" if listed in ("Hybrid", "Remote") and self._says_in_person(job) else listed
 
     def detail(self, listing, http, employer):
         job = listing["raw"]
         places = [self._first_place(job)] + [place.get("location", "") for place in job.get("secondaryLocations") or []]
-        arrangement = _arrangement(job.get("workplaceType")) or ("Remote" if job.get("isRemote") else None)
+        arrangement = self.workplace(job) or ("Remote" if job.get("isRemote") else None)
         return _opening(employer, title=job.get("title", ""), url=job.get("jobUrl", ""), locations=places,
                         html=job.get("descriptionHtml") or job.get("descriptionPlain") or "",
                         posted=str(job.get("publishedAt") or "")[:10], arrangement=arrangement,

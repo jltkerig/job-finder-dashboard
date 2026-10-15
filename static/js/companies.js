@@ -23,7 +23,11 @@
   const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || "";
   const HIDDEN_KEY = "jobFinder.hiddenCompanies";
   let companies = [];
+  const kindTags = document.getElementById("companies-kind-tags");
+  const activeKinds = new Set();  // kinds of place picked as tags under the toolbar; none picked shows them all
   let revealHidden = false;
+  let savedNames = new Set(); // names in Saved Companies, so a search result can show "Saved"
+  const nameKey = (name) => String(name || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 
   const readHidden = () => {
     try { return new Set(JSON.parse(localStorage.getItem(HIDDEN_KEY) || "[]")); } catch { return new Set(); }
@@ -111,6 +115,33 @@
     if (!response.ok) throw new Error(reply.message || "That did not work. Try again.");
     return reply;
   }
+
+  // Save a search result into My Companies, with what the search found. Its distance is measured from the town in the
+  // box unless the address has its own ZIP code.
+  async function saveCompany(company, node) {
+    node.disabled = true;
+    node.textContent = "Saving…";
+    try {
+      await post("/companies/saved", {
+        name: company.name, website: company.website || "", address: company.address || "",
+        phone: company.phone || "", place: /d{5}/.test(company.address || "") ? "" : place.value.trim(),
+        notes: company.type ? `Found near ${place.value.trim() || "your home"}: ${company.type}` : "",
+      });
+      savedNames.add(nameKey(company.name));
+      document.dispatchEvent(new CustomEvent("saved-companies-changed"));
+      render();
+    } catch (error) {
+      node.disabled = false;
+      node.textContent = "Save";
+      say(error.message, true);
+    }
+  }
+
+  // saved-companies.js (its own file) tells this page which results are already saved.
+  document.addEventListener("saved-companies-loaded", (event) => {
+    savedNames = new Set((event.detail?.names || []).map(nameKey));
+    render();
+  });
 
   async function removeCompany(company) {
     if (!window.confirm(`Delete ${company.name} from your companies?`)) return;
@@ -221,6 +252,11 @@
         map.textContent = "Map";
         actions.append(map);
       }
+      const saved = savedNames.has(nameKey(company.name));
+      const save = button(saved ? "Saved" : "Save", "companies-save", () => saveCompany(company, save));
+      save.disabled = saved;
+      save.title = saved ? "In Saved Companies" : "Keep this company in Saved Companies";
+      actions.append(save);
       actions.append(button(hidden.has(keyOf(company)) ? "Unhide" : "Hide", "companies-hide", () => {
         const set = readHidden();
         if (set.has(keyOf(company))) set.delete(keyOf(company)); else set.add(keyOf(company));
@@ -251,17 +287,52 @@
     }
   }
 
+  // One tag per kind of place found, with how many; click tags to show only those kinds (click again to undo).
+  function renderKindTags(hidden) {
+    if (!kindTags) return;
+    const found = new Map();  // kind -> [label, count]
+    for (const company of companies) {
+      if (!company.mine && hidden.has(keyOf(company)) && !revealHidden) continue;
+      (company.kinds || []).forEach((kind, index) => {
+        const entry = found.get(kind) || [(company.kindLabels || [])[index] || kind, 0];
+        entry[1] += 1;
+        found.set(kind, entry);
+      });
+    }
+    for (const kind of [...activeKinds]) if (!found.has(kind)) activeKinds.delete(kind);
+    kindTags.hidden = found.size < 2;
+    kindTags.replaceChildren();
+    if (found.size < 2) return;
+    const all = document.createElement("button");
+    all.type = "button";
+    all.className = `chip-button companies-kind-tag${activeKinds.size ? "" : " is-active"}`;
+    all.textContent = "All kinds";
+    all.addEventListener("click", () => { activeKinds.clear(); render(); });
+    kindTags.append(all);
+    for (const [kind, [label, total]] of [...found.entries()].sort((a, b) => b[1][1] - a[1][1])) {
+      const tag = document.createElement("button");
+      tag.type = "button";
+      tag.className = `chip-button companies-kind-tag${activeKinds.has(kind) ? " is-active" : ""}`;
+      tag.setAttribute("aria-pressed", String(activeKinds.has(kind)));
+      tag.textContent = `${label} (${total})`;
+      tag.addEventListener("click", () => { if (activeKinds.has(kind)) activeKinds.delete(kind); else activeKinds.add(kind); render(); });
+      kindTags.append(tag);
+    }
+  }
+
   function render() {
     const hidden = readHidden();
     const words = filter.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
     const visible = companies.filter((company) => {
       const isHidden = !company.mine && hidden.has(keyOf(company));
       if (isHidden && !revealHidden) return false;
+      if (activeKinds.size && !(company.kinds || []).some((kind) => activeKinds.has(kind))) return false;
       if (websiteOnly.checked && !company.website) return false;
       const haystack = `${company.name} ${company.type} ${company.address} ${company.place || ""} ${company.notes || ""}`.toLowerCase();
       return words.every((word) => haystack.includes(word));
     });
     body.replaceChildren(...visible.map((company) => row(company, hidden)));
+    renderKindTags(hidden);
     const hiddenCount = companies.filter((company) => !company.mine && hidden.has(keyOf(company))).length;
     count.textContent = `${visible.length} of ${companies.length} companies`;
     showHidden.hidden = hiddenCount === 0;
@@ -276,7 +347,9 @@
     if (!boxes.length) { say("Choose at least one kind of place.", true); return; }
     searchButton.disabled = true;
     companies = [];
+    activeKinds.clear();
     revealHidden = false;
+    const byId = new Map();
     const seen = new Set();
     const failed = [];
     let shown = "";
@@ -294,9 +367,17 @@
         }
         shown = data.place;
         milesHeader.textContent = `Miles from ${shown}`;
+        const kindLabel = box.closest("label").textContent.trim();
         for (const company of data.companies || []) {
-          if (seen.has(company.id)) continue;
+          if (seen.has(company.id)) {  // found by another kind too: it carries both tags
+            const known = byId.get(company.id);
+            if (known && !known.kinds.includes(box.value)) { known.kinds.push(box.value); known.kindLabels.push(kindLabel); }
+            continue;
+          }
           seen.add(company.id);
+          company.kinds = [box.value];
+          company.kindLabels = [kindLabel];
+          byId.set(company.id, company);
           companies.push(company);
         }
         companies.sort(byDistance);
@@ -329,4 +410,33 @@
   filter.addEventListener("input", render);
   websiteOnly.addEventListener("change", render);
   showHidden.addEventListener("click", () => { revealHidden = !revealHidden; render(); });
+})();
+// "My Companies" folds like the other sections (a details with a chevron). A page still served from the template cached
+// before that change is rebuilt here into the same markup, and remembers its state the same way.
+(function () {
+  const section = document.getElementById("companies-mine");
+  if (!section || section.tagName === "DETAILS") return;
+  const KEY = "jobFinder.myCompaniesOpen";
+  const panel = document.createElement("details");
+  panel.className = "companies-mine history-collapse";
+  panel.id = "companies-mine";
+  const summary = document.createElement("summary");
+  const heading = document.getElementById("companies-mine-heading");
+  const chevron = document.createElement("span");
+  chevron.className = "summary-chevron";
+  chevron.setAttribute("aria-hidden", "true");
+  summary.append(heading, chevron);
+  panel.append(summary, ...section.childNodes);
+  section.replaceWith(panel);
+  try { const saved = localStorage.getItem(KEY); panel.open = saved === null ? true : saved === "1"; } catch (error) { panel.open = true; }
+  panel.addEventListener("toggle", () => { try { localStorage.setItem(KEY, panel.open ? "1" : "0"); } catch (error) { /* ok */ } });
+})();
+
+// Saved Companies has its own script. It is loaded from here so it also works on a page served from a cached template.
+(function () {
+  const self = document.querySelector('script[src*="/static/js/companies.js"]');
+  if (!self || document.querySelector('script[src*="saved-companies.js"]')) return;
+  const script = document.createElement("script");
+  script.src = self.src.replace("companies.js", "saved-companies.js");
+  document.head.append(script);
 })();

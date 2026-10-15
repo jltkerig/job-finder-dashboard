@@ -6,7 +6,7 @@ from flask import render_template, request, jsonify
 
 from jobfinder.profiles.travel import place_point, zip_point
 from jobfinder.sources import address_lookup, local_companies
-from jobfinder.web import employer_sync, listing_queries, my_companies, profile_store
+from jobfinder.web import employer_sync, listing_queries, my_companies, profile_store, saved_companies
 from jobfinder.web.core import api_error, app
 
 MILE_CHOICES = (5, 10, 15, 25, 50)
@@ -117,6 +117,35 @@ def my_company_list():
     center, shown = (found[0], found[1]) if found else (None, "")
     companies = my_companies.everything(center)
     return jsonify({"status": "ok", "place": shown, "count": len(companies), "companies": companies})
+
+
+@app.route("/companies/saved", methods=["GET"])
+def saved_company_list():
+    """The search results you saved, nearest first from the place given (or your home)."""
+    found = resolve_place(request.args.get("place"), profile_store.get_user_profile())
+    center, shown = (found[0], found[1]) if found else (None, "")
+    companies = saved_companies.everything(center)
+    return jsonify({"status": "ok", "place": shown, "count": len(companies), "companies": companies})
+
+
+@app.route("/companies/saved", methods=["POST"])
+def saved_company_add():
+    """The Save button on a search result. One already saved is not added twice."""
+    state = str(profile_store.get_user_profile().get("state") or "")
+    try:
+        entry, added = saved_companies.add(_fields_from_request(), state)
+    except ValueError as error:
+        return api_error("E3521", str(error), 400)
+    return jsonify({"status": "ok", "company": saved_companies.as_result(entry), "already": not added})
+
+
+@app.route("/companies/saved/<company_id>/delete", methods=["POST"])
+def saved_company_delete(company_id):
+    try:
+        saved_companies.delete(company_id)
+    except KeyError:
+        return api_error("E3522", "That company is no longer in your saved list.", 404)
+    return jsonify({"status": "ok"})
 
 
 @app.route("/companies/mine", methods=["POST"])

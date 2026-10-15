@@ -17,12 +17,12 @@ This file only puts the app together and starts it. The pages and what they do l
     resume_builder_process.py keeps Résumé Builder running while Job Finder is
     (profile_store, listing_queries, search_history, schema: reading and writing the database)
 """
-from jobfinder.web import (application_files, auto_apply, blocklists, clear_results, companies_routes, extension_api, listing_actions, listing_queries, pages, top_picks_routes, profile_routes,  # noqa: F401
+from jobfinder.web import (application_files, auto_apply, blocklists, clear_results, companies_routes, extension_api, listing_actions, listing_queries, local_government_routes, pages, top_picks_routes, profile_routes,  # noqa: F401
                            profile_store, resume_builder_process, schema, search_control, search_history, tuning, update_checks)
 from jobfinder.web.core import app
 
 # The version lives here, in one place. release.py raises it, update.ps1 and start.ps1 read it, and the pages show it.
-APP_VERSION = "1.1.273"
+APP_VERSION = "1.1.274"
 
 app.config.update(APP_VERSION=APP_VERSION)
 

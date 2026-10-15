@@ -49,6 +49,7 @@
           </div>
           <div id="search-city-list" class="city-list city-list-below">
           </div>
+          <div id="local-gov-suggestions" class="local-gov" hidden aria-live="polite"></div>
         </div>
         <div class="form-field avoid-terms-field"><label for="new-avoid-term">Ignore</label>
           <p class="field-help">Shared with Avoid in Job Postings on your Dashboard. Saves as you go.</p>
@@ -92,7 +93,7 @@
       </div>
       <div class="form-field compact-field"><label for="result-new-filter">Found</label><select id="result-new-filter"><option value="all">All results</option><option value="new">New since last search</option></select>
       </div>
-      <div class="form-field compact-field"><label for="result-sort">Sort</label><select id="result-sort"><option value="default">Newest</option><option value="company">Company A–Z</option><option value="job">Job title A–Z</option><option value="distance">Distance</option><option value="career-credibility">Career credibility</option><option value="usa-credibility">USA credibility</option></select>
+      <div class="form-field compact-field"><label for="result-sort">Sort</label><select id="result-sort"><option value="default">Newest</option><option value="company">Company A–Z</option><option value="job">Job title A–Z</option><option value="distance">Distance</option><option value="job-fit">Job fit</option><option value="career-credibility">Career credibility</option><option value="usa-credibility">USA credibility</option></select>
       </div>
       <div class="form-field compact-field details-all-field"><button id="details-all-button" class="bordered-button secondary-action" type="button" title="Open or close the Details of every result shown and of the Top 10 picks">Open All Details</button>
       </div>
@@ -222,6 +223,7 @@
   </div>
 </footer>
   <script src="/static/js/charts.js?v={{ asset_version }}"></script>
+  <script src="/static/js/local-government.js?v={{ asset_version }}"></script>
   <script src="/static/js/captures.js?v={{ asset_version }}"></script>
   <script src="/static/js/columns.js?v={{ asset_version }}"></script>
   <script src="/static/js/clear-results.js?v={{ asset_version }}"></script>

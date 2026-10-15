@@ -2218,6 +2218,8 @@ body[data-page="search"] #results-table td[data-label="Listing"] .inline-action-
 .companies-results { margin-top:16px; }
 .companies-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:10px 16px; margin:0 0 10px; }
 .companies-filter input { min-width:260px; padding:7px 10px; border:1px solid #c4c8ce; border-radius:6px; font:inherit; }
+.companies-kind-tags { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 10px; }
+.companies-kind-tag.is-active { background:#1f2937; border-color:#1f2937; color:#fff; }
 .companies-website-only { display:inline-flex; align-items:center; gap:6px; font-size:.92rem; }
 .companies-table { width:100%; border-collapse:collapse; font-size:.92rem; }
 .companies-table th, .companies-table td { padding:8px 10px; border-bottom:1px solid #e6e8eb; text-align:left; vertical-align:top; }
@@ -2281,3 +2283,22 @@ body[data-page="search"] .city-chip, body[data-page="search"] .skill-chip, body[
   display:inline-flex; align-items:center; gap:5px; margin:0; padding:2px 5px 2px 9px; font-size:.8rem; font-weight:400; line-height:1.25; border-radius:999px; }
 body[data-page="search"] .job-suggestion-button { padding:2px 9px; background:#e6f0ff; border:1px solid #9bbcf2; color:#1d4f9c; }
 body[data-page="search"] .job-suggestion-button:hover { background:#d3e5ff; }
+
+/* State filter: just the abbreviation, so a short box is enough */
+body[data-page="search"] .results-toolbar .compact-field:has(#result-state-filter) { justify-self:start; }
+body[data-page="search"] .results-toolbar #result-state-filter { width:96px; }
+/* Search results filters: a wrapping row, so the narrow State box doesn't leave a gap and the others sit next to it */
+@media (min-width:1101px) {
+  body[data-page="search"] .results-toolbar { display:flex; flex-wrap:wrap; gap:12px; align-items:flex-start; }
+  body[data-page="search"] .results-toolbar .toolbar-title, body[data-page="search"] .results-toolbar .results-count { flex:1 1 100%; }
+  body[data-page="search"] .results-toolbar .compact-field { flex:1 1 130px; }
+  body[data-page="search"] .results-toolbar .compact-field:has(#result-state-filter) { flex:0 0 96px; }
+  body[data-page="search"] .results-toolbar .details-all-field { flex:0 0 auto; }
+  body[data-page="search"] .results-toolbar .compact-field:has(#result-filter) { flex:0 1 160px; min-width:140px; }
+}
+/* Local governments suggested for the place typed in the Search page's city box */
+.local-gov { margin-top:10px; padding:10px 12px; border:1px solid #cfd4da; border-radius:8px; background:#f7f9fb; }
+.local-gov-heading { margin:0 0 8px; }
+.local-gov-item { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; padding:6px 0; border-top:1px solid #e3e7ec; }
+.local-gov-item:first-of-type { border-top:0; }
+.local-gov-item .bordered-button { min-height:34px; padding:4px 12px; font-size:.85rem; }
