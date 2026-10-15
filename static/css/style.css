@@ -2310,3 +2310,6 @@ body[data-page="search"] .results-toolbar #result-state-filter { width:96px; }
 .companies-filters [hidden] { display:none; }
 .companies-form .companies-kind-tags { flex:1 1 100%; margin:0; }
 .companies-kind-tag.is-empty { opacity:.5; }
+/* The Open All Details button sits on the same line as the filter boxes (bottom edges level), the same height as them */
+body[data-page="search"] .results-toolbar > .details-all-field { align-self:flex-end; }
+body[data-page="search"] .results-toolbar > .details-all-field .bordered-button { height:36px; min-height:36px; line-height:1; padding-top:0; padding-bottom:0; }
