@@ -260,6 +260,28 @@ class WebAppTests(unittest.TestCase):
         save.assert_not_called()
         self.assertIn("Enter both a first and last name.", page)
 
+    def test_typed_links_are_saved_and_shown(self):
+        form = {"csrf": self.csrf(), "first_name": "Jane", "last_name": "Doe", "wh_count": "0", "link_count": "3",
+                "link0_type": "GitHub", "link0_url": "github.com/jane", "link1_type": "Figma", "link1_url": "",
+                "link2_type": "Behance", "link2_url": "https://www.behance.net/jane"}
+        with mock.patch.object(jobfinder_db, "save_profile") as save:
+            self.client.post("/profile", data=form, follow_redirects=True)
+        sent = save.call_args.args[9]
+        self.assertEqual([(l["type"], l["url"]) for l in jobfinder_db.clean_links(sent)],
+                         [("GitHub", "https://github.com/jane"), ("Behance", "https://www.behance.net/jane")])
+        profile = dict(PROFILE, links=[{"type": "GitHub", "url": "https://github.com/jane"}])
+        with mock.patch.object(jobfinder_db, "get_profile", return_value=profile):
+            page = self.client.get("/").get_data(as_text=True)
+        self.assertIn('href="https://github.com/jane" target="_blank" rel="noopener">GitHub</a>', page)
+        self.assertIn('id="add-link"', page)  # more links can be added
+        self.assertIn("<option value=\"Figma\">Figma</option>", page)
+
+    def test_profile_form_without_links_leaves_them_alone(self):
+        with mock.patch.object(jobfinder_db, "save_profile") as save:
+            self.client.post("/profile", data={"csrf": self.csrf(), "first_name": "Jane", "last_name": "Doe", "wh_count": "0"},
+                             follow_redirects=True)
+        self.assertIsNone(save.call_args.args[9])
+
     def test_work_history_saves_in_the_order_the_move_buttons_left_it(self):
         form = {"csrf": self.csrf(), "first_name": "Jane", "last_name": "Doe", "wh_count": "4",
                 "wh0_role": "First Job", "wh0_company": "A", "wh0_pos": "2",

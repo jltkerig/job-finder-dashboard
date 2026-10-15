@@ -47,7 +47,9 @@ Built-in rules:
   phone or supervisor details on a resume or cover letter unless the user asks; city and state may
   be shown with the job as usual.
 - The profile's linkedin_url and portfolio_url belong in the resume's contact line (shown without
-  https://). Use them only if they are filled in.
+  https://). Use them only if they are filled in. The profile's `links` are more links, each with a type
+  (GitHub, Figma, Behance and so on): add one to the contact line only when the user asks for it or it suits
+  the job (a Figma or Behance link for a design job).
 - The profile's education (school, degree, major, minor, dates, optional GPA) is the only source for an
   Education section. Show a GPA only if the user saved one.
 - References (get_references) are other people's contact details. Never put them in a cover

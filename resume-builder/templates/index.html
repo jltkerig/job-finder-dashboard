@@ -227,7 +227,7 @@
     <dl class="facts">
       <dt>Name</dt><dd>{{ (profile.first_name ~ ' ' ~ profile.last_name).strip() or '—' }}</dd>
       <dt>Location</dt><dd>{{ profile.home_location or '—' }}</dd>
-      <dt>Links</dt><dd>{% if profile.linkedin_url %}<div><a href="{{ profile.linkedin_url }}" target="_blank" rel="noopener">LinkedIn</a></div>{% endif %}{% if profile.portfolio_url %}<div><a href="{{ profile.portfolio_url }}" target="_blank" rel="noopener">{{ profile.portfolio_url.split('://')[-1].rstrip('/') }}</a></div>{% endif %}{% if not (profile.linkedin_url or profile.portfolio_url) %}— <span class="field-help">(add them on Job Finder's Dashboard)</span>{% endif %}</dd>
+      <dt>Links</dt><dd>{% if profile.linkedin_url %}<div><a href="{{ profile.linkedin_url }}" target="_blank" rel="noopener">LinkedIn</a></div>{% endif %}{% if profile.portfolio_url %}<div><a href="{{ profile.portfolio_url }}" target="_blank" rel="noopener">{{ profile.portfolio_url.split('://')[-1].rstrip('/') }}</a></div>{% endif %}{% for l in profile.links %}<div><a href="{{ l.url }}" target="_blank" rel="noopener">{{ l.type }}</a> <span class="field-help">{{ l.url.split('://')[-1].rstrip('/') }}</span></div>{% endfor %}{% if not (profile.linkedin_url or profile.portfolio_url or profile.links) %}— <span class="field-help">(add them on Job Finder's Dashboard)</span>{% endif %}</dd>
       {% if resume_links %}<dt></dt><dd><p class="status status-warn">Your résumé lists {{ resume_links.values()|join(' and ') }}, which {{ 'are' if resume_links|length > 1 else 'is' }} not in your Profile yet.</p>
         <form method="post" action="{{ url_for('add_links_from_resume') }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}" /><button class="bordered-button" type="submit">Add {{ 'them' if resume_links|length > 1 else 'it' }} to my Profile</button></form></dd>{% endif %}
       <dt>Primary job</dt><dd>{{ profile.primary_job_title or '—' }}</dd>
@@ -284,6 +284,16 @@
           <label>Home ZIP <input name="home_zip" value="{{ profile.home_zip or '' }}" maxlength="5" inputmode="numeric" pattern="[0-9]{5}" placeholder="{{ form_examples.home_zip or '' }}" autocomplete="postal-code" /></label>
           <label>LinkedIn profile <input name="linkedin_url" value="{{ profile.linkedin_url or '' }}" maxlength="255" inputmode="url" placeholder="e.g. linkedin.com/in/your-name" /></label>
           <label>Portfolio or website <input name="portfolio_url" value="{{ profile.portfolio_url or '' }}" maxlength="255" inputmode="url" placeholder="e.g. yourname.com" /></label>
+          {% set has_github = (profile.links or [])|selectattr('type', 'equalto', 'GitHub')|list|length > 0 %}
+          {% set link_rows = (profile.links or []) + [{'type': '' if has_github else 'GitHub', 'url': ''}] %}
+          <fieldset class="ref-notes more-links"><legend>More links <span class="field-help">pick what each one is; leave a row empty to remove it</span></legend>
+            <input type="hidden" name="link_count" value="{{ link_rows|length }}" />
+            {% for l in link_rows %}<div class="link-row">
+              <select name="link{{ loop.index0 }}_type" aria-label="Link type"><option value="">Type…</option>{% for t in link_types %}<option value="{{ t }}"{% if l.type == t %} selected{% endif %}>{{ t }}</option>{% endfor %}</select>
+              <input name="link{{ loop.index0 }}_url" value="{{ l.url }}" maxlength="255" inputmode="url" placeholder="e.g. github.com/your-name" aria-label="Link address" />
+            </div>{% endfor %}
+            <button type="button" class="bordered-button add-link" id="add-link">Add another link</button>
+          </fieldset>
           <label class="ref-notes">Primary job title <input id="pf-primary" name="primary_job_title" value="{{ profile.primary_job_title }}" maxlength="255" placeholder="e.g. Web Designer" data-title-suggest="single" /></label>
           <label class="ref-notes">Other job titles to search for <span class="field-help">separate with commas</span>
             <textarea id="pf-other-titles" name="other_titles" rows="2" data-title-suggest="list" data-also-from="pf-primary">{{ others|join(', ') }}</textarea></label>

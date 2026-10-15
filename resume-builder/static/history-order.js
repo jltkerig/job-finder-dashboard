@@ -1,6 +1,6 @@
-// Profile > Work History: move a job up or down. The form saves jobs in the order the boxes are in, so the order is
-// written into each job's hidden "pos" field (the server sorts by it) and the "Work history · Job 2 of 5" markers are
-// renumbered. The empty "Add a Job" box stays last.
+// Profile page helpers. First: Work History order. The form saves jobs in the order of the "pos" field in each job (the
+// server sorts by it); Move up / Move down rewrite it and renumber the "Work history · Job 2 of 5" markers. The empty
+// "Add a Job" box stays last. Second: the More links rows.
 (function () {
   "use strict";
   var rows = Array.prototype.slice.call(document.querySelectorAll("#profile fieldset.history-row[data-job]"));
@@ -46,4 +46,27 @@
     if (down) down.addEventListener("click", function () { move(row, 1); });
   });
   renumber();
+})();
+
+// Profile > More links: "Add another link" adds an empty row (up to 12 links); the form counts them on save.
+(function () {
+  "use strict";
+  var button = document.getElementById("add-link");
+  if (!button) return;
+  var box = button.parentElement;
+  var count = box.querySelector("input[name='link_count']");
+  button.addEventListener("click", function () {
+    var rows = box.querySelectorAll(".link-row");
+    if (rows.length >= 12) { button.disabled = true; return; }
+    var next = rows[rows.length - 1].cloneNode(true);
+    var index = rows.length;
+    var select = next.querySelector("select");
+    var input = next.querySelector("input");
+    select.name = "link" + index + "_type"; select.value = "";
+    input.name = "link" + index + "_url"; input.value = "";
+    rows[rows.length - 1].after(next);
+    count.value = String(index + 1);
+    input.focus();
+    if (index + 1 >= 12) button.disabled = true;
+  });
 })();

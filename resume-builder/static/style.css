@@ -359,3 +359,8 @@ input:not([type]), input[type="text"], input[type="search"], input[type="number"
 .job-order { display:flex; gap:8px; justify-content:flex-end; margin:4px 0 0; }
 .job-order .bordered-button { padding:3px 12px; font-size:.82rem; }
 .job-order .bordered-button:disabled { opacity:.4; cursor:default; }
+/* Profile: typed links */
+.more-links { border:1px solid #e5e7eb; border-radius:8px; padding:6px 12px 10px; margin:8px 0; }
+.more-links legend { font-weight:600; font-size:.9rem; padding:0 4px; }
+.link-row { display:grid; grid-template-columns:minmax(120px, 180px) 1fr; gap:8px; margin-top:6px; }
+@media (max-width: 640px) { .link-row { grid-template-columns:1fr; } }

@@ -48,6 +48,28 @@ EDUCATION_DEGREES = ["High School Diploma", "GED", "Certificate", "Associate's D
 EDUCATION_SIZES = {"school": 200, "degree": 60, "major": 150, "minor": 150, "start_date": 20, "end_date": 20, "gpa": 10}
 
 
+# More links for the profile, each with a type (the LinkedIn and portfolio links keep their own boxes).
+LINK_TYPES = ("GitHub", "Figma", "Behance", "Dribbble", "Instagram", "X / Twitter", "YouTube", "Medium", "Online résumé",
+              "Website", "Other")
+MAX_LINKS = 12
+
+
+def clean_links(entries):
+    """[{"type", "url"}] with a known type, a web address (https:// added when left off) and no repeats; anything else is dropped."""
+    import re
+    cleaned, seen = [], set()
+    for item in (entries or [])[:MAX_LINKS * 2]:
+        kind = str(item.get("type", "") or "").strip()
+        link = str(item.get("url", "") or "").strip()[:255]
+        if link and not re.match(r"^https?://", link, re.I):
+            link = "https://" + link
+        if kind not in LINK_TYPES or not re.fullmatch(r"https?://[^\s<>\"']+\.[^\s<>\"']+", link, re.I) or link.lower() in seen:
+            continue
+        seen.add(link.lower())
+        cleaned.append({"type": kind, "url": link})
+    return cleaned[:MAX_LINKS]
+
+
 def _table_exists(cursor, name):
     cursor.execute("SHOW TABLES LIKE %s", (name,))
     return cursor.fetchone() is not None
@@ -55,7 +77,7 @@ def _table_exists(cursor, name):
 
 def get_profile():
     profile = {"first_name": "", "last_name": "", "home_location": "", "state": "", "linkedin_url": "", "portfolio_url": "", "home_zip": "",
-               "primary_job_title": "", "job_titles": [], "skills": [], "work_history": [], "education": []}
+               "primary_job_title": "", "job_titles": [], "skills": [], "work_history": [], "education": [], "links": []}
     with _cursor() as cursor:
         if not _table_exists(cursor, "user_profile"):
             return profile
@@ -76,6 +98,9 @@ def get_profile():
         if _table_exists(cursor, "user_profile_education"):
             cursor.execute("SELECT * FROM user_profile_education WHERE profile_id = 1 ORDER BY id")
             profile["education"] = [{k: (r.get(k) or "") for k in EDUCATION_SIZES} for r in cursor.fetchall()]
+        if _table_exists(cursor, "user_profile_links"):
+            cursor.execute("SELECT link_type, url FROM user_profile_links WHERE profile_id = 1 ORDER BY id")
+            profile["links"] = [{"type": r["link_type"], "url": r["url"]} for r in cursor.fetchall()]
     return profile
 
 
@@ -132,7 +157,7 @@ def _titles(primary, others):
 
 
 def save_profile(first_name, last_name, home_location, primary_job_title, other_titles, skills, work_history, education=None,
-                 contact=None):
+                 contact=None, links=None):
     """Write the profile fields Resume Builder shows. Cities, photo and work preferences are left alone.
     State is the part of the home city after the last comma, exactly as Job Finder's form sets it."""
     first_name, last_name = first_name.strip()[:100], last_name.strip()[:100]
@@ -171,6 +196,14 @@ def save_profile(first_name, last_name, home_location, primary_job_title, other_
         for row in history:
             cursor.execute(f"INSERT INTO user_profile_work_history (profile_id, {', '.join(columns)}) "
                            f"VALUES (1{', %s' * len(columns)})", [row[c] for c in columns])
+        # The typed links are only replaced when the form that edits them was saved (None leaves them as they are).
+        if links is not None:
+            cursor.execute("""CREATE TABLE IF NOT EXISTS user_profile_links (
+                id INT AUTO_INCREMENT PRIMARY KEY, profile_id TINYINT NOT NULL,
+                link_type VARCHAR(40) NOT NULL DEFAULT '', url VARCHAR(255) NOT NULL DEFAULT '')""")
+            cursor.execute("DELETE FROM user_profile_links WHERE profile_id = 1")
+            for link in clean_links(links):
+                cursor.execute("INSERT INTO user_profile_links (profile_id, link_type, url) VALUES (1, %s, %s)", (link["type"], link["url"]))
         # Education is only replaced when the form that edits it was saved (None leaves it as it is).
         if education is not None and _table_exists(cursor, "user_profile_education"):
             cursor.execute("DELETE FROM user_profile_education WHERE profile_id = 1")
@@ -268,5 +301,5 @@ def profile_version(profile):
     import hashlib
     shared = {key: profile.get(key) for key in ("first_name", "last_name", "home_location", "home_zip", "linkedin_url",
                                                  "portfolio_url", "primary_job_title", "job_titles", "skills", "work_history",
-                                                 "education")}
+                                                 "education", "links")}
     return hashlib.sha1(json.dumps(shared, sort_keys=True, default=str).encode("utf-8")).hexdigest()[:16]

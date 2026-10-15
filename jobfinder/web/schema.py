@@ -281,6 +281,9 @@ def ensure_profile_tables():
             id INT AUTO_INCREMENT PRIMARY KEY, profile_id TINYINT NOT NULL,
             company VARCHAR(150) NOT NULL DEFAULT '', role VARCHAR(150) NOT NULL DEFAULT '',
             dates VARCHAR(100) NOT NULL DEFAULT '', description TEXT NULL)""")
+        cursor.execute("""CREATE TABLE IF NOT EXISTS user_profile_links (
+            id INT AUTO_INCREMENT PRIMARY KEY, profile_id TINYINT NOT NULL,
+            link_type VARCHAR(40) NOT NULL DEFAULT '', url VARCHAR(255) NOT NULL DEFAULT '')""")
         cursor.execute("""CREATE TABLE IF NOT EXISTS user_profile_education (
             id INT AUTO_INCREMENT PRIMARY KEY, profile_id TINYINT NOT NULL,
             school VARCHAR(200) NOT NULL DEFAULT '', degree VARCHAR(60) NOT NULL DEFAULT '',

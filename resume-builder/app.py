@@ -121,7 +121,7 @@ def index():
     return render_template("index.html", profile=profile, profile_error=profile_error, resume_jobs=resume_jobs,
                            resume_schools=resume_schools, resume_links=resume_links, found_people=found_people, reference_sources=reference_sources,
                            relationship_options=reference_people.relationship_options,
-                           document_finds=document_finds, education_degrees=jobfinder_db.EDUCATION_DEGREES,
+                           document_finds=document_finds, education_degrees=jobfinder_db.EDUCATION_DEGREES, link_types=jobfinder_db.LINK_TYPES,
                            reference_jobs={r['id']: document_import.job_index_for(r, profile) for r in references.load()} if profile else {},
                            profile_version=jobfinder_db.profile_version(profile) if profile else "", detail_labels=document_import.DETAIL_LABELS,
                            **_design_context(),
@@ -643,7 +643,10 @@ def save_profile():
                                   proper(request.form.get("primary_job_title", "")), [proper(t) for t in split("other_titles")],
                                   split("skills"), history, education if "ed_count" in request.form else None,
                                   {key: request.form.get(key, "") for key in ("home_zip", "linkedin_url", "portfolio_url")}
-                                  if "home_zip" in request.form else None)
+                                  if "home_zip" in request.form else None,
+                                  [{"type": request.form.get(f"link{i}_type", ""), "url": request.form.get(f"link{i}_url", "")}
+                                   for i in range(min(int(request.form.get("link_count", 0) or 0), 24))]
+                                  if "link_count" in request.form else None)
     except jobfinder_db.JobFinderUnavailable as error:
         flash(str(error), "error")
     else:
