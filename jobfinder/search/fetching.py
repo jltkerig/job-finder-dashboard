@@ -208,3 +208,6 @@ def _fetch_page(url, key, failure=None):
         else:
             shared._last_failure_status = code
         return None
+    except ValueError:
+        # An address that cannot be parsed (a host label too long, as when a sentence was taken for a company name).
+        return None

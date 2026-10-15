@@ -100,6 +100,8 @@ class EmployerSite(unittest.TestCase):
         self.assertEqual(calls, [])
         self.assertFalse(can_guess_domain('Office of Human Resources'))
         self.assertFalse(can_guess_domain('IBM'))
+        # a sentence taken from a page (a captured job's fit chart) is not a company name
+        self.assertFalse(can_guess_domain('This chart is used to compare your background against this job to help to determine if you would be a good fit'))
         self.assertTrue(can_guess_domain('YOUCANIC'))
 
     def test_the_exact_opening_on_the_employer_site_is_preferred(self):

@@ -90,7 +90,9 @@ def is_third_party(posting_url, company):
 
 
 def can_guess_domain(company):
-    return len(name_slug(company)) >= 4 and not _GENERIC_NAME.search(str(company or ""))
+    # A name of more than 60 letters or 8 words is a sentence taken from a page, not a company: no address comes from it.
+    text = str(company or "")
+    return (4 <= len(name_slug(company)) <= 60 and len(text.split()) <= 8 and not _GENERIC_NAME.search(text))
 
 
 _GENERIC_TAIL = {"technologies", "technology", "tech", "solutions", "systems", "services", "labs", "lab", "studio",
