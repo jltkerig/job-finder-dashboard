@@ -16,7 +16,7 @@ from flask import jsonify, request
 from mysql.connector import Error
 
 from jobfinder import db
-from jobfinder.web import applied_dates, queue_documents, webfiles
+from jobfinder.web import applied_dates, easy_apply, queue_documents, webfiles
 from jobfinder.web.core import api_error, app, log_error_code
 from jobfinder.web.schema import ensure_job_tracking_columns, ensure_keep_column
 from jobfinder.web.tuning import read_tuning_settings
@@ -125,7 +125,7 @@ def get_apply_queue():
         if details.get("apply_queued") and row.get("application_status") not in QUEUE_DONE:
             row["url"] = row.get("career_url") or row.get("source_url") or ""
             row["queued_at"] = str(details.get("apply_queued_at") or "")  # when it was added; blank for older ones
-            row["easy_apply"] = bool(details.get("easy_apply"))  # LinkedIn's Easy Apply button was on it
+            row["easy_apply"] = bool(details.get("easy_apply")) and easy_apply.apply_link_is_linkedin(row.get("career_url"), row.get("source_url"))  # LinkedIn's Easy Apply button was on it
             queue.append(row)
     return queue
 

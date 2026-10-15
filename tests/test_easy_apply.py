@@ -32,7 +32,7 @@ class EasyApplyBadge(unittest.TestCase):
         self.assertIn("Easy Apply", html)
 
     def test_the_results_and_the_dashboard_show_it_only_for_easy_apply_jobs(self):
-        for name, marker in (("index.html", "company.details.easy_apply"), ("user-dashboard.html", "company.easy_apply")):
+        for name, marker in (("index.html", "company.details.easy_apply and (not company.career_url or 'linkedin.com' in company.career_url|lower)"), ("user-dashboard.html", "company.easy_apply")):
             source = (Path(__file__).resolve().parents[1] / "templates" / name).read_text(encoding="utf-8")
             self.assertIn("{% if " + marker + " %}", source)
             self.assertIn('{% from "_easy_apply.html" import easy_apply_badge %}', source)
@@ -42,3 +42,12 @@ class EasyApplyBadge(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class EasyApplyLinkTests(unittest.TestCase):
+    def test_badge_goes_when_apply_opens_the_employers_workday_page(self):
+        details = json.dumps({"easy_apply": True})
+        jobs = [{"listing_details": details, "career_url": "https://meanpug.wd1.myworkdayjobs.com/en-US/x/job/1", "source_url": "https://www.linkedin.com/jobs/view/1"},
+                {"listing_details": details, "career_url": "", "source_url": "https://www.linkedin.com/jobs/view/2"},
+                {"listing_details": details, "career_url": "https://www.linkedin.com/jobs/view/3", "source_url": ""}]
+        self.assertEqual([c["easy_apply"] for c in easy_apply.add_to(jobs)], [False, True, True])

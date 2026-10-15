@@ -28,7 +28,7 @@ class ApplyButton(unittest.TestCase):
 class DashboardWording(unittest.TestCase):
     def test_section_headings_are_capitalized_and_locations_is_just_locations(self):
         html = read("templates", "user-dashboard.html")
-        for heading in ("<h3>Job Titles", "<h3>Work Preferences", "<h3>Work History", "<h3>Skills", "Locations</label>"):
+        for heading in ("<h3>Job Titles", "<h3>Work Preferences", "<h3>Work History", "<h3>Skills", "<h3>Locations"):
             self.assertIn(heading, html)
         self.assertNotIn("Search Locations + Radius", html)
         self.assertNotIn("<h3>Job titles", html)

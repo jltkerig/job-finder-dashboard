@@ -17,8 +17,16 @@ def is_easy_apply(listing_details):
     return bool(isinstance(listing_details, dict) and listing_details.get("easy_apply"))
 
 
+def apply_link_is_linkedin(career_url, source_url=""):
+    """False when the job's own apply page is somewhere else (say the employer's Workday site): the Easy Apply button was
+    on the LinkedIn lead, and Apply no longer goes there, so the badge would promise something the link doesn't do."""
+    link = str(career_url or source_url or "")
+    return not link or "linkedin.com" in link.lower()
+
+
 def add_to(companies):
     """Put "easy_apply" (True or False) on each saved job from its listing_details."""
     for company in companies:
-        company["easy_apply"] = is_easy_apply(company.get("listing_details"))
+        company["easy_apply"] = (is_easy_apply(company.get("listing_details"))
+                                 and apply_link_is_linkedin(company.get("career_url"), company.get("source_url")))
     return companies

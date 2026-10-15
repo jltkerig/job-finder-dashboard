@@ -42,9 +42,7 @@
             <div class="form-field profile-link-field"><label for="portfolio-url">Portfolio or Website</label><input id="portfolio-url" name="portfolio_url" type="text" inputmode="url" maxlength="255" value="{{ profile.portfolio_url or '' }}" placeholder="e.g. yourname.com" autocomplete="url" />
             </div>
           </div>
-          <section class="profile-subsection">
-            <h3>Job Titles
-            </h3>
+          <details class="profile-subsection profile-collapse" open data-section="job-titles"><summary class="profile-collapse-summary"><h3>Job Titles</h3><span class="summary-chevron" aria-hidden="true"></span></summary>
             <div class="form-field"><label for="primary-job-title">Primary Job Title</label><input id="primary-job-title" name="primary_job_title" type="text" data-title-suggest="single" value="{{ profile.primary_job_title }}" placeholder="e.g. Web Designer" autocomplete="off" />
             </div>
             <div class="form-field"><label for="job-titles">Other Job Titles to Search For</label>
@@ -55,10 +53,8 @@
                 </div>
               </div>
             </div>
-          </section>
-          <section class="profile-subsection">
-            <h3>Work Preferences
-            </h3>
+          </details>
+          <details class="profile-subsection profile-collapse" open data-section="work-preferences"><summary class="profile-collapse-summary"><h3>Work Preferences</h3><span class="summary-chevron" aria-hidden="true"></span></summary>
             <fieldset class="preference-group">
               <legend>Work Type
               </legend>
@@ -71,29 +67,23 @@
               <div class="profile-preferences">{% for preference in ["Remote", "Hybrid", "Onsite"] %}<label><input type="checkbox" name="work_preferences" value="{{ preference }}" {% if preference in profile.work_preferences %}checked{% endif %} />{{ preference }}</label>{% endfor %}
               </div>
             </fieldset>
-          </section>
-          <section class="profile-subsection">
-            <h3>Work History
-            </h3>
+          </details>
+          <details class="profile-subsection profile-collapse" open data-section="work-history"><summary class="profile-collapse-summary"><h3>Work History</h3><span class="summary-chevron" aria-hidden="true"></span></summary>
             <p class="field-help">Add past jobs manually or review suggestions from a résumé.
             </p>
             <p class="field-help" id="work-history-note" data-source="{{ resume_source or '' }}" data-history='{{ (resume_history or [])|tojson }}' hidden>
             </p>
             <div id="work-history-list">
             </div><button class="bordered-button secondary-action" id="add-work-history" type="button">Add Job</button>
-          </section>
-          <section class="profile-subsection">
-            <h3>Education
-            </h3>
+          </details>
+          <details class="profile-subsection profile-collapse" open data-section="education"><summary class="profile-collapse-summary"><h3>Education</h3><span class="summary-chevron" aria-hidden="true"></span></summary>
             <p class="field-help">Schools you attended. GPA and minor are optional.
             </p>
             <p class="field-help" id="education-note" data-source="{{ resume_source or '' }}" data-schools='{{ (resume_education or [])|tojson }}' hidden></p>
             <div id="education-list" data-degrees='{{ (education_degrees or [])|tojson }}'>
             </div><button class="bordered-button secondary-action" id="add-education" type="button">Add School</button>
-          </section>
-          <section class="profile-subsection">
-            <h3>Skills
-            </h3>
+          </details>
+          <details class="profile-subsection profile-collapse" open data-section="skills"><summary class="profile-collapse-summary"><h3>Skills</h3><span class="summary-chevron" aria-hidden="true"></span></summary>
             <p class="field-help">The skills you list here are compared with what each job asks for to work out its Job Fit. Add the ones you really have; suggestions come from your résumé, the jobs Job Finder found and the skills you already added, and appear as you type.
             </p>
             <div id="profile-skill-list" class="skill-chip-list">
@@ -104,10 +94,16 @@
             </div>
             <div id="skill-suggestions" class="skill-chip-list" aria-live="polite" data-resume='{{ (resume_skills or [])|tojson }}' data-demand='{{ (demanded_skills or [])|tojson }}' hidden>
             </div>
-          </section>
-          <section class="profile-subsection">
-            <h3><label for="new-avoid-term">Avoid in Job Postings</label>
-            </h3>
+          </details>
+          <details class="profile-subsection profile-collapse" open data-section="locations"><summary class="profile-collapse-summary"><h3>Locations</h3><span class="summary-chevron" aria-hidden="true"></span></summary>
+            <p class="field-help">Job Finder looks for jobs around each city, out to the distance you pick.
+            </p>
+            <div class="city-add-row"><input id="profile-city-input" type="text" list="city-state-options" placeholder="e.g. Wilmington, DE" autocomplete="off" /><select id="profile-city-radius"><option value="5">5 miles</option><option value="10">10 miles</option><option value="15">15 miles</option><option value="20">20 miles</option><option value="30">30 miles</option><option value="50" selected>50 miles</option></select><button id="add-profile-city" class="bordered-button secondary-action city-add-button" type="button">Add Location</button>
+            </div>
+            <div id="profile-city-list" class="city-list city-list-below">
+            </div>
+          </details>
+          <details class="profile-subsection profile-collapse" open data-section="avoid-in-job-postings"><summary class="profile-collapse-summary"><h3>Avoid in Job Postings</h3><span class="summary-chevron" aria-hidden="true"></span></summary>
             <p class="field-help">Work you can't or don't want to do. Top 10 Picks moves down any listing that mentions it.
             </p>
             <input type="hidden" name="avoid_terms" id="avoid-terms-field" value="{{ (profile.avoid_terms or [])|join(', ') }}" />
@@ -115,17 +111,7 @@
             <div class="skill-add-row"><input id="new-avoid-term" type="text" maxlength="80" placeholder="Add something to avoid" aria-label="Add something to avoid" />
               <button class="bordered-button secondary-action" id="add-avoid-term" type="button">Add Term</button>
             </div>
-          </section>
-          <section class="profile-subsection">
-            <h3><label for="profile-city-input">Locations</label>
-            </h3>
-            <p class="field-help">Job Finder looks for jobs around each city, out to the distance you pick.
-            </p>
-            <div class="city-add-row"><input id="profile-city-input" type="text" list="city-state-options" placeholder="e.g. Wilmington, DE" autocomplete="off" /><select id="profile-city-radius"><option value="5">5 miles</option><option value="10">10 miles</option><option value="15">15 miles</option><option value="20">20 miles</option><option value="30">30 miles</option><option value="50" selected>50 miles</option></select><button id="add-profile-city" class="bordered-button secondary-action city-add-button" type="button">Add Location</button>
-            </div>
-            <div id="profile-city-list" class="city-list city-list-below">
-            </div>
-          </section>
+          </details>
           <datalist id="city-state-options">
           </datalist>
           <div class="profile-save-actions"><button class="bordered-button primary-action" type="submit">Save Profile</button><div class="unsaved-note" id="unsaved-note" role="status" hidden><span>Unsaved changes. Click Save Profile to keep them.</span><button class="bordered-button primary-action" type="submit" form="profile-form">Save Profile</button></div><button class="bordered-button secondary-action" id="upload-resume" type="button">Upload Résumé</button><a class="bordered-button secondary-action" href="/extension/profile-file" title="A file to load in the Web Job Scraper extension (Load profile), so it can mark jobs that fit and show distances">Export for Web Job Scraper</a><input id="resume-file" type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden />
@@ -169,12 +155,13 @@
       <p id="apply-queue-status" class="field-help" role="status"></p>
     </section>
 {% endif %}
-    <div class="section-heading-row">
+    <details class="saved-jobs-panel history-collapse" id="saved-jobs-panel" open>
+    <summary class="section-heading-row saved-jobs-summary">
       <h2>Saved Jobs
       </h2>{% if companies %}
       <div class="collapse-all-actions"><button class="bordered-button secondary-action" id="expand-all-jobs" type="button">Expand all</button><button class="bordered-button secondary-action" id="collapse-all-jobs" type="button">Collapse all</button>
-      </div>{% endif %}
-    </div>
+      </div>{% endif %}<span class="summary-chevron" aria-hidden="true"></span>
+    </summary>
     <form class="filter-panel dashboard-filter-panel" method="get" action="/dashboard">
       <div class="filter-heading"><span class="filter-icon" aria-hidden="true">⌕</span><strong>Filters</strong>
       </div>
@@ -206,7 +193,7 @@
               <p class="summary-line summary-status"><span class="application-indicator status-{{ (company.application_status or 'None')|lower|replace(' ', '-') }}">{{ company.application_status if company.application_status not in ['Saved', 'None', None] else 'Not applied' }}</span>{% if company.applied_on %}<span class="applied-on" title="Date you applied. Change it under Status below.">Applied {{ company.applied_label }}</span>{% endif %}<span class="summary-fit" title="Job Fit">Fit {{ company.job_fit.score|string ~ '%' if company.job_fit.score is not none else '?' }}</span><span class="job-open-state"><span class="status-dot {{ 'closed' if listing_status == 'closed' else 'open' if listing_status == 'open' else 'unknown' }}" data-tooltip="{{ 'This listing appears to still be active.' if listing_status == 'open' else 'This listing appears to no longer be active.' if listing_status == 'closed' else 'The current listing status could not be confirmed.' }}"></span>{{ company.job_open_status or 'Unknown' }}</span><span>Found {{ company.date_found|local_time('%b %d, %Y') if company.date_found else '?' }}</span>{% if company.notes %}<span class="summary-notes" title="{{ company.notes[:200] }}">Notes</span>{% endif %}
               </p>
             </div>
-            {% set listing_link = company.career_url if (company.career_url and company.source_type not in feed_names) else (company.source_url or company.career_url) %}<div class="summary-actions">{% if company.application_status in ['Applied', 'Talking With Recruiter', 'Interview'] %}{% elif company.apply_queued %}<span class="queued-note" title="It is in your Apply Queue at the top of this page">In Apply Queue</span>{% else %}<button class="bordered-button primary-action saved-apply-button" type="button" data-company-id="{{ company.id }}" title="Add to your Apply Queue">Apply</button>{% endif %}{% if listing_link %}<a class="bordered-button summary-listing-link" href="{{ listing_link }}" target="_blank" rel="noopener noreferrer" title="Open the job listing">Listing</a>{% endif %}</div>
+            {% set listing_link = company.career_url if (company.career_url and company.source_type not in feed_names) else (company.source_url or company.career_url) %}<div class="summary-actions">{% if company.application_status in ['Applied', 'Talking With Recruiter', 'Interview'] %}{% elif company.apply_queued %}<span class="queued-note" title="It is in your Apply Queue at the top of this page">In Apply Queue</span>{% else %}<button class="bordered-button primary-action saved-apply-button" type="button" data-company-id="{{ company.id }}" title="Add to your Apply Queue">Apply</button>{% endif %}{% if listing_link %}<a class="bordered-button summary-listing-link" href="{{ listing_link }}" target="_blank" rel="noopener noreferrer" title="Open the job listing">Listing</a>{% endif %}<form action="/delete-kept/{{ company.id }}" method="post" class="summary-delete-form" onsubmit="return confirm('Permanently delete this saved job? This cannot be undone.');"><input type="hidden" name="csrf_token" value="{{ csrf_token }}" /><button class="bordered-button destructive-action summary-delete" type="submit" title="Delete this saved job">Delete</button></form></div>
             <span class="summary-chevron" aria-hidden="true"></span>
           </summary>
           <div class="saved-job-body">
@@ -256,6 +243,7 @@
       <p>{% if filters.title or filters.state or filters.status %}Try clearing or changing the filters above.{% else %}Use the green Keep button on Search results to add jobs here.{% endif %}
       </p><a class="bordered-button button-link" href="/">Search for Jobs</a>
     </div>{% endif %}
+    </details>
     <details class="history-panel history-collapse" id="recent-searches">
       <summary class="history-summary">
         <h2>Recent Searches
