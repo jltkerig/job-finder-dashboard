@@ -76,6 +76,67 @@
     return td;
   }
 
+  // Clicking a company's row opens its details in a row right under it, where Edit opens the form; click again to close.
+  function closeInfo() {
+    document.querySelectorAll(".companies-info-row").forEach((infoRow) => {
+      infoRow.previousElementSibling?.classList.remove("is-open");
+      infoRow.remove();
+    });
+  }
+
+  function showCompany(company, tr) {
+    const wasOpen = tr.nextElementSibling?.classList.contains("companies-info-row");
+    closeInfo();
+    if (wasOpen) return;
+    const facts = [];
+    const add = (label, value, href) => { if (value) facts.push([label, value, href]); };
+    add("Type", company.kindLabels && company.kindLabels.length ? company.kindLabels.join(", ") : company.type);
+    add("Address", company.address || company.place);
+    add("Miles", company.miles === null || company.miles === undefined ? "" : String(company.miles));
+    add("Phone", company.phone);
+    add("Website", company.website, company.website);
+    add("Job board", company.jobs_board, company.jobs_url);
+    add("Notes", company.notes);
+    const infoRow = document.createElement("tr");
+    infoRow.className = "companies-info-row";
+    const holder = document.createElement("td");
+    holder.colSpan = tr.children.length;
+    const title = document.createElement("strong");
+    title.textContent = company.name;
+    const list = document.createElement("dl");
+    list.className = "companies-info";
+    for (const [label, value, href] of facts) {
+      const term = document.createElement("dt");
+      term.textContent = label;
+      const detail = document.createElement("dd");
+      if (href) {
+        const link = document.createElement("a");
+        link.href = href;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.textContent = value;
+        detail.append(link);
+      } else {
+        detail.textContent = value;
+      }
+      list.append(term, detail);
+    }
+    if (!facts.length) {
+      const none = document.createElement("p");
+      none.className = "field-help";
+      none.textContent = "Nothing more is known about this company.";
+      holder.append(title, none);
+    } else {
+      holder.append(title, list);
+    }
+    infoRow.append(holder);
+    tr.after(infoRow);
+    tr.classList.add("is-open");
+  }
+
+  // Rows build their own handlers; the saved list (its own file) asks for the same view with this event.
+  document.addEventListener("show-company", (event) => showCompany(event.detail.company, event.detail.tr));
+
   function button(label, className, onClick) {
     const node = document.createElement("button");
     node.type = "button";
@@ -99,6 +160,7 @@
   // Editing a company opens the form in a row right under it; saving or cancelling closes that row and puts the form
   // back in "Add a company of your own".
   function dockForm() {
+    closeInfo();
     document.querySelectorAll(".companies-edit-row").forEach((editRow) => editRow.remove());
     if (!addDetails.contains(addForm)) addDetails.insertBefore(addForm, addDetails.querySelector(".companies-add-help"));
   }
@@ -307,6 +369,12 @@
       }));
     }
     tr.append(site, actions);
+    tr.classList.add("companies-clickable");
+    tr.title = "Click to see everything about this company";
+    tr.addEventListener("click", (event) => {
+      if (event.target.closest("a, button, input, textarea, select")) return;
+      showCompany(company, tr);
+    });
     return tr;
   }
 

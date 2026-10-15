@@ -75,6 +75,12 @@
     edit.title = "Add its job board, notes or a fixed address. It moves to My Companies.";
     edit.addEventListener("click", () => document.dispatchEvent(new CustomEvent("edit-saved-company", { detail: { company, tr } })));
     actions.append(edit, button);
+    tr.className = "companies-clickable";
+    tr.title = "Click to see everything about this company";
+    tr.addEventListener("click", (event) => {
+      if (event.target.closest("a, button")) return;
+      document.dispatchEvent(new CustomEvent("show-company", { detail: { company, tr } }));
+    });
     tr.append(name, cell(company.address), cell(company.miles == null ? "" : String(company.miles)), site, actions);
     return tr;
   }
