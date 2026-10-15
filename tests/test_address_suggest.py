@@ -83,5 +83,30 @@ class Route(unittest.TestCase):
         self.assertIn("address-suggest.js", html)
 
 
+
+class FourBoxes(unittest.TestCase):
+    def test_street_city_state_and_zip_are_kept_as_an_address_and_come_back_as_parts(self):
+        from jobfinder.web import my_companies
+        with patch.object(my_companies, "place_point", return_value=(39.5, -76.3)):
+            values = my_companies.clean({"name": "Example Co", "street": "10 Main Street", "city": "Springfield",
+                                         "state": "MD", "zip": "21015"})
+        self.assertEqual(values["address"], "10 Main Street, Springfield, MD, 21015")
+        self.assertEqual(values["place"], "Springfield, MD")
+        shown = my_companies.as_result(dict(values, id="x"))
+        self.assertEqual((shown["street"], shown["city"], shown["state"], shown["zip"]),
+                         ("10 Main Street", "Springfield", "MD", "21015"))
+
+    def test_a_zip_alone_is_the_place(self):
+        from jobfinder.web import my_companies
+        with patch.object(my_companies, "zip_point", return_value=(39.5, -76.3)):
+            values = my_companies.clean({"name": "Example Co", "zip": "21015"})
+        self.assertEqual((values["address"], values["place"]), ("21015", "21015"))
+
+    def test_the_suggestion_has_the_four_parts(self):
+        (first, *_) = al.format_features(FEATURES)
+        self.assertEqual((first["street"], first["city"], first["state"], first["zip"]),
+                         ("757 Example Road", "Springfield", "MD", "21228"))
+
+
 if __name__ == "__main__":
     unittest.main()

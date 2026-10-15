@@ -19,6 +19,7 @@ from jobfinder.sources.ats_discovery import identify
 
 FIELD_LIMITS = {"name": 150, "website": 200, "jobs_board": 400, "address": 200, "place": 100, "phone": 40, "notes": 500}
 MAX_COMPANIES = 1000
+ADDRESS_PARTS = ("street", "city", "state", "zip")
 
 
 def _path():
@@ -78,6 +79,10 @@ def clean(fields, home_state=""):
     """The stored form of what was typed, or raises ValueError with a message for the page."""
     values = {key: " ".join(str(fields.get(key) or "").split())[:limit] for key, limit in FIELD_LIMITS.items() if key != "notes"}
     values["notes"] = str(fields.get("notes") or "").strip()[:FIELD_LIMITS["notes"]]
+    parts = {key: " ".join(str(fields.get(key) or "").split()) for key in ADDRESS_PARTS}
+    if any(parts.values()):  # the form sends the address in four boxes: it is kept as one line, and the town is the place
+        values["address"] = ", ".join(text for text in (parts["street"], parts["city"], parts["state"], parts["zip"]) if text)[:FIELD_LIMITS["address"]]
+        values["place"] = (f"{parts['city']}, {parts['state']}" if parts["city"] and parts["state"] else parts["zip"])[:FIELD_LIMITS["place"]]
     if not values["name"]:
         raise ValueError("Enter the company's name.")
     raw_site = values["website"]
@@ -211,13 +216,14 @@ def as_result(item, center=None):
     miles = None
     if center is not None and item.get("lat") is not None and item.get("lon") is not None:
         miles = round(miles_between(center, (float(item["lat"]), float(item["lon"]))), 1)
+    from jobfinder.web.employer_sync import split_address  # here, not at the top: employer_sync imports this module
     jobs_board = str(item.get("jobs_board") or item.get("jobs_url") or "")
     jobs_url = _link(jobs_board)
     board = (identify(jobs_url) or {}).get("system", "") if jobs_url else ""
     return {"id": f"mine/{item['id']}", "mine": True, "name": item["name"], "type": "My company", "address": item.get("address", ""),
             "place": item.get("place", ""), "website": item.get("website", ""), "jobs_board": jobs_board,
             "jobs_url": jobs_url, "jobs_system": board.title() if board else "", "phone": item.get("phone", ""),
-            "notes": item.get("notes", ""), "lat": item.get("lat"), "lon": item.get("lon"), "miles": miles}
+            "notes": item.get("notes", ""), **split_address(item.get("address"), item.get("place")), "lat": item.get("lat"), "lon": item.get("lon"), "miles": miles}
 
 
 def everything(center=None):

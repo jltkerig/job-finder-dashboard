@@ -49,8 +49,10 @@
         <div class="form-field"><label for="companies-add-name">Company name</label><input id="companies-add-name" name="name" type="text" maxlength="150" required /></div>
         <div class="form-field"><label for="companies-add-website">Website</label><input id="companies-add-website" name="website" type="text" maxlength="200" placeholder="acme.com" /></div>
         <div class="form-field"><label for="companies-add-jobs-board">Job board</label><input id="companies-add-jobs-board" name="jobs_board" type="text" maxlength="400" placeholder="Indeed, or a link such as jobs.lever.co/acme" title="Where the company posts jobs, if you know: a link to its jobs page, or just the name of the board" /></div>
-        <div class="form-field companies-add-address"><label for="companies-add-address">Address</label><input id="companies-add-address" name="address" type="text" maxlength="200" placeholder="Start typing: 10 Main Street, Bel Air, MD 21014" /></div>
-        <div class="form-field"><label for="companies-add-place">Town, State or ZIP</label><input id="companies-add-place" name="place" type="text" list="city-state-options" maxlength="100" placeholder="Bel Air, MD" title="Used to measure how far the company is from the place you search around" /></div>
+        <div class="form-field companies-add-address"><label for="companies-add-street">Street</label><input id="companies-add-street" name="street" type="text" maxlength="120" placeholder="Start typing: 10 Main Street" /></div>
+        <div class="form-field"><label for="companies-add-city">City</label><input id="companies-add-city" name="city" type="text" list="city-state-options" maxlength="80" placeholder="Bel Air" /></div>
+        <div class="form-field"><label for="companies-add-state">State</label><input id="companies-add-state" name="state" type="text" maxlength="30" placeholder="MD" title="Two letters, such as MD" /></div>
+        <div class="form-field"><label for="companies-add-zip">ZIP code</label><input id="companies-add-zip" name="zip" type="text" inputmode="numeric" maxlength="10" placeholder="21014" title="Used to measure how far the company is from the place you search" /></div>
         <div class="form-field"><label for="companies-add-phone">Phone</label><input id="companies-add-phone" name="phone" type="text" maxlength="40" /></div>
         <div class="form-field companies-add-notes companies-add-notes-wide"><label for="companies-add-notes">Notes</label><textarea id="companies-add-notes" name="notes" rows="2" maxlength="500" placeholder="Who you know there, what they make, when to check back"></textarea></div>
         <div class="companies-add-actions">
@@ -59,7 +61,7 @@
           <span id="companies-add-status" class="field-help" role="status"></span>
         </div>
       </form>
-      <p class="field-help companies-add-help">The town or ZIP code is what measures the distance. For an employer from your résumé, the address, phone and website are shared with that job in your Profile: what you save here shows in the Résumé Builder too, and what the Profile has shows here. Kept in this computer's user-data folder, in my_companies.json. They are listed in the My Companies box above, nearest first when a town or ZIP code is given.</p>
+      <p class="field-help companies-add-help">The city and state (or the ZIP code) measure the distance. For an employer from your résumé, the address, phone and website are shared with that job in your Profile: what you save here shows in the Résumé Builder too, and what the Profile has shows here. Kept in this computer's user-data folder, in my_companies.json. They are listed in the My Companies box above, nearest first when a town or ZIP code is given.</p>
     </details>
   </section>
   <section class="company-section companies-results" id="companies-results" hidden aria-live="polite">

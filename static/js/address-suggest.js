@@ -1,14 +1,16 @@
 // Companies page: the Address box suggests addresses as you type (from /companies/address-suggest, which asks OpenStreetMap
-// through Photon). Picking one fills the address, the Town / ZIP box when it is empty, and the company name when it is
+// through Photon). Picking one fills the street, city, state and ZIP boxes, and the company name when it is
 // empty and the suggestion is a business. Arrow keys, Enter and Escape work; nothing is filled until one is chosen.
 (() => {
-  const input = document.getElementById("companies-add-address");
-  const placeBox = document.getElementById("companies-add-place");
+  const input = document.getElementById("companies-add-street");
+  const cityBox = document.getElementById("companies-add-city");
+  const stateBox = document.getElementById("companies-add-state");
+  const zipBox = document.getElementById("companies-add-zip");
   const nameBox = document.getElementById("companies-add-name");
   if (!input) return;
 
   const list = document.createElement("ul");
-  list.id = "companies-add-address-list";
+  list.id = "companies-add-street-list";
   list.className = "address-suggest";
   list.setAttribute("role", "listbox");
   list.hidden = true;
@@ -41,9 +43,11 @@
   }
 
   function choose(suggestion) {
-    input.value = suggestion.address;
-    asked = suggestion.address; // so the filled-in address is not asked about again
-    if (placeBox && !placeBox.value.trim() && suggestion.place) placeBox.value = suggestion.place;
+    input.value = suggestion.street || suggestion.address;
+    asked = input.value.trim(); // so the filled-in street is not asked about again
+    if (cityBox) cityBox.value = suggestion.city || "";
+    if (stateBox) stateBox.value = suggestion.state || "";
+    if (zipBox) zipBox.value = suggestion.zip || "";
     if (nameBox && !nameBox.value.trim() && suggestion.name) nameBox.value = suggestion.name;
     close();
     input.dispatchEvent(new Event("change", { bubbles: true }));
@@ -81,7 +85,8 @@
     if (request) request.abort();
     request = new AbortController();
     try {
-      const params = new URLSearchParams({ q: typed, place: placeBox ? placeBox.value.trim() : "" });
+      const town = [cityBox && cityBox.value.trim(), stateBox && stateBox.value.trim()].filter(Boolean).join(", ") || (zipBox ? zipBox.value.trim() : "");
+      const params = new URLSearchParams({ q: typed, place: town });
       const response = await fetch(`/companies/address-suggest?${params}`, { cache: "no-store", signal: request.signal });
       const data = await response.json();
       if (input.value.trim() !== typed || document.activeElement !== input) return; // typed on, or left the box

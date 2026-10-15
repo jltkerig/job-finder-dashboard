@@ -64,7 +64,7 @@
   const addSave = document.getElementById("companies-add-save");
   const addCancel = document.getElementById("companies-add-cancel");
   const addStatus = document.getElementById("companies-add-status");
-  const FIELDS = ["name", "website", "jobs_board", "address", "place", "phone", "notes"];
+  const FIELDS = ["name", "website", "jobs_board", "street", "city", "state", "zip", "phone", "notes"];
 
   const field = (name) => addForm.elements[name];
 

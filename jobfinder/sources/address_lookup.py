@@ -50,6 +50,7 @@ def format_features(features):
         state = _text(properties.get("statecode")) or STATE_BY_NAME.get(_text(properties.get("state")).casefold(), _text(properties.get("state")))
         postcode = _text(properties.get("postcode"))
         region = " ".join(part for part in (state, postcode) if part)
+        postcode = postcode[:5]
         address = ", ".join(part for part in (line, town, region) if part)
         key = address.casefold()
         if key in seen:
@@ -57,7 +58,7 @@ def format_features(features):
         seen.add(key)
         name = _text(properties.get("name"))
         business = name if name and properties.get("osm_key") in BUSINESS_KEYS and name.casefold() != street.casefold() else ""
-        found.append({"address": address, "place": ", ".join(part for part in (town, state) if part) if town and state else "",
+        found.append({"street": line, "city": town, "state": state, "zip": postcode, "address": address, "place": ", ".join(part for part in (town, state) if part) if town and state else "",
                       "name": business, "detail": name if name and name.casefold() != street.casefold() else ""})
         if len(found) >= SHOWN:
             break
