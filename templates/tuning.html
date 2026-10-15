@@ -46,6 +46,15 @@
       </p>
   {% endif %}
     </details>
+    <details class="settings-panel history-collapse" id="skipped-pages" data-remember="jobFinder.skippedPagesOpen">
+  <summary>
+        <h2>Skipped Pages ({{ skipped|length }} Recent Checks)
+        </h2><span class="summary-chevron" aria-hidden="true"></span>
+      </summary>
+      {% if skipped %}<ul class="skipped-list">{% for item in skipped %}
+        <li><strong>{{ item.reason }}</strong>{% if item.title %} · {{ item.title }}{% endif %} <a href="{{ item.url }}" target="_blank" rel="noopener noreferrer">Source</a></li>{% endfor %}
+      </ul>{% else %}<p class="field-help">Nothing was skipped in the recent searches.</p>{% endif %}
+    </details>
     <details class="settings-panel history-collapse" id="search-settings" data-remember="jobFinder.searchSettingsOpen"{% if saved or error %} data-open-now{% endif %}>
   <summary>
         <h2>Search Settings

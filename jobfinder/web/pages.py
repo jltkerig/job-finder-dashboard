@@ -63,22 +63,9 @@ def home():
     add_current_distances(companies, profile.get("cities", []))
     recent_search = get_search_history(limit=1)
     latest_search_at = recent_search[0].get("searched_at") if recent_search else None
-    skipped = []
-    if SEARCH_SKIPS_FILE.exists():
-        try:
-            for item in reversed(list(latest_decisions(SEARCH_SKIPS_FILE).values())):
-                # Older searches recorded PDFs as skips; they are now ignored entirely.
-                if item.get("reason") != "Passed" and not is_pdf_url(item.get("url")):
-                    skipped.append(item)
-                if len(skipped) >= 20:
-                    break
-        except (OSError, ValueError):
-            skipped = []
-
     return render_template(
         "index.html",
         companies=companies,
-        skipped=skipped,
         latest_search_at=latest_search_at,
         scraper_running=running,
         scraper_mode=mode or "",

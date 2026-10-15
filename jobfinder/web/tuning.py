@@ -10,6 +10,7 @@ from flask import redirect, render_template, request
 
 from jobfinder.records.board_health import STATUSES as HEALTH_STATUSES, read_health
 from jobfinder.web import webfiles
+from jobfinder.web.skipped_pages import recent_skipped
 from jobfinder.web.core import app, log_error_code
 
 # Search tuning options that live in settings.json: key -> (label, help, kind, minimum, maximum, default).
@@ -72,7 +73,7 @@ def tuning_page():
         except (KeyError, ValueError):
             health["updated_text"] = health.get("updated", "")
     return render_template("tuning.html", fields=TUNING_FIELDS, switches=TUNING_SWITCHES, values=current,
-                           health=health, statuses=HEALTH_STATUSES, saved=request.args.get("saved"),
+                           health=health, skipped=recent_skipped(), statuses=HEALTH_STATUSES, saved=request.args.get("saved"),
                            error=request.args.get("error"))
 
 

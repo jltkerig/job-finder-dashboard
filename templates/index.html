@@ -71,15 +71,7 @@
     <div class="section-heading-row">
       <h2>Results
       </h2>
-    </div>{% if skipped %}
-    <details class="skipped-results">
-      <summary>Why were some pages skipped? ({{ skipped|length }} recent checks)
-      </summary>
-      <ul>{% for item in skipped %}
-        <li><strong>{{ item.reason }}</strong>{% if item.title %} · {{ item.title }}{% endif %} <a href="{{ item.url }}" target="_blank" rel="noopener noreferrer">Source</a>
-        </li>{% endfor %}
-      </ul>
-    </details>{% endif %}
+    </div>
     {% if companies %}
     <section class="results-toolbar" aria-label="Results filters">
       <div class="toolbar-title"><span class="filter-icon" aria-hidden="true">⌕</span><strong>Filters</strong>

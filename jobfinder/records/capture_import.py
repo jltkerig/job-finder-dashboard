@@ -27,6 +27,8 @@ SITES = {
     "mwe": ("Maryland Workforce Exchange", "mwejobs.maryland.gov"),
     # Blocks automated visitors too: jobs come only from search pages you opened (the optional API stays separate).
     "usajobs": ("USAJOBS", "usajobs.gov"),
+    # The State of Maryland's own public job feed (RSS): the extension fetches it, so these are the employer's postings.
+    "jobaps": ("State of Maryland Jobs", "jobapscloud.com"),
 }
 # Rows with these source types came from the extension. The dashboard shows them even though their domains are
 # on the blocked list (that list is for web-search results), and Refresh never re-fetches them: the sites answer
