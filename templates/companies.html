@@ -15,6 +15,8 @@
 </header>
 <main>
   <section class="company-section companies-search">
+    <details class="companies-searchbox history-collapse" id="companies-searchbox" data-remember="jobFinder.companiesSearchOpen" data-open-default>
+    <summary><h2>Search</h2><span class="summary-chevron" aria-hidden="true"></span></summary>
     <form id="companies-form" class="companies-form" autocomplete="off">
       <div class="form-field companies-place">
         <label for="companies-place">Search around</label>
@@ -24,17 +26,23 @@
         <label for="companies-miles">Within</label>
         <select id="companies-miles" name="miles">{% for miles in mile_choices %}<option value="{{ miles }}"{% if miles == default_miles %} selected{% endif %}>{{ miles }} miles</option>{% endfor %}</select>
       </div>
+      <div class="companies-filter-box">
+      <div class="filter-heading"><span class="filter-icon" aria-hidden="true">⌕</span><strong>Filters</strong></div>
       <div class="companies-filters">
-        <label class="companies-website-only"><input id="companies-website-only" type="checkbox" /> Only with a website</label>
+        <label class="companies-website-only" title="Tick to hide every company that has no website listed."><input id="companies-website-only" type="checkbox" /> Hide companies with no website</label>
         <button class="bordered-button secondary-action" id="companies-show-hidden" type="button" hidden>Show hidden</button>
       </div>
+      <p class="companies-filter-label">Source</p>
+      <div class="companies-kind-tags companies-source-tags" id="companies-source-tags" role="group" aria-label="Where the companies come from"></div>
+      <p class="companies-filter-label">Type of business</p>
       <div class="companies-kind-tags" id="companies-kind-tags" role="group" aria-label="Kinds of place: pick some to show only those in the results"></div>
+      </div>
       <fieldset class="companies-kinds" hidden>
         {% for key, label in kinds %}<label class="companies-kind"><input type="checkbox" name="kinds" value="{{ key }}"{% if key in default_kinds %} checked{% endif %} /> {{ label }}</label>{% endfor %}
       </fieldset>
       <div class="companies-actions"><button class="bordered-button primary-action" id="companies-search" type="submit">Search</button></div>
     </form>
-    <p class="field-help companies-origin">One place at a time: it starts at your home. The miles in the list are straight-line miles from the place in the box.</p>
+    </details>
     <details class="companies-mine history-collapse" id="companies-mine" data-remember="jobFinder.myCompaniesOpen" data-open-default>
     <summary><h2 id="companies-mine-heading">My Companies <span class="field-help" id="companies-mine-count"></span></h2><span class="summary-chevron" aria-hidden="true"></span></summary>
     <p class="field-help" id="companies-mine-empty" hidden>None yet. The employers in your work history are added here, and you can add your own above.</p>
@@ -45,8 +53,8 @@
       </table>
     </div>
   </details>
-    <details class="companies-add" id="companies-add">
-      <summary>Add a company of your own</summary>
+    <details class="companies-add history-collapse" id="companies-add" data-remember="jobFinder.addCompanyOpen">
+      <summary><h2>Add a Company of Your Own</h2><span class="summary-chevron" aria-hidden="true"></span></summary>
       <form id="companies-add-form" class="companies-add-form" autocomplete="off">
         <input type="hidden" id="companies-add-id" value="" />
         <div class="form-field"><label for="companies-add-name">Company name</label><input id="companies-add-name" name="name" type="text" maxlength="150" required /></div>

@@ -1733,7 +1733,7 @@ body[data-page="search"] #results-table td[data-label="Listing"] .inline-action-
 }
 .companies-jobs-link { font-size:.85rem; font-weight:600; }
 .companies-jobs-text { font-size:.85rem; color:#59636e; }
-.companies-origin { margin:10px 0 0; }
+.companies-origin { margin:0 0 10px; }
 .companies-mine { margin:16px 0 0; padding:14px 16px; border:1px solid #d4d8dd; border-radius:8px; background:#fff; }
 .companies-mine h2 { margin:0 0 8px; font-size:1.15rem; }
 .companies-mine-table th:nth-child(2), .companies-mine-table td:nth-child(2) { display:none; }
@@ -1896,3 +1896,58 @@ body[data-page="dashboard"] .summary-delete-form { margin: 0; }
 .toolbar-title .filters-chevron, .filter-heading .filters-chevron { position: absolute; top: 24px; right: 20px; margin: 0; }
 body[data-page="search"] .results-toolbar .results-count { right: 46px; }
 body[data-page="search"] .results-toolbar .toolbar-title { padding-right: 140px; }
+
+/* A collapsed Results section is a boxed, clickable bar, so it is clear that clicking it opens it. */
+.results-collapse:not([open]) { padding: 14px 20px; background: #fff; border: 1px solid #b9c1cc; border-radius: 12px; }
+.results-collapse:not([open]) > summary { cursor: pointer; }
+.results-collapse:not([open]):hover { border-color: #1f2937; box-shadow: 0 1px 4px rgba(31,41,55,.18); }
+.results-collapse:not([open]) > summary .summary-chevron { transform: rotate(45deg); }
+
+/* Companies: "Only with a website" and the kinds of place sit in one labelled Filters box. */
+.companies-form .companies-filter-box { position: relative; flex: 1 1 100%; display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; background: #eef1f4; border: 1px solid #cfd4da; border-radius: 10px; }
+.companies-filter-box .filter-heading { display: flex; justify-content: flex-start; align-items: center; gap: 8px; width: 100%; }
+.companies-filter-box .filter-icon { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: #e2e6eb; font-size: .8rem; }
+.companies-filter-box .companies-filters { flex: none; }
+
+/* Companies: the whole search (place, distance, filters, button) folds up under one "Search" heading. */
+.companies-searchbox > summary h2 { margin: 0; }
+.companies-searchbox[open] > summary { margin-bottom: 12px; }
+
+/* The Companies Search box is a white card, like My Companies. */
+.companies-searchbox { margin: 0; padding: 14px 16px; border: 1px solid #d4d8dd; border-radius: 8px; background: #fff; }
+.companies-searchbox > summary h2 { font-size: 1.15rem; }
+
+/* "Add a Company of Your Own" is a white card with the same heading and arrow as Search and My Companies. */
+.companies-add { margin: 16px 0 0; padding: 14px 16px; border: 1px solid #d4d8dd; border-radius: 8px; background: #fff; }
+.companies-add > summary { font-weight: 400; }
+.companies-add > summary h2 { margin: 0; font-size: 1.15rem; }
+
+/* The Companies results ("N of N companies") are a white card with the same heading size as the other sections. */
+.companies-results { margin: 16px 0 0; padding: 14px 16px; border: 1px solid #d4d8dd; border-radius: 8px; background: #fff; }
+.companies-results .companies-collapse-summary { padding: 0; }
+.companies-results #companies-count { font-size: 1.15rem; font-weight: 700; }
+
+/* Companies Filters: a tidier box, with a labelled "Kind of place" row of pills and a count badge on each. */
+.companies-form .companies-filter-box { gap: 12px; padding: 16px 18px 18px; background: #f3f5f8; border-color: #d4d8dd; }
+.companies-filter-box .filter-heading strong { font-size: 1.05rem; }
+.companies-filter-box .companies-filters { padding-bottom: 12px; border-bottom: 1px solid #dde1e7; }
+.companies-filter-box .companies-website-only { padding: 6px 12px; border: 1px solid #c7cbd1; border-radius: 999px; background: #fff; font-size: .9rem; font-weight: 600; cursor: pointer; }
+.companies-filter-box .companies-website-only input { width: 16px; height: 16px; margin: 0; accent-color: #1f2937; }
+.companies-filter-label { margin: 0; font-size: .85rem; font-weight: 700; color: #1f2937; }
+.companies-filter-label span { font-weight: 400; color: #4b5563; margin-left: 6px; }
+.companies-filter-box .companies-kind-tags { gap: 8px; }
+.companies-kind-tag { display: inline-flex; align-items: center; gap: 8px; margin: 0; padding: 6px 8px 6px 14px; border: 1px solid #c7cbd1; border-radius: 999px; background: #fff; font-size: .88rem; font-weight: 600; color: #1f2937; cursor: pointer; }
+.companies-kind-tag:only-child, .companies-kind-tag:first-child { padding-right: 14px; }
+.companies-kind-tag:hover { border-color: #1f2937; }
+.companies-kind-tag.is-active { background: #1f2937; border-color: #1f2937; color: #fff; }
+.kind-count { min-width: 24px; padding: 1px 7px; border-radius: 999px; background: #e6ebf2; color: #1f2937; font-size: .78rem; font-weight: 700; text-align: center; }
+.companies-kind-tag.is-active .kind-count { background: rgba(255,255,255,.22); color: #fff; }
+.companies-kind-tag.is-empty { opacity: .55; }
+.companies-form .companies-source-tags { flex: none; }
+
+/* "Hide companies with no website" is a toggle pill like the others: no checkbox, dark when it is on. */
+.companies-filter-box .companies-website-only input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; pointer-events: none; }
+.companies-filter-box .companies-website-only { position: relative; padding: 6px 14px; font-size: .88rem; }
+.companies-filter-box .companies-website-only:hover { border-color: #1f2937; }
+.companies-filter-box .companies-website-only:has(input:checked) { background: #1f2937; border-color: #1f2937; color: #fff; }
+.companies-filter-box .companies-website-only:has(input:focus-visible) { outline: 3px solid #93c5fd; outline-offset: 2px; }

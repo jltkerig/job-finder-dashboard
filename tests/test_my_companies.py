@@ -219,7 +219,7 @@ class Routes(unittest.TestCase):
         self.assertIn('id="companies-add-form"', html)
         self.assertIn('id="companies-mine"', html)
         self.assertIn('id="companies-mine-body"', html)
-        self.assertNotIn('value="mine"', html)  # not a kind to tick: they are always in their own box
+        self.assertIn('value="mine"', html)  # also a Source in the results, next to the employers from your searches
 
     def test_the_box_lists_all_of_them_nearest_first_including_far_and_unplaced_ones(self):
         with patch.object(my_companies, "place_point", side_effect=[NEAR, FAR]):

@@ -40,6 +40,7 @@
   const HIDDEN_KEY = "jobFinder.hiddenCompanies";
   let companies = [];
   const kindTags = document.getElementById("companies-kind-tags");
+  const activeSources = new Set();  // Source pills (your search employers, My Companies); they combine with the types picked
   const activeKinds = new Set();  // kinds of place picked as tags under the toolbar; none picked shows them all
   let revealHidden = false;
   let savedNames = new Set(); // names in Saved Companies, so a search result can show "Saved"
@@ -411,21 +412,25 @@
     }));
     kindTags.hidden = false;
     kindTags.replaceChildren();
-    const make = (text, active, onClick, dim) => {
+    const sourceTags = document.getElementById("companies-source-tags");  // "Employers from your searches" is a source, so it sits apart from the types
+    if (sourceTags) sourceTags.replaceChildren();
+    const make = (text, active, onClick, dim, count, into = kindTags) => {
       const tag = document.createElement("button");
       tag.type = "button";
       tag.className = `chip-button companies-kind-tag${active ? " is-active" : ""}${dim ? " is-empty" : ""}`;
       tag.setAttribute("aria-pressed", String(active));
       tag.textContent = text;
+      if (count !== undefined) { const badge = document.createElement("span"); badge.className = "kind-count"; badge.textContent = count; tag.append(badge); }
       tag.addEventListener("click", onClick);
-      kindTags.append(tag);
+      into.append(tag);
     };
-    make("All kinds", activeKinds.size === 0, () => { activeKinds.clear(); render(); });
+    make("All", activeKinds.size === 0, () => { activeKinds.clear(); render(); });
     const searched = companies.length > 0;
     for (const { key, label } of kinds) {
       const count = found.get(key) || 0;
-      make(searched ? `${label} (${count})` : label, activeKinds.has(key),
-        () => { if (activeKinds.has(key)) activeKinds.delete(key); else activeKinds.add(key); render(); }, searched && count === 0);
+      const isSource = key === "known" || key === "mine";
+      make(label, isSource ? activeSources.has(key) : activeKinds.has(key),
+        () => { if (isSource) { if (activeSources.has(key)) activeSources.delete(key); else activeSources.add(key); } else if (activeKinds.has(key)) activeKinds.delete(key); else activeKinds.add(key); render(); }, searched && count === 0, searched ? count : undefined, isSource && sourceTags ? sourceTags : kindTags);
     }
   }
 
@@ -434,6 +439,7 @@
     const visible = companies.filter((company) => {
       const isHidden = !company.mine && hidden.has(keyOf(company));
       if (isHidden && !revealHidden) return false;
+      if (activeSources.size && !(company.kinds || []).some((kind) => activeSources.has(kind))) return false;
       if (activeKinds.size && !(company.kinds || []).some((kind) => activeKinds.has(kind))) return false;
       if (websiteOnly.checked && !company.website) return false;
       return true;
@@ -459,6 +465,7 @@
     searchButton.disabled = true;
     companies = [];
     activeKinds.clear();
+    activeSources.clear();
     revealHidden = false;
     const byId = new Map();
     const seen = new Set();
@@ -530,9 +537,25 @@
       if (saved.place) place.value = saved.place;
       if (saved.miles) miles.value = saved.miles;
       milesHeader.textContent = saved.shown ? `Miles from ${saved.shown}` : "Miles";
-      say(`Your last search, around ${saved.shown || saved.place}. Press Search to look again.`);
       render();
+      addMyCompaniesToSaved(saved);
     } catch { /* an unreadable copy is ignored */ }
+  }
+  // Results kept from before "My companies" became a Source have none of them: look them up now, so the pill has its count.
+  async function addMyCompaniesToSaved(saved) {
+    if (companies.some((company) => (company.kinds || []).includes("mine"))) return;
+    try {
+      const params = new URLSearchParams({ place: saved.place || place.value.trim(), miles: saved.miles || miles.value, kinds: "mine" });
+      const response = await fetch(`/companies/search?${params}`, { cache: "no-store" });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) return;
+      for (const company of data.companies || []) {
+        if (companies.some((known) => known.id === company.id)) continue;
+        company.kinds = ["mine"]; company.kindLabels = ["My companies"];
+        companies.push(company);
+      }
+      render();
+    } catch { /* the pill just shows 0 until the next search */ }
   }
 
   // A new place in the box keeps the results already found and measures them again from it (no new search).
