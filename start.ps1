@@ -256,7 +256,7 @@ if (-not (Test-LocalPort 5000)) {
     try {
         $DashboardProcess = Start-Process `
             -FilePath $PythonPath `
-            -ArgumentList $DashboardPath `
+            -ArgumentList "`"$DashboardPath`"" `
             -WorkingDirectory $ProjectPath `
             -WindowStyle Hidden `
             -RedirectStandardOutput $DashboardStdoutLog `

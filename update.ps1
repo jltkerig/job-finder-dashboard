@@ -228,7 +228,7 @@ try {
 
     Start-Sleep -Milliseconds 750
     Write-UpdateLog "Starting updated Job Finder."
-    Start-Process powershell.exe -ArgumentList '-ExecutionPolicy','Bypass','-File',(Join-Path $ProjectDir 'start.ps1') -WorkingDirectory $ProjectDir
+    Start-Process powershell.exe -ArgumentList '-ExecutionPolicy','Bypass','-File',('"' + (Join-Path $ProjectDir 'start.ps1') + '"') -WorkingDirectory $ProjectDir
 }
 catch {
     Write-UpdateLog ("UPDATE FAILED: " + $_.Exception.Message)
